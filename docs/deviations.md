@@ -35,8 +35,11 @@ Web capabilities without a Unity equivalent, replaced rather than emulated:
   pointer visually.
 - **Fields with an active range clamp the internal value during the drag**,
   not just the output, so leaving the clamped zone responds immediately.
-- **Scale ticks show the actual reachable values as numbers** (not anonymous
-  dots), on every field, with fixed scrub sensitivity (`step / 20 px`).
+- **Scrub scale ticks can show the actual reachable values as numbers.** The
+  default is faithful to the original (`NumberInput.ScaleStyle = Dots`); the
+  numeric readout is opt-in via `ScaleStyle = Values` (UXML `scale-style`),
+  which drops the original's stepped-and-clamped gate and shows labels on every
+  field. Unranged scrub sensitivity is fixed at `step / 20 px` in both styles.
 - **`Tab` focus enters text-edit mode with select-all**, enabling
   Tab → type → Tab → type flows across a parameter panel.
 - **Arrow-key focus navigation can be suppressed** via

@@ -7,6 +7,16 @@ using UnityEngine.UIElements;
 
 namespace Tweeq.UIToolkit
 {
+    /// <summary>スクラブ中に出すスケールの描き方。</summary>
+    public enum NumberScaleStyle
+    {
+        /// <summary>本家 tweeq と同じ感度ドット列。既定。</summary>
+        Dots,
+
+        /// <summary>各目盛りの位置に「そこまで引いたときの到達値」を数字で出す（fork 拡張）。</summary>
+        Values,
+    }
+
     /// <summary>
     /// 数値入力欄。テキスト編集・レンジバー・横ドラッグによるスクラブを 1 つのフィールドで兼ねる。
     /// 内部計算は double、外部 API は UI Toolkit の流儀に合わせて float。
@@ -71,6 +81,14 @@ namespace Tweeq.UIToolkit
         // 間引きが効いている限り実際に使うのは 1 系統 10 個程度
         const int SCALE_LABEL_PER_TRAIN_MAX = 16;
         const int SCALE_LABEL_POOL_MAX = SCALE_TRAIN_COUNT * SCALE_LABEL_PER_TRAIN_MAX;
+
+        // ドットの直径。本家 .overlay .scale の stroke-width: calc(4px + var(--offset-weight) * -1px)。
+        // 縦ドラッグ（感度調整）へ寄るほど細くなる
+        const float SCALE_DOT_DIAMETER_BASE = 4f;
+        const float SCALE_DOT_DIAMETER_WEIGHT = 1f;
+
+        // 直径 0 の円は頂点が作れないので下限を敷く
+        const float SCALE_DOT_MIN_RADIUS = 0.5f;
 
         // 粗い系統と同じ x に同じ値が来る細かい系統のラベルを捨てるときの許容誤差（C-1）
         const double SCALE_LABEL_DEDUPE_EPSILON = 1e-6;
@@ -137,6 +155,7 @@ namespace Tweeq.UIToolkit
         bool _disabled;
         bool _invalid;
         string _leftLabelText = string.Empty;
+        NumberScaleStyle _scaleStyle = NumberScaleStyle.Dots;
 
         TweeqBoxPosition _inlinePosition = TweeqBoxPosition.None;
         TweeqBoxPosition _blockPosition = TweeqBoxPosition.None;
@@ -370,6 +389,25 @@ namespace Tweeq.UIToolkit
                 }
 
                 ApplyInteractivity();
+                Refresh();
+            }
+        }
+
+        /// <summary>
+        /// スクラブ中のスケール表示。既定は本家忠実のドット列で、数字ラベルはオプトイン。
+        /// </summary>
+        [UxmlAttribute("scale-style")]
+        public NumberScaleStyle ScaleStyle
+        {
+            get => _scaleStyle;
+            set
+            {
+                if (_scaleStyle == value)
+                {
+                    return;
+                }
+
+                _scaleStyle = value;
                 Refresh();
             }
         }
@@ -866,6 +904,12 @@ namespace Tweeq.UIToolkit
         // バー付きでは D-2改2 のハンドルアンカーによりバー座標に乗った「値のものさし」になるので、
         // step 付きレンジ完備のフィールドでも出す意味がある
         bool ShowTweakScale => true;
+
+        // ドットは本家 showTweakScale のゲートをそのまま持つ（数字ラベルと違い、
+        // 止まり位置が離散なフィールドでは連続感度の可視化に意味が無い）
+        bool ScaleDotsVisible =>
+            _scaleStyle == NumberScaleStyle.Dots
+            && NumberLogic.ShowScaleDots(_step, _clampMin, _clampMax, _min, _max);
 
         // 修飾キー由来の感度。TweakGesture 内部の keySpeed と同じ式（表示桁の計算に使う）
         double KeySpeed => (_altHeld ? 0.1 : 1.0) * (_shiftHeld ? Math.Max(_snapStep, 1.0) : 1.0);
@@ -1893,9 +1937,10 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // feedback-fixes-01.md C-1: スケールのドット描画は廃止し、目盛りは
-            // UpdateScaleLabels が置く数字ラベルだけになった（ここはバー・ハンドル・矢印のみ）
+            // 本家と同じ重ね順（バー → step 目盛り → スケール → ハンドル）。
+            // ScaleStyle=Values のときのスケールは要素（数字ラベル）なのでここには出ない
             PaintTicks(painter, width, height);
+            PaintScaleDots(painter, width, height);
             PaintHandle(painter, width, height);
             PaintOutOfRangeArrows(painter, width, height);
 
@@ -1940,6 +1985,70 @@ namespace Tweeq.UIToolkit
             }
 
             painter.Stroke();
+        }
+
+        // 本家の <line stroke-dasharray="0 gap" stroke-linecap="round"> は「円点の列」。
+        // Painter2D に dasharray が無いので円をそのまま置く（見た目は同じ）
+        void PaintScaleDots(Painter2D painter, float width, float height)
+        {
+            if (!_scrubbing || _disabled || !ScaleDotsVisible)
+            {
+                return;
+            }
+
+            // 位相はハンドルと同じ「検証済みの値」に載せる。生値だと step 付きフィールドで
+            // ハンドルとドットが半ステップずれて見える
+            double phase = NumberLogic.ScaleDotPhase(
+                BarVisible, _value, _min, _max, width, ScrubValuePerPixel);
+            if (!TweeqMath.IsFinite(phase))
+            {
+                return;
+            }
+
+            double gestureSpeed = _gesture.Speed;
+            float weight = ScaleOffsetWeight;
+            float radius = Mathf.Max(
+                (SCALE_DOT_DIAMETER_BASE - weight * SCALE_DOT_DIAMETER_WEIGHT) * 0.5f,
+                SCALE_DOT_MIN_RADIUS);
+
+            Color baseColor = ScaleColor;
+            float centerY = height * 0.5f;
+
+            for (int offset = 0; offset < SCALE_TRAIN_COUNT; offset++)
+            {
+                NumberLogic.ScaleDotLayer layer;
+                if (!NumberLogic.TryBuildScaleDotLayer(
+                        gestureSpeed, offset, phase, width, SCALE_MIN_OPACITY, out layer))
+                {
+                    continue;
+                }
+
+                Color color = baseColor;
+                color.a *= (float)layer.Opacity;
+
+                painter.fillColor = color;
+                painter.BeginPath();
+
+                for (int i = 0; i < layer.Count; i++)
+                {
+                    float x = (float)layer.DotX(i);
+                    if (x < 0f || x > width)
+                    {
+                        continue;
+                    }
+
+                    // Arc は現在位置から弧の始点まで線を引くので、点ごとに MoveTo で
+                    // サブパスを開き直さないと円どうしが繋がってしまう
+                    painter.MoveTo(new Vector2(x + radius, centerY));
+                    painter.Arc(
+                        new Vector2(x, centerY),
+                        radius,
+                        Angle.Degrees(0f),
+                        Angle.Degrees(360f));
+                }
+
+                painter.Fill();
+            }
         }
 
         void PaintHandle(Painter2D painter, float width, float height)
@@ -2214,6 +2323,13 @@ namespace Tweeq.UIToolkit
         {
             if (_scaleLabelLayer == null)
             {
+                return;
+            }
+
+            // Values 以外は数字を一切置かない。ここから下は従来の到達値ラベル実装そのまま
+            if (_scaleStyle != NumberScaleStyle.Values)
+            {
+                HideScaleLabelsFrom(0);
                 return;
             }
 
