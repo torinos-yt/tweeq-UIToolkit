@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using NUnit.Framework;
+using Tweeq.UIToolkit.TestSupport;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -977,6 +978,121 @@ namespace Tweeq.UIToolkit.Tests
         {
             Assert.AreEqual(240f, TweeqTheme.Dark().PopupWidth);
             Assert.AreEqual(240f, TweeqTheme.Light().PopupWidth);
+        }
+
+        #endregion
+
+        #region SV texture
+
+        // The SV gradient is one texture shared by the picker pad and the scrub overlay, and the
+        // picker's elements are only built the first time it opens. So the pad can come into
+        // existence after the texture was already baked - these pin that the pad still ends up
+        // pointing at a live texture, and that it lets go of one that has been destroyed.
+
+        TweeqRuntimeTestPanel _panel;
+        ColorInput _panelInput;
+
+        [TearDown]
+        public void TearDown()
+        {
+            if (_panelInput != null)
+            {
+                _panelInput.CancelChannelScrub();
+                _panelInput.ClosePicker();
+                _panelInput.RemoveFromHierarchy();
+                _panelInput = null;
+            }
+
+            _panel?.Dispose();
+            _panel = null;
+        }
+
+        ColorInput ArrangeOnPanel(Color initial)
+        {
+            _panel = TweeqRuntimeTestPanel.Create();
+
+            _panelInput = Create(initial);
+            _panel.Root.Add(_panelInput);
+
+            return _panelInput;
+        }
+
+        // The picker is mounted on the popover in the overlay layer, not under the field itself
+        VisualElement SvPadInPanel()
+        {
+            IPanel panel = _panel != null && _panel.Root != null ? _panel.Root.panel : null;
+            return panel != null ? panel.visualTree.Q("tweeq-color-sv-pad") : null;
+        }
+
+        static Texture2D PadTexture(VisualElement pad)
+        {
+            return pad.style.backgroundImage.value.texture;
+        }
+
+        [Test]
+        public void SvTexture_PadIsPaintedWhenTheFirstBakeCameFromAScrub()
+        {
+            ColorInput input = ArrangeOnPanel(Color.red);
+
+            // A swatch drag scrubs in Pad mode, which bakes the gradient while the picker has never
+            // been opened. The hue is unchanged from there on, so the pad must not depend on a
+            // later re-bake to receive its background.
+            input.BeginChannelScrub(new Vector2(40f, 40f));
+            input.UpdateChannelScrub(new Vector2(48f, 44f));
+            input.EndChannelScrub();
+
+            input.OpenPicker();
+
+            VisualElement pad = SvPadInPanel();
+            Assert.IsNotNull(pad, "the SV pad is built on the first open");
+            Assert.IsTrue(PadTexture(pad) != null, "the SV pad must hold a live gradient texture");
+        }
+
+        [Test]
+        public void SvTexture_PadKeepsTheSameInstanceWhileHueIsUnchanged()
+        {
+            ColorInput input = ArrangeOnPanel(Color.red);
+
+            input.OpenPicker();
+            Texture2D first = PadTexture(SvPadInPanel());
+
+            input.ClosePicker();
+            input.OpenPicker();
+
+            Assert.IsTrue(first != null);
+            Assert.AreSame(first, PadTexture(SvPadInPanel()), "re-opening must not re-allocate");
+        }
+
+        [Test]
+        public void SvTexture_DetachReleasesThePadBackground()
+        {
+            ColorInput input = ArrangeOnPanel(Color.red);
+
+            input.OpenPicker();
+            VisualElement pad = SvPadInPanel();
+            Assert.IsTrue(PadTexture(pad) != null);
+
+            // Detaching destroys the texture. The pad lives on the popover and survives, so a
+            // reference left behind here would be a destroyed texture bound to a visible element.
+            input.RemoveFromHierarchy();
+
+            Assert.IsTrue(
+                ReferenceEquals(PadTexture(pad), null),
+                "the destroyed texture must not stay bound to the pad");
+        }
+
+        [Test]
+        public void SvTexture_ReattachRepaintsThePadWithALiveTexture()
+        {
+            ColorInput input = ArrangeOnPanel(Color.red);
+
+            input.OpenPicker();
+            input.RemoveFromHierarchy();
+
+            _panel.Root.Add(input);
+            input.OpenPicker();
+
+            Assert.IsTrue(PadTexture(SvPadInPanel()) != null);
         }
 
         #endregion

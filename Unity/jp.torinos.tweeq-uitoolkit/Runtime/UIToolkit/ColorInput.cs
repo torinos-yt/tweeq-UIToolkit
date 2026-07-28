@@ -228,6 +228,11 @@ namespace Tweeq.UIToolkit
         Color32[] _svPixels;
         double _svTextureHue = double.NaN;
 
+        // What the pad's backgroundImage currently points at. The bake and the assignment have to be
+        // tracked separately: a channel scrub bakes the gradient while the picker has never been
+        // built, so "hue changed" alone is not a valid trigger for assigning it to the pad.
+        Texture2D _svPadTexture;
+
         ColorPickerAxis _dragAxis = ColorPickerAxis.None;
         int _dragPointerId = PointerId.invalidPointerId;
 
@@ -1754,6 +1759,11 @@ namespace Tweeq.UIToolkit
             DestroyTexture(_svTexture);
             _svTexture = null;
             _svTextureHue = double.NaN;
+
+            // The pad outlives the texture (it hangs off the popover, not off this element), so its
+            // backgroundImage has to be released here as well - a destroyed texture left bound there
+            // would be drawn as black on the next open.
+            SyncSvPadTexture();
         }
 
         #endregion
@@ -2314,11 +2324,20 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            if (_svTexture != null && _svTextureHue == _hsva.H)
+            if (_svTexture == null || _svTextureHue != _hsva.H)
             {
-                return;
+                BakeSvTexture();
             }
 
+            // Outside the bake branch on purpose: the texture is shared with the scrub overlay, and a
+            // scrub can bake it before the picker exists. Assigning only on a hue change would leave a
+            // pad that was built afterwards with no backgroundImage at all, i.e. rendering black until
+            // the next hue change happens to re-assign it.
+            SyncSvPadTexture();
+        }
+
+        void BakeSvTexture()
+        {
             EnsureSvTexture();
 
             int size = SV_TEXTURE_SIZE;
@@ -2344,11 +2363,21 @@ namespace Tweeq.UIToolkit
             _svTexture.SetPixels32(_svPixels);
             _svTexture.Apply(false);
             _svTextureHue = hue;
+        }
 
-            if (_svPad != null)
+        // Reference comparison rather than writing the style every time, so a scrub (which runs this
+        // on every pointer move) touches nothing once the pad already points at the right texture.
+        void SyncSvPadTexture()
+        {
+            if (_svPad == null || ReferenceEquals(_svPadTexture, _svTexture))
             {
-                _svPad.style.backgroundImage = new StyleBackground(_svTexture);
+                return;
             }
+
+            _svPadTexture = _svTexture;
+            _svPad.style.backgroundImage = _svTexture != null
+                ? new StyleBackground(_svTexture)
+                : new StyleBackground(StyleKeyword.None);
         }
 
         void EnsureSvTexture()
@@ -2363,6 +2392,10 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
+            // Left readable on purpose (Apply is never called with makeNoLongerReadable). At
+            // SV_TEXTURE_SIZE the texture would otherwise fit the dynamic atlas' default
+            // maxSubTextureSize, and an atlased copy is blitted once - it would not follow the
+            // in-place SetPixels32 / Apply re-bake. The Readability filter keeps it out of the atlas.
             _svTexture = new Texture2D(SV_TEXTURE_SIZE, SV_TEXTURE_SIZE, TextureFormat.RGBA32, false)
             {
                 name = "tweeq-color-sv",
