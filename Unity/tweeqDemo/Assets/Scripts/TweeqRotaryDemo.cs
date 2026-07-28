@@ -156,6 +156,8 @@ namespace TweeqDemo
         TweeqRuler _ruler;
         VisualElement _playhead;
         ButtonInput _focusInOutButton;
+        NumberInput _inPointField;
+        NumberInput _outPointField;
         StringInput _text;
         ColorInput _tint;
         CubicBezierInput _curve;
@@ -397,6 +399,18 @@ namespace TweeqDemo
             {
                 _focusInOutButton.Clicked -= OnFocusInOutClicked;
                 _focusInOutButton = null;
+            }
+
+            if (_inPointField != null)
+            {
+                _inPointField.UnregisterValueChangedCallback(OnInPointChanged);
+                _inPointField = null;
+            }
+
+            if (_outPointField != null)
+            {
+                _outPointField.UnregisterValueChangedCallback(OnOutPointChanged);
+                _outPointField = null;
             }
 
             if (_text != null)
@@ -903,13 +917,48 @@ namespace TweeqDemo
             stack.Add(_timeline);
             group.Content.Add(stack);
 
+            _inPointField = new NumberInput
+            {
+                Theme = _theme,
+                Min = 0,
+                Max = TIMELINE_RANGE_END,
+                Step = 1,
+                ClampMin = true,
+                ClampMax = true,
+                LeftLabel = "I",
+            };
+            _inPointField.SetValueWithoutNotify((float)TIMELINE_IN);
+            _inPointField.RegisterValueChangedCallback(OnInPointChanged);
+
+            _outPointField = new NumberInput
+            {
+                Theme = _theme,
+                Min = 0,
+                Max = TIMELINE_RANGE_END,
+                Step = 1,
+                ClampMin = true,
+                ClampMax = true,
+                LeftLabel = "O",
+            };
+            _outPointField.SetValueWithoutNotify((float)TIMELINE_OUT);
+            _outPointField.RegisterValueChangedCallback(OnOutPointChanged);
+
             _focusInOutButton = new ButtonInput("Focus In/Out")
             {
                 Theme = _theme,
             };
-            _focusInOutButton.style.flexGrow = 1f;
             _focusInOutButton.Clicked += OnFocusInOutClicked;
-            group.Content.Add(BuildRow("In/Out", _focusInOutButton));
+
+            // One fused control: [In][Out][Focus] — the fields drive the timeline live
+            InputGroup inOutGroup = new InputGroup { Theme = _theme };
+            inOutGroup.style.flexGrow = 1f;
+            _inPointField.style.flexGrow = 1f;
+            _outPointField.style.flexGrow = 1f;
+            _focusInOutButton.style.flexGrow = 1f;
+            inOutGroup.Add(_inPointField);
+            inOutGroup.Add(_outPointField);
+            inOutGroup.Add(_focusInOutButton);
+            group.Content.Add(BuildRow("In/Out", inOutGroup));
 
             SetPlayhead(_playheadFrame, false);
             SyncRuler();
@@ -1315,7 +1364,25 @@ namespace TweeqDemo
 
         void OnRulerDragged(double frame)
         {
-            SetPlayhead(frame, true);
+            // The ruler reports the raw pixel mapping; the demo works in whole frames, so
+            // quantize here (otherwise the timecode field shows fractional frames)
+            SetPlayhead(System.Math.Round(frame), true);
+        }
+
+        void OnInPointChanged(ChangeEvent<float> evt)
+        {
+            if (_timeline != null)
+            {
+                _timeline.InPoint = evt.newValue;
+            }
+        }
+
+        void OnOutPointChanged(ChangeEvent<float> evt)
+        {
+            if (_timeline != null)
+            {
+                _timeline.OutPoint = evt.newValue;
+            }
         }
 
         void OnFocusInOutClicked()
