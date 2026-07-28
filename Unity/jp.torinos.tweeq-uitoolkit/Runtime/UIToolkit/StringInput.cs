@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -513,7 +512,7 @@ namespace Tweeq.UIToolkit
             _focusRing.style.right = 0f;
             _focusRing.style.bottom = 0f;
             _focusRing.style.display = DisplayStyle.None;
-            SetBorderWidth(_focusRing, FOCUS_RING_WIDTH);
+            TweeqInputBoxStyles.SetBorderWidth(_focusRing, FOCUS_RING_WIDTH);
             this.hierarchy.Add(_focusRing);
         }
 
@@ -527,22 +526,22 @@ namespace Tweeq.UIToolkit
             this.style.height = _theme.InputHeight;
             this.style.minWidth = _theme.InputHeight;
             ApplyCornerRadius();
-            SetBorderColor(this, _theme.Border);
+            TweeqInputBoxStyles.SetBorderColor(this, _theme.Border);
 
             // 背景のみ 0.15s / cubic-bezier(0.4,0,0.2,1)。UI Toolkit に同一カーブが無いので
             // EaseInOutCubic で近似する（NumberInput / RotaryInput と同じ判断）
-            ApplyBackgroundTransition(this);
+            TweeqInputBoxStyles.ApplyBackgroundTransition(this, _theme);
 
             if (_focusRing != null)
             {
-                SetBorderColor(_focusRing, _theme.Accent);
+                TweeqInputBoxStyles.SetBorderColor(_focusRing, _theme.Accent);
             }
 
             if (_textInput != null)
             {
                 _textInput.style.backgroundColor = Color.clear;
-                SetBorderWidth(_textInput, 0f);
-                SetBorderColor(_textInput, Color.clear);
+                TweeqInputBoxStyles.SetBorderWidth(_textInput, 0f);
+                TweeqInputBoxStyles.SetBorderColor(_textInput, Color.clear);
                 _textInput.style.paddingLeft = TEXT_PADDING;
                 _textInput.style.paddingRight = TEXT_PADDING;
                 _textInput.style.marginLeft = 0f;
@@ -597,21 +596,6 @@ namespace Tweeq.UIToolkit
             ApplyAlign();
         }
 
-        void ApplyBackgroundTransition(VisualElement element)
-        {
-            if (element == null || _theme == null)
-            {
-                return;
-            }
-
-            element.style.transitionProperty = new StyleList<StylePropertyName>(
-                new List<StylePropertyName> { new StylePropertyName("background-color") });
-            element.style.transitionDuration = new StyleList<TimeValue>(
-                new List<TimeValue> { new TimeValue(_theme.HoverTransitionDuration, TimeUnit.Second) });
-            element.style.transitionTimingFunction = new StyleList<EasingFunction>(
-                new List<EasingFunction> { new EasingFunction(EasingMode.EaseInOutCubic) });
-        }
-
         void ApplyAlign()
         {
             TextAnchor anchor;
@@ -657,62 +641,13 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        // 両軸の指定は OR で合成する（片方でも「潰す」なら潰す）
         void ApplyCornerRadius()
         {
-            float radius = _theme != null ? _theme.InputRadius : 0f;
+            TweeqInputBoxStyles.ApplyCornerRadius(this, _theme, _inlinePosition, _blockPosition);
 
-            bool topLeft = true;
-            bool topRight = true;
-            bool bottomLeft = true;
-            bool bottomRight = true;
-
-            switch (_inlinePosition)
-            {
-                case TweeqBoxPosition.Start:
-                    topRight = false;
-                    bottomRight = false;
-                    break;
-
-                case TweeqBoxPosition.Middle:
-                    topLeft = false;
-                    topRight = false;
-                    bottomLeft = false;
-                    bottomRight = false;
-                    break;
-
-                case TweeqBoxPosition.End:
-                    topLeft = false;
-                    bottomLeft = false;
-                    break;
-            }
-
-            switch (_blockPosition)
-            {
-                case TweeqBoxPosition.Start:
-                    bottomLeft = false;
-                    bottomRight = false;
-                    break;
-
-                case TweeqBoxPosition.Middle:
-                    topLeft = false;
-                    topRight = false;
-                    bottomLeft = false;
-                    bottomRight = false;
-                    break;
-
-                case TweeqBoxPosition.End:
-                    topLeft = false;
-                    topRight = false;
-                    break;
-            }
-
-            SetCornerRadius(this, radius, topLeft, topRight, bottomLeft, bottomRight);
-
-            if (_focusRing != null)
-            {
-                SetCornerRadius(_focusRing, radius, topLeft, topRight, bottomLeft, bottomRight);
-            }
+            // フォーカスリングは別レイヤなので同じ角丸を掛け直す
+            TweeqInputBoxStyles.ApplyCornerRadius(
+                _focusRing, _theme, _inlinePosition, _blockPosition);
         }
 
         #endregion
@@ -913,13 +848,13 @@ namespace Tweeq.UIToolkit
             {
                 // 背景透明 + 1px Border のインセット枠（NumberInput と同じ）
                 this.style.backgroundColor = Color.clear;
-                SetBorderWidth(this, DISABLED_BORDER_WIDTH);
-                SetBorderColor(this, _theme.Border);
+                TweeqInputBoxStyles.SetBorderWidth(this, DISABLED_BORDER_WIDTH);
+                TweeqInputBoxStyles.SetBorderColor(this, _theme.Border);
                 return;
             }
 
-            SetBorderWidth(this, 0f);
-            this.style.backgroundColor = _hovered ? _theme.InputHover : _theme.Input;
+            TweeqInputBoxStyles.SetBorderWidth(this, 0f);
+            this.style.backgroundColor = TweeqInputBoxStyles.ResolveBackground(_theme, _hovered);
         }
 
         // 仕様: invalid は文字色を Error に変えるだけ（枠線・アイコンは変えない）
@@ -939,40 +874,6 @@ namespace Tweeq.UIToolkit
         }
 
         bool ShowInvalid => _invalid || _rejected;
-
-        #endregion
-
-        #region Helpers
-
-        static void SetBorderWidth(VisualElement element, float width)
-        {
-            element.style.borderLeftWidth = width;
-            element.style.borderRightWidth = width;
-            element.style.borderTopWidth = width;
-            element.style.borderBottomWidth = width;
-        }
-
-        static void SetBorderColor(VisualElement element, Color color)
-        {
-            element.style.borderLeftColor = color;
-            element.style.borderRightColor = color;
-            element.style.borderTopColor = color;
-            element.style.borderBottomColor = color;
-        }
-
-        static void SetCornerRadius(
-            VisualElement element,
-            float radius,
-            bool topLeft,
-            bool topRight,
-            bool bottomLeft,
-            bool bottomRight)
-        {
-            element.style.borderTopLeftRadius = topLeft ? radius : 0f;
-            element.style.borderTopRightRadius = topRight ? radius : 0f;
-            element.style.borderBottomLeftRadius = bottomLeft ? radius : 0f;
-            element.style.borderBottomRightRadius = bottomRight ? radius : 0f;
-        }
 
         #endregion
     }
