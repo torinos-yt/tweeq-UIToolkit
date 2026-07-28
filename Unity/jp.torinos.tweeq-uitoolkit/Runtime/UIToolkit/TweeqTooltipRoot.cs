@@ -116,6 +116,7 @@ namespace Tweeq.UIToolkit
                 _theme = value ?? TweeqTheme.Dark();
                 _popover.Theme = _theme;
                 _label.style.color = _theme.Text;
+                TweeqFonts.Apply(_label, _theme.FontUi);
             }
         }
 

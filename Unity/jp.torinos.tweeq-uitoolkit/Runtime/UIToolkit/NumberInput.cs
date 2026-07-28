@@ -750,6 +750,12 @@ namespace Tweeq.UIToolkit
             {
                 TweeqFonts.Apply(_scaleLabels[i].Element, numeric);
             }
+
+            // Prefix / suffix are unit words and LeftLabel is an axis name, i.e. UI text rather than digits.
+            FontDefinition ui = _theme.FontUi;
+            TweeqFonts.Apply(_prefixLabel, ui);
+            TweeqFonts.Apply(_suffixLabel, ui);
+            TweeqFonts.Apply(_leftLabel, ui);
         }
 
         void ApplyInteractivity()

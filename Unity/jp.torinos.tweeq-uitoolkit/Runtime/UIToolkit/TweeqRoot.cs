@@ -17,6 +17,13 @@ namespace Tweeq.UIToolkit
     ///     --tq-gray: #8b8d98;
     ///     --tq-background: #111111;
     ///     --tq-color-mode: "dark"; /* or "light" */
+    ///
+    ///     /* Font tokens. Either a legacy Font or a TextCore FontAsset.
+    ///        Asset references must use url(); resource() does not resolve for these. */
+    ///     --tq-font-ui: url("project://database/Assets/Fonts/MyFont.ttf");
+    ///     --tq-font-numeric: url("/Assets/Fonts/MyMono.ttf");
+    ///     --tq-font-heading: url("MyFont-SemiBold.ttf"); /* relative to this .uss */
+    ///     --tq-font-code: url("project://database/Packages/my.package/Fonts/MyMono.ttf");
     /// }
     /// </code>
     /// <para>
@@ -62,6 +69,18 @@ namespace Tweeq.UIToolkit
         /// <summary>The light value to specify for <see cref="COLOR_MODE_PROPERTY_NAME"/>.</summary>
         public const string COLOR_MODE_LIGHT = "light";
 
+        /// <summary>Custom property name that supplies <see cref="TweeqTheme.FontUi"/>.</summary>
+        public const string FONT_UI_PROPERTY_NAME = "--tq-font-ui";
+
+        /// <summary>Custom property name that supplies <see cref="TweeqTheme.FontNumeric"/>.</summary>
+        public const string FONT_NUMERIC_PROPERTY_NAME = "--tq-font-numeric";
+
+        /// <summary>Custom property name that supplies <see cref="TweeqTheme.FontHeading"/>.</summary>
+        public const string FONT_HEADING_PROPERTY_NAME = "--tq-font-heading";
+
+        /// <summary>Custom property name that supplies <see cref="TweeqTheme.FontCode"/>.</summary>
+        public const string FONT_CODE_PROPERTY_NAME = "--tq-font-code";
+
         #endregion
 
         #region Custom style properties
@@ -77,6 +96,20 @@ namespace Tweeq.UIToolkit
 
         static readonly CustomStyleProperty<string> ColorModeProperty =
             new CustomStyleProperty<string>(COLOR_MODE_PROPERTY_NAME);
+
+        // Font seeds arrive as an asset reference (USS resource() / url()), so the property type is
+        // Object rather than a font type: which of Font / FontAsset it turned out to be is decided at resolve time
+        static readonly CustomStyleProperty<UnityEngine.Object> FontUiProperty =
+            new CustomStyleProperty<UnityEngine.Object>(FONT_UI_PROPERTY_NAME);
+
+        static readonly CustomStyleProperty<UnityEngine.Object> FontNumericProperty =
+            new CustomStyleProperty<UnityEngine.Object>(FONT_NUMERIC_PROPERTY_NAME);
+
+        static readonly CustomStyleProperty<UnityEngine.Object> FontHeadingProperty =
+            new CustomStyleProperty<UnityEngine.Object>(FONT_HEADING_PROPERTY_NAME);
+
+        static readonly CustomStyleProperty<UnityEngine.Object> FontCodeProperty =
+            new CustomStyleProperty<UnityEngine.Object>(FONT_CODE_PROPERTY_NAME);
 
         #endregion
 
@@ -96,6 +129,10 @@ namespace Tweeq.UIToolkit
         Color _resolvedBackground;
         Color _resolvedAccent;
         Color _resolvedGray;
+        UnityEngine.Object _resolvedFontUi;
+        UnityEngine.Object _resolvedFontNumeric;
+        UnityEngine.Object _resolvedFontHeading;
+        UnityEngine.Object _resolvedFontCode;
 
         #endregion
 
@@ -140,6 +177,103 @@ namespace Tweeq.UIToolkit
         {
             ApplyBackground();
             Distribute(this);
+        }
+
+        #endregion
+
+        #region Font seeds
+
+        /// <summary>
+        /// Reads the four font custom properties off <paramref name="style"/> and overrides the
+        /// matching tokens on <paramref name="theme"/>.
+        /// </summary>
+        public static void ApplyFontSeeds(ICustomStyle style, TweeqTheme theme)
+        {
+            if (style == null || theme == null)
+            {
+                return;
+            }
+
+            ApplyFontSeeds(
+                theme,
+                ResolveFontSeed(style, FontUiProperty),
+                ResolveFontSeed(style, FontNumericProperty),
+                ResolveFontSeed(style, FontHeadingProperty),
+                ResolveFontSeed(style, FontCodeProperty));
+        }
+
+        /// <summary>
+        /// Overrides a theme's font tokens with already-resolved seed assets. A null entry leaves
+        /// that token untouched, which is what makes "specify only the ones you care about" work —
+        /// an unspecified token keeps the default (FontUi empty, the rest bundled Geist).
+        /// </summary>
+        public static void ApplyFontSeeds(
+            TweeqTheme theme,
+            UnityEngine.Object ui,
+            UnityEngine.Object numeric,
+            UnityEngine.Object heading,
+            UnityEngine.Object code)
+        {
+            if (theme == null)
+            {
+                return;
+            }
+
+            if (TryCreateFontDefinition(ui, out FontDefinition uiFont))
+            {
+                theme.FontUi = uiFont;
+            }
+
+            if (TryCreateFontDefinition(numeric, out FontDefinition numericFont))
+            {
+                theme.FontNumeric = numericFont;
+            }
+
+            if (TryCreateFontDefinition(heading, out FontDefinition headingFont))
+            {
+                theme.FontHeading = headingFont;
+            }
+
+            if (TryCreateFontDefinition(code, out FontDefinition codeFont))
+            {
+                theme.FontCode = codeFont;
+            }
+        }
+
+        /// <summary>
+        /// Turns a seed asset into a <see cref="FontDefinition"/>. Both a TextCore
+        /// <see cref="UnityEngine.TextCore.Text.FontAsset"/> and a legacy <see cref="Font"/> are
+        /// accepted, since which one a USS <c>url()</c> yields depends on how the font was
+        /// imported. Returns false for anything else.
+        /// </summary>
+        public static bool TryCreateFontDefinition(UnityEngine.Object asset, out FontDefinition definition)
+        {
+            definition = default;
+
+            // Unity's lifetime-aware == also catches an asset destroyed after the style was resolved
+            if (asset == null)
+            {
+                return false;
+            }
+
+            if (asset is UnityEngine.TextCore.Text.FontAsset fontAsset)
+            {
+                definition = FontDefinition.FromSDFFont(fontAsset);
+                return true;
+            }
+
+            if (asset is Font font)
+            {
+                definition = FontDefinition.FromFont(font);
+                return true;
+            }
+
+            // A wrong asset type would silently leave the default font in place and be hard to diagnose,
+            // so warn (but don't throw — this library has to survive a bad asset at runtime)
+            Debug.LogWarning(
+                $"[TweeqRoot] a font seed must be a Font or a FontAsset, got "
+                + $"'{asset.GetType().Name}' ({asset.name}).");
+            return false;
         }
 
         #endregion
@@ -205,11 +339,20 @@ namespace Tweeq.UIToolkit
                 gray = grayValue;
             }
 
+            UnityEngine.Object fontUi = ResolveFontSeed(style, FontUiProperty);
+            UnityEngine.Object fontNumeric = ResolveFontSeed(style, FontNumericProperty);
+            UnityEngine.Object fontHeading = ResolveFontSeed(style, FontHeadingProperty);
+            UnityEngine.Object fontCode = ResolveFontSeed(style, FontCodeProperty);
+
             if (_seedsResolved
                 && _resolvedMode == mode
                 && _resolvedBackground == background
                 && _resolvedAccent == accent
-                && _resolvedGray == gray)
+                && _resolvedGray == gray
+                && ReferenceEquals(_resolvedFontUi, fontUi)
+                && ReferenceEquals(_resolvedFontNumeric, fontNumeric)
+                && ReferenceEquals(_resolvedFontHeading, fontHeading)
+                && ReferenceEquals(_resolvedFontCode, fontCode))
             {
                 return;
             }
@@ -219,9 +362,20 @@ namespace Tweeq.UIToolkit
             _resolvedBackground = background;
             _resolvedAccent = accent;
             _resolvedGray = gray;
+            _resolvedFontUi = fontUi;
+            _resolvedFontNumeric = fontNumeric;
+            _resolvedFontHeading = fontHeading;
+            _resolvedFontCode = fontCode;
 
             _theme = TweeqTheme.FromSeeds(mode, background, accent, gray);
+            ApplyFontSeeds(_theme, fontUi, fontNumeric, fontHeading, fontCode);
             Redistribute();
+        }
+
+        static UnityEngine.Object ResolveFontSeed(
+            ICustomStyle style, CustomStyleProperty<UnityEngine.Object> property)
+        {
+            return style.TryGetValue(property, out UnityEngine.Object value) ? value : null;
         }
 
         static ColorMode ResolveColorMode(ICustomStyle style)

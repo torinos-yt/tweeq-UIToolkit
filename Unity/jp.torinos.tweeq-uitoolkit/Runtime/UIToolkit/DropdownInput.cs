@@ -776,6 +776,8 @@ namespace Tweeq.UIToolkit
                 // Inset from left and right by the chevron's width, keeping the text's center aligned with the box's center
                 _fieldLabel.style.paddingLeft = chevronWidth;
                 _fieldLabel.style.paddingRight = chevronWidth;
+
+                TweeqFonts.Apply(_fieldLabel, _theme.FontUi);
             }
 
             if (_focusRing != null)
@@ -939,6 +941,12 @@ namespace Tweeq.UIToolkit
 
             _filterField.style.unityTextAlign = TextAnchor.MiddleCenter;
             _filterField.style.fontSize = TEXT_FONT_SIZE;
+
+            // TextField's internals declare their own fontSize, so inheritance alone can't be trusted here;
+            // the font is pushed down to input / TextElement the same way NumberInput does it.
+            TweeqFonts.Apply(_filterField, _theme.FontUi);
+            TweeqFonts.Apply(_filterInput, _theme.FontUi);
+            TweeqFonts.Apply(_filterText, _theme.FontUi);
 
             // The caret/selection colors default to USS black, which is invisible on a dark background.
             // selectionColor is obsolete, but the recommended --unity-selection-color can't be
@@ -1305,6 +1313,8 @@ namespace Tweeq.UIToolkit
             row.style.overflow = Overflow.Hidden;
             row.style.textOverflow = TextOverflow.Ellipsis;
             SetCornerRadius(row, _theme.InputRadius, true, true, true, true);
+
+            TweeqFonts.Apply(row, _theme.FontUi);
         }
 
         void ApplyPopupStyles()

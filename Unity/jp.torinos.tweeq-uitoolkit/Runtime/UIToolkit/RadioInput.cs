@@ -316,6 +316,8 @@ namespace Tweeq.UIToolkit
                 EasingMode.EaseInOutCubic,
                 "background-color",
                 "color");
+
+            TweeqFonts.Apply(segment, _theme.FontUi);
         }
 
         // Only the indicator uses plain ease (an explicit exception in spec §5).

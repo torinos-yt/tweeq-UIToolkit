@@ -287,6 +287,8 @@ namespace Tweeq.UIToolkit
                     new List<EasingFunction> { new EasingFunction(EasingMode.EaseInOutCubic) });
             }
 
+            TweeqFonts.Apply(_labelElement, _theme.FontUi);
+
             ApplyCornerRadius();
         }
 

@@ -291,7 +291,7 @@ namespace Tweeq.UIToolkit
                 // Leaving the rejected panel displayed would show two panels overlapping.
                 // A warning is logged so the cause is discoverable, and it's folded away without throwing an exception.
                 Debug.LogWarning(
-                    $"{nameof(TweeqTabs)}: id '{tab.Id}' のタブが重複している。後から来た方を無視する");
+                    $"{nameof(TweeqTabs)}: duplicate tab id '{tab.Id}'; ignoring the later one");
                 tab.SetActive(false);
                 return;
             }
@@ -657,8 +657,9 @@ namespace Tweeq.UIToolkit
                 label.style.marginRight = 0f;
                 label.style.whiteSpace = WhiteSpace.NoWrap;
 
-                // Vue's font-weight: bold. The font itself is left as the panel's default (FontHeading isn't used).
+                // Vue's font-weight: bold. FontHeading isn't used here, so this follows the general UI font.
                 label.style.unityFontStyleAndWeight = FontStyle.Bold;
+                TweeqFonts.Apply(label, _theme.FontUi);
                 label.style.height = HEADER_LINE_HEIGHT;
 
                 if (_vertical)

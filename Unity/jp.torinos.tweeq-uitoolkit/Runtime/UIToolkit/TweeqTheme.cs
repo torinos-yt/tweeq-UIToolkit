@@ -235,9 +235,10 @@ namespace Tweeq.UIToolkit
         // results and returns empty on failure, so the Resources reference here is cheap
 
         /// <summary>
-        /// The general UI font. Corresponds to the Vue original's fontUi=system-ui, so the
-        /// default is empty (i.e. unspecified). Has no applying code yet — a token reserved for a
-        /// future bulk override.
+        /// The general UI font, i.e. every piece of text not claimed by
+        /// <see cref="FontNumeric"/> / <see cref="FontHeading"/> / <see cref="FontCode"/>.
+        /// Corresponds to the Vue original's fontUi=system-ui, so the default is empty
+        /// (unspecified) and the panel's own font applies.
         /// </summary>
         public FontDefinition FontUi = default;
 

@@ -215,6 +215,8 @@ namespace Tweeq.UIToolkit
                 SetBorderRadius(_handle, size * 0.5f);
                 ApplyTransition(_handle, new[] { "left", "width", "background-color" });
             }
+
+            TweeqFonts.Apply(_labelElement, _theme.FontUi);
         }
 
         // Spec §2: the track background and the handle's left/width/background are all 64ms.

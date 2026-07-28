@@ -164,6 +164,7 @@ namespace Tweeq.UIToolkit
             _label.style.height = _theme.InputHeight;
             _label.style.fontSize = LABEL_FONT_SIZE;
             _label.style.color = _theme.TextMuted;
+            TweeqFonts.Apply(_label, _theme.FontUi);
 
             // Gap between the label column and the value column (original grid-gap = gapControl)
             _label.style.marginRight = _theme.GapControl;

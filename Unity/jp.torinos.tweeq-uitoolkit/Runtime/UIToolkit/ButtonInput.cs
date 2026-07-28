@@ -413,6 +413,8 @@ namespace Tweeq.UIToolkit
 
             SetBorderColor(_focusInner, _theme.Input);
             SetBorderColor(_focusOuter, _theme.Accent);
+
+            TweeqFonts.Apply(_label, _theme.FontUi);
         }
 
         void ApplyContentLayout()

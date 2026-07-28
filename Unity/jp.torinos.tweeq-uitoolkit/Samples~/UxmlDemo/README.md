@@ -43,6 +43,40 @@ TweeqRoot root = document.rootVisualElement.Q<TweeqRoot>();
 root.Theme = TweeqTheme.Light().WithAccent(new Color32(0xFF, 0x66, 0x00, 0xFF));
 ```
 
+## Specifying the fonts
+
+Four more custom properties on the same selector swap the font tokens.
+
+| Property | Applies to | Default |
+| --- | --- | --- |
+| `--tq-font-ui` | general text (labels, buttons, dropdown rows, tabs) | the panel's own font |
+| `--tq-font-numeric` | digits (number fields, timecode, rulers) | bundled Geist |
+| `--tq-font-heading` | headings and dialog titles | bundled Geist SemiBold |
+| `--tq-font-code` | monospace text (HEX fields) | bundled Geist Mono |
+
+The value is an asset reference to a `Font` (`.ttf` / `.otf`) or a TextCore
+`FontAsset`. All of these forms work:
+
+```css
+.demo-root {
+    /* the form UI Builder writes */
+    --tq-font-ui: url("project://database/Assets/Fonts/MyFont.ttf");
+
+    /* project-root absolute */
+    --tq-font-numeric: url("/Assets/Fonts/MyMono.ttf");
+
+    /* relative to this .uss file */
+    --tq-font-heading: url("MyFont-SemiBold.ttf");
+
+    /* a font living in a package */
+    --tq-font-code: url("project://database/Packages/my.package/Fonts/MyMono.ttf");
+}
+```
+
+- `resource("...")` does **not** resolve for these properties — use `url()`.
+- Unspecified tokens keep their defaults; the C#-assignment-wins rule above
+  applies to the fonts too.
+
 ## Notes
 
 - UXML tag/attribute names follow each component's `[UxmlElement]` /

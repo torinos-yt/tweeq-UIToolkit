@@ -1169,9 +1169,12 @@ namespace Tweeq.UIToolkit
                 {
                     _fontTheme = theme;
 
-                    // These are fields for reading the raw value, so the numeric font is used (the X / Y axis names stay on the UI default).
+                    // These are fields for reading the raw value, so the numeric font is used; the X / Y axis
+                    // names are UI text rather than digits, so they follow the general UI font.
                     TweeqFonts.Apply(_xValue.Element, theme.FontNumeric);
                     TweeqFonts.Apply(_yValue.Element, theme.FontNumeric);
+                    TweeqFonts.Apply(_xAxis, theme.FontUi);
+                    TweeqFonts.Apply(_yAxis, theme.FontUi);
                 }
 
                 _xValue.Sync(_state.Value.x, _state.Precision);

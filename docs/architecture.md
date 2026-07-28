@@ -88,7 +88,9 @@ theme boundaries.
 [Geist](https://vercel.com/font) v1.7.2 (static TTF, OFL) is bundled and applied
 to numeric fields, headings, and code/hex text. The general UI font is left
 unset on purpose, falling back to the panel's default — the Unity analogue of
-the original's `system-ui` stack.
+the original's `system-ui` stack. All four tokens are replaceable, either through
+the `TweeqTheme` font fields in C# or through the `--tq-font-*` USS seeds on
+`TweeqRoot`.
 
 ## Extending
 

@@ -519,6 +519,11 @@ namespace Tweeq.UIToolkit
             // Normalization of height, padding, and caret color was moved into the shared public helper (EXT-03-A).
             TweeqInputBoxStyles.ApplyTextField(_textField, _theme);
 
+            // Applied to the root rather than to the inner TextField because unityFontDefinition is
+            // inherited: a host that wants a different font here (ColorInput's HEX field uses FontCode)
+            // overrides it on this same root afterwards, and an inner override would win over that.
+            TweeqFonts.Apply(this, _theme.FontUi);
+
             if (_textInput != null)
             {
                 // The helper resets left/right to 0, so the spec's 0.5em is reapplied here.

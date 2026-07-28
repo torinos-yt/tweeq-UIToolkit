@@ -85,6 +85,53 @@ Radix-scale pipeline ported to pure C#:
 
 Nested `TweeqRoot`s form independent theme boundaries.
 
+## Fonts
+
+The theme carries four font tokens. Every widget reads one of them, so swapping a
+token re-fonts the whole UI.
+
+| Token | Applies to | Default |
+| --- | --- | --- |
+| `FontUi` | General text: button/checkbox/switch/radio labels, parameter labels, dropdown field & option rows, tab headings, tooltips, `StringInput`, number prefixes/suffixes/axis labels | unset — the panel's own font, the Unity analogue of `system-ui` |
+| `FontNumeric` | Digits: number fields, timecode digits, ruler ticks, scrub overlays | bundled Geist |
+| `FontHeading` | `ParameterHeading`, modal dialog titles | bundled Geist SemiBold |
+| `FontCode` | Monospace text: HEX fields, the color scrub overlay | bundled Geist Mono |
+
+From C#, assign the fields and hand the theme back to the root — the tokens are
+read while distributing, so a mutation made after distribution needs a
+re-assignment (or `Redistribute()`) to take effect:
+
+```csharp
+TweeqTheme theme = TweeqTheme.Dark();
+theme.FontUi = FontDefinition.FromFont(myFont);
+theme.FontCode = FontDefinition.FromSDFFont(myMonoFontAsset);
+
+root.Theme = theme;   // distribute; re-assign (or call root.Redistribute()) after later edits
+```
+
+Setting a token back to `default` restores the panel's font rather than leaving
+the previous override behind.
+
+From USS, seed the same four tokens on the element carrying `TweeqRoot`:
+
+```css
+.my-panel {
+    --tq-font-ui: url("project://database/Assets/Fonts/MyFont.ttf");
+    --tq-font-numeric: url("/Assets/Fonts/MyMono.ttf");
+    --tq-font-heading: url("MyFont-SemiBold.ttf");
+    --tq-font-code: url("project://database/Packages/my.package/Fonts/MyMono.ttf");
+}
+```
+
+Both a legacy `Font` and a TextCore `FontAsset` are accepted. Asset references
+must go through `url()`; `resource()` does not resolve for these properties.
+Unspecified tokens keep their defaults, and — as with the color seeds — assigning
+`root.Theme` from C# wins over USS.
+
+Geist is bundled under `Resources/Tweeq`, but nothing forces you to ship it: point
+all four tokens at your own fonts and the bundled files go unused (see
+`Runtime/Fonts/Licenses.md` for the OFL terms that apply if you do ship it).
+
 ## Gesture & keyboard reference
 
 | Input | Effect |

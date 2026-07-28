@@ -1336,8 +1336,11 @@ namespace Tweeq.UIToolkit
                 {
                     _fontTheme = theme;
 
-                    // This is a field for reading the raw angle, so it uses the numeric font (the chevrons are symbols, so they stay on the UI default).
+                    // This is a field for reading the raw angle, so it uses the numeric font; the chevrons are
+                    // symbols rather than digits, so they follow the general UI font.
                     TweeqFonts.Apply(_valueLabel, theme.FontNumeric);
+                    TweeqFonts.Apply(_leftChevron, theme.FontUi);
+                    TweeqFonts.Apply(_rightChevron, theme.FontUi);
                 }
             }
 
