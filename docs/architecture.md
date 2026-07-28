@@ -111,6 +111,8 @@ widget author needs are public:
   field normalization (`ApplyTextField`), and the disabled look
   (`ApplyDisabledChrome`).
 - **`TweeqFocusRing`** — the focus indicator layer, corner-fusion aware.
+- **`TweeqScrollbarStyles`** — restyles a `ScrollView`'s scrollers into a slim,
+  themed thumb that fits the tweeq chrome.
 - **`TweeqScrubManipulator`** — drag-to-scrub pointer wiring with the standard
   drag thresholds (3 px mouse / 5 px pen+touch), Escape cancel, and
   click-vs-scrub discrimination. Pair it with `Tweeq.Core.TweakGesture` for

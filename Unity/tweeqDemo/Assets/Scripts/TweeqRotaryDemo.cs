@@ -522,6 +522,7 @@ namespace TweeqDemo
             scroll.contentContainer.style.paddingBottom = GAP * 2f;
             scroll.contentContainer.style.paddingLeft = GAP;
             scroll.contentContainer.style.paddingRight = GAP;
+            TweeqScrollbarStyles.ApplySlim(scroll, _theme);
             _root.Add(scroll);
 
             _rotary = new RotaryInput
