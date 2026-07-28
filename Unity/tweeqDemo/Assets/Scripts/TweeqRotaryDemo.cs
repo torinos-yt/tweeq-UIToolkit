@@ -158,6 +158,7 @@ namespace TweeqDemo
         ButtonInput _focusInOutButton;
         StringInput _text;
         ColorInput _tint;
+        CubicBezierInput _curve;
         ButtonInput _flashButton;
         ButtonInput _plusButton;
 
@@ -201,6 +202,8 @@ namespace TweeqDemo
         float _timeLive = INITIAL_TIME_FRAMES;
         string _textConfirmed = INITIAL_TEXT;
         Color _tintConfirmed = Color.white;
+        Vector4 _curveConfirmed = CubicBezierInput.DEFAULT_VALUE;
+        Vector4 _curveLive = CubicBezierInput.DEFAULT_VALUE;
         int _flashClicks;
         int _plusClicks;
 
@@ -406,6 +409,13 @@ namespace TweeqDemo
             {
                 _tint.Confirmed -= OnTintConfirmed;
                 _tint = null;
+            }
+
+            if (_curve != null)
+            {
+                _curve.Confirmed -= OnCurveConfirmed;
+                _curve.UnregisterValueChangedCallback(OnCurveChanged);
+                _curve = null;
             }
 
             if (_flashButton != null)
@@ -774,6 +784,17 @@ namespace TweeqDemo
             _tint.Confirmed += OnTintConfirmed;
             _tintConfirmed = tint;
             group.Content.Add(BuildRow("Tint", _tint));
+
+            // Easing curve: the preview button opens a pad where both control points are dragged.
+            // ChangeEvent tracks the drag live, Confirmed lands once per drag
+            _curve = new CubicBezierInput
+            {
+                Theme = _theme,
+            };
+            _curve.SetValueWithoutNotify(CubicBezierInput.DEFAULT_VALUE);
+            _curve.RegisterValueChangedCallback(OnCurveChanged);
+            _curve.Confirmed += OnCurveConfirmed;
+            group.Content.Add(BuildRow("Curve", _curve));
 
             group.RefreshContentGaps();
             return group;
@@ -1377,6 +1398,18 @@ namespace TweeqDemo
             RefreshConfirmedLabel();
         }
 
+        void OnCurveChanged(ChangeEvent<Vector4> evt)
+        {
+            _curveLive = evt.newValue;
+            RefreshConfirmedLabel();
+        }
+
+        void OnCurveConfirmed(Vector4 value)
+        {
+            _curveConfirmed = value;
+            RefreshConfirmedLabel();
+        }
+
         void OnFlashClicked()
         {
             _flashClicks++;
@@ -1543,6 +1576,8 @@ namespace TweeqDemo
                 + " / playhead " + Format((float)_playheadFrame) + "F"
                 + " / text \"" + _textConfirmed + "\""
                 + " / tint #" + ColorUtility.ToHtmlStringRGBA(_tintConfirmed)
+                + " / curve " + FormatCurve(_curveConfirmed)
+                + " (live " + FormatCurve(_curveLive) + ")"
                 + " / flash " + _flashClicks
                 + " / plus " + _plusClicks
                 + " / dialog " + _dialogResult
@@ -1565,6 +1600,16 @@ namespace TweeqDemo
         static string Format(float value)
         {
             return value.ToString("0.###", CultureInfo.InvariantCulture);
+        }
+
+        // The pad has no numeric fields, so the label is where the actual control points are read off
+        static string FormatCurve(Vector4 curve)
+        {
+            return "("
+                + curve.x.ToString("F2", CultureInfo.InvariantCulture) + ","
+                + curve.y.ToString("F2", CultureInfo.InvariantCulture) + ","
+                + curve.z.ToString("F2", CultureInfo.InvariantCulture) + ","
+                + curve.w.ToString("F2", CultureInfo.InvariantCulture) + ")";
         }
 
         static string FormatAngle(float angle)

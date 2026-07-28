@@ -23,6 +23,7 @@ preserved at the git tag [`vue-final`](https://github.com/torinos-yt/tweeq-UIToo
 | `InputRadio` | `RadioInput` | Sliding indicator, drag selection, arrow-key wrap |
 | `InputDropdown` | `DropdownInput<T>`, `StringDropdownInput` | Fuzzy filtering included |
 | `InputShuffle` | `ShuffleInput<T>`, `StringShuffleInput` | |
+| `InputCubicBezier` | `CubicBezierInput` | `Vector4` easing control points, popover pad with two draggable handles |
 | `InputTime` | `TimeInput` | Frame-count value, SMPTE timecode display, per-digit scrub, clock overlay; expressions use a reduced arithmetic grammar |
 | `InputGroup` | `InputGroup` | Corner-radius fusion, stretch layout |
 | `ParameterGrid` | `ParameterGrid` / `Parameter` / `ParameterHeading` / `ParameterGroup` | Shared label column, collapsible groups with persistence |
@@ -46,7 +47,6 @@ All widgets are `[UxmlElement]`s and can be placed from UXML/UI Builder
 | Original | Status |
 | --- | --- |
 | `PaneSplit`, `PaneFloating` | Planned as a separate workspace assembly (split/floating panes + layout persistence). Will be designed against concrete host-app use cases. |
-| `InputCubicBezier` | Planned. |
 | `InputDrum` | Ported when a concrete need appears. |
 
 ## Not ported (out of scope)
@@ -62,7 +62,7 @@ have no sensible Unity equivalent:
 - **Eyedropper**: relies on a browser API
 - **Icon system**: `Icon` / `SvgIcon` / `BindIcon` / `ColorIcon` /
   `IconIndicator` — this port draws its glyphs directly with `Painter2D`
-- `InputCubicBezier`, `InputComplex`
+- `InputComplex`
 - `PaneExpandable` — collapsible groups are covered by `ParameterGroup`
 - `stores` (application state) — out of a widget library's responsibility
 

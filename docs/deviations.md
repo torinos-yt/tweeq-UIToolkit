@@ -93,6 +93,10 @@ Web capabilities without a Unity equivalent, replaced rather than emulated:
 - Values follow UI Toolkit's `INotifyValueChanged<T>` / `ChangeEvent<T>`
   convention instead of Vue's `modelValue` binding.
 - `ColorInput` uses **`UnityEngine.Color`** as its value type.
+- `CubicBezierInput` uses **`UnityEngine.Vector4`** `(x1, y1, x2, y2)` as its
+  value type, defaults to CSS `ease` (the original has no default), and wraps
+  handle drags in the port's edit-session semantics (one `Confirmed` per drag,
+  `Escape` cancels the drag in progress; the original only streams updates).
 - `VecInput` (`float[]`) uses **copy semantics** on get/set to avoid exposing a
   mutable internal buffer; the typed `Vec2/3/4Input` variants use structs and
   are allocation-free during gestures.
