@@ -36,6 +36,8 @@ namespace TweeqDemo
         // feedback-fixes-01.md D-4: both clamps off, so this row can leave [0,1] and raise the arrows
         const float OVERSHOOT_INITIAL = 0.5f;
 
+        const float ZOOM_INITIAL = 1f;
+
         // ParameterGroup persists its open state in PlayerPrefs under these names
         const string VECTOR_GROUP_NAME = "tweeqDemo.vector";
         const string BOOLEAN_GROUP_NAME = "tweeqDemo.boolean";
@@ -126,6 +128,7 @@ namespace TweeqDemo
         NumberInput _rotation;
         NumberInput _offsetX;
         NumberInput _overshoot;
+        NumberInput _zoom;
         PositionInput _position;
         SizeInput _size;
         Label _confirmedLabel;
@@ -175,6 +178,7 @@ namespace TweeqDemo
         float _rotationConfirmed;
         float _offsetConfirmed;
         float _overshootConfirmed = OVERSHOOT_INITIAL;
+        float _zoomConfirmed = ZOOM_INITIAL;
         Vector2 _positionConfirmed;
         Vector2 _sizeConfirmed = INITIAL_SIZE;
 
@@ -271,6 +275,12 @@ namespace TweeqDemo
             {
                 _overshoot.Confirmed -= OnOvershootConfirmed;
                 _overshoot = null;
+            }
+
+            if (_zoom != null)
+            {
+                _zoom.Confirmed -= OnZoomConfirmed;
+                _zoom = null;
             }
 
             if (_position != null)
@@ -605,6 +615,24 @@ namespace TweeqDemo
             _overshoot.SetValueWithoutNotify(OVERSHOOT_INITIAL);
             _overshoot.Confirmed += OnOvershootConfirmed;
             grid.Add(BuildRow("Overshoot", _overshoot));
+
+            // The fork's numeric scale readout (ScaleStyle = Values), kept as an opt-in next to
+            // the faithful default dots so both styles can be compared while scrubbing
+            _zoom = new NumberInput
+            {
+                Theme = _theme,
+                Min = 0.0,
+                Max = 4.0,
+                Step = 0.01,
+                SnapStep = 0.5,
+                Bar = true,
+                Precision = 2,
+                ScaleStyle = NumberScaleStyle.Values,
+                Suffix = " x",
+            };
+            _zoom.SetValueWithoutNotify(ZOOM_INITIAL);
+            _zoom.Confirmed += OnZoomConfirmed;
+            grid.Add(BuildRow("Zoom (values)", _zoom));
 
             grid.Add(BuildVectorGroup());
             grid.Add(BuildBooleanGroup());
@@ -1127,6 +1155,12 @@ namespace TweeqDemo
             RefreshConfirmedLabel();
         }
 
+        void OnZoomConfirmed(float value)
+        {
+            _zoomConfirmed = value;
+            RefreshConfirmedLabel();
+        }
+
         void OnPositionConfirmed(Vector2 value)
         {
             _positionConfirmed = value;
@@ -1496,7 +1530,9 @@ namespace TweeqDemo
                 + Format(_offsetConfirmed)
                 + "px / over "
                 + Format(_overshootConfirmed)
-                + " / ("
+                + " / zoom "
+                + Format(_zoomConfirmed)
+                + "x / ("
                 + Format(_positionConfirmed.x)
                 + ", "
                 + Format(_positionConfirmed.y)
