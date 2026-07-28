@@ -7,19 +7,19 @@ using UnityEngine.UIElements;
 
 namespace Tweeq.UIToolkit
 {
-    /// <summary>スクラブ中に出すスケールの描き方。</summary>
+    /// <summary>How the scale shown during a scrub is drawn.</summary>
     public enum NumberScaleStyle
     {
-        /// <summary>本家 tweeq と同じ感度ドット列。既定。</summary>
+        /// <summary>The same row of sensitivity dots as the original tweeq. Default.</summary>
         Dots,
 
-        /// <summary>各目盛りの位置に「そこまで引いたときの到達値」を数字で出す（fork 拡張）。</summary>
+        /// <summary>Shows the "value reached if dragged this far" as a number at each tick's position (fork extension).</summary>
         Values,
     }
 
     /// <summary>
-    /// 数値入力欄。テキスト編集・レンジバー・横ドラッグによるスクラブを 1 つのフィールドで兼ねる。
-    /// 内部計算は double、外部 API は UI Toolkit の流儀に合わせて float。
+    /// A number input field. Handles text editing, a range bar, and horizontal-drag scrubbing all in one field.
+    /// Internal computation is double; the external API is float, matching UI Toolkit's convention.
     /// </summary>
     [UxmlElement]
     public partial class NumberInput
@@ -30,16 +30,16 @@ namespace Tweeq.UIToolkit
         const float MOUSE_DRAG_THRESHOLD = 3f;
         const float TOUCH_DRAG_THRESHOLD = 5f;
 
-        // 閾値に届かなくても長押しでスクラブへ入る（仕様 §1）
+        // Enters a scrub via long-press even without reaching the movement threshold (spec §1).
         const long HOLD_DRAG_DELAY_MS = 500;
 
-        // ハンドルの掴み代。Vue の .handle:before（left/right とも -inputHeight/2）と同じ幅
+        // The handle's grab zone. Same width as Vue's .handle:before (-inputHeight/2 on both left/right).
         const float GRAB_ZONE_WIDTH = 24f;
 
-        // 目盛りグリッドはこの間隔を下回ったら描かない（仕様 §5）
+        // The tick grid isn't drawn once its spacing falls below this (spec §5).
         const float MIN_TICK_GAP = 10f;
 
-        // 左右端 1px は描かない（Vue の mask 相当）
+        // The outermost 1px on each side isn't drawn (equivalent to Vue's mask).
         const float TICK_EDGE_MARGIN = 1f;
         const int MAX_TICKS = 512;
 
@@ -50,58 +50,58 @@ namespace Tweeq.UIToolkit
         const float ARROW_SIZE = 4f;
         const float ARROW_OPACITY_IDLE = 0.3f;
 
-        // 系統ごとの「理想の画面間隔」（px）。実際の間隔は D-2改2 の dv 量子化で
-        // この 1/√10 〜 √10 倍へ丸められる
+        // The "ideal screen spacing" (px) for each train. The actual spacing gets rounded to somewhere
+        // between 1/sqrt(10) and sqrt(10) times this by D-2 rev2's dv quantization.
         const double SCALE_IDEAL_GAP_MIN = 1.0;
         const double SCALE_IDEAL_GAP_MAX = 1000.0;
 
-        // 間隔が 10px まで詰まると目盛りが数百個になるが、その帯は
-        // smoothstep(1,2,log10(screenGap)) が 0 なので出す必要がない。閾値以下は丸ごと捨てる。
-        // 実間隔 > 10px が保証されることで、1 系統あたりの走査回数も width/10 に収まる
+        // Once the spacing tightens to 10px, ticks would number in the hundreds, but that band doesn't
+        // need to be shown since smoothstep(1,2,log10(screenGap)) is 0 there. Anything at or below the threshold is discarded outright.
+        // Guaranteeing an actual spacing > 10px also keeps the scan count per train within width/10.
         const float SCALE_MIN_OPACITY = 0.01f;
         const int SCALE_TRAIN_COUNT = 3;
         const double SCALE_PRECISION_CYCLE = 3.0;
 
-        // 位相は value/(baseSpeed*speed) px なので、値が巨大だとインデックスが int を溢れる。
-        // 溢れる帯はどうせ画面外なので、その系統は丸ごと捨てる
+        // The phase is value/(baseSpeed*speed) px, so for huge values the index would overflow an int.
+        // An overflowing band is off-screen anyway, so that train is discarded outright.
         const double MAX_SCALE_TICK_INDEX = 1e9;
 
-        // feedback-fixes-01.md C-1: 目盛りはドットではなく「到達値の数字」そのもの
+        // feedback-fixes-01.md C-1: ticks are the "value reached" number itself, not a dot.
         const float SCALE_LABEL_FONT_SIZE = 9f;
 
-        // 幅は固定して中央揃えで x に載せる（テキスト幅を実測せずに中心を合わせるため）
+        // Width is fixed and centered on x (so the center can be aligned without measuring the text width).
         const float SCALE_LABEL_WIDTH = 48f;
         const float SCALE_LABEL_HEIGHT = 11f;
 
-        // ラベル同士が重ならない最小間隔。これを割るなら 2 個／4 個に 1 個へ間引く
+        // The minimum spacing before labels overlap each other. Below this, thin out to every 2nd or every 4th.
         const float SCALE_LABEL_MIN_GAP = 32f;
         const int SCALE_LABEL_MAX_STRIDE = 4;
 
-        // C-1: 3 系統すべてが数字になるので、プールは「1 系統ぶん × 系統数」。
-        // 間引きが効いている限り実際に使うのは 1 系統 10 個程度
+        // C-1: since all 3 trains become numbers, the pool is "one train's worth x number of trains."
+        // As long as the thinning-out is in effect, only around 10 per train are actually used.
         const int SCALE_LABEL_PER_TRAIN_MAX = 16;
         const int SCALE_LABEL_POOL_MAX = SCALE_TRAIN_COUNT * SCALE_LABEL_PER_TRAIN_MAX;
 
-        // ドットの直径。本家 .overlay .scale の stroke-width: calc(4px + var(--offset-weight) * -1px)。
-        // 縦ドラッグ（感度調整）へ寄るほど細くなる
+        // Dot diameter. The original's .overlay .scale stroke-width: calc(4px + var(--offset-weight) * -1px).
+        // Gets thinner the more you lean into a vertical drag (sensitivity adjustment).
         const float SCALE_DOT_DIAMETER_BASE = 4f;
         const float SCALE_DOT_DIAMETER_WEIGHT = 1f;
 
-        // 直径 0 の円は頂点が作れないので下限を敷く
+        // A circle with 0 diameter can't produce vertices, so a lower bound is enforced.
         const float SCALE_DOT_MIN_RADIUS = 0.5f;
 
-        // 粗い系統と同じ x に同じ値が来る細かい系統のラベルを捨てるときの許容誤差（C-1）
+        // Tolerance for discarding a fine train's label when a coarse train lands on the same value at the same x (C-1).
         const double SCALE_LABEL_DEDUPE_EPSILON = 1e-6;
 
-        // Clamp 有効側の到達可能判定に使う相対許容誤差（D-2改2）。dv 倍して絶対値にする。
-        // 端ちょうどの目盛り（v=min / v=max）が浮動小数誤差で消えないようにするための遊び
+        // Relative tolerance used for the reachability check on the side where Clamp is active (D-2 rev2). Multiplied by dv to become an absolute value.
+        // Slack so that a tick exactly at the boundary (v=min / v=max) doesn't disappear due to floating-point error.
         const double SCALE_TICK_RANGE_EPSILON = 1e-6;
 
-        // スクラブゾーンの上下ストリップ（仕様 §5: max((24 - 1em) / 2, 4px)）
+        // The top/bottom strips of the scrub zone (spec §5: max((24 - 1em) / 2, 4px)).
         const float STRIP_MIN_HEIGHT = 4f;
         const float FALLBACK_FONT_SIZE = 12f;
 
-        // grip のヒントアイコン。18px アイコンを scale 0.8 で描く前提のガイド幅
+        // The grip's hint icon. Guide width assumes an 18px icon drawn at scale 0.8.
         const float ICON_SIZE = 18f;
         const float ICON_SCALE = 0.8f;
         const float GRIP_HINT_OPACITY = 0.5f;
@@ -109,12 +109,12 @@ namespace Tweeq.UIToolkit
 
         const float TEXT_PADDING = 4f;
 
-        // 軸ラベル（仕様 §5-4）。掴み代 24px より狭くして、grip 全域を塞いだように見せない
+        // The axis label (spec §5-4). Kept narrower than the 24px grab zone so it doesn't look like it's blocking the whole grip.
         const float LEFT_LABEL_WIDTH = 18f;
         const float LEFT_LABEL_FONT_SIZE = 11f;
         const int LEFT_LABEL_MAX_LENGTH = 2;
 
-        // TextField の内側要素（背景・枠を消して中央揃えにするために触る）
+        // TextField's inner element (touched to remove the background/border and center-align it).
         const string TEXT_INPUT_NAME = "unity-text-input";
 
         #endregion
@@ -123,13 +123,13 @@ namespace Tweeq.UIToolkit
 
         float _value;
 
-        // スクラブ／入力中の生値。量子化とスナップは出力側にだけ掛け、ここには残さない
+        // The raw value while scrubbing/editing. Quantization and snapping are only applied on the output side, never left in here.
         double _local;
 
-        // 直近に組み立てた表示文字列。displayPrecision の入力にもなる（Vue の display ref 相当）
+        // The most recently composed display string. Also feeds displayPrecision's input (equivalent to Vue's display ref).
         string _display = string.Empty;
 
-        // ComposeDisplayText のメモ。キー = (値のビット列, 桁数, スクラブ中か)
+        // Memo for ComposeDisplayText. Key = (value's bit pattern, digit count, whether scrubbing).
         string _formatCache;
         double _formatCacheSource;
         int _formatCachePrecision;
@@ -169,12 +169,12 @@ namespace Tweeq.UIToolkit
         VisualElement _textInput;
         TextElement _textElement;
 
-        // 到達値ラベルは毎フレーム作らずプールを使い回す（feedback-fixes-01.md A-4 / C-1）
+        // Reached-value labels reuse a pool instead of being created every frame (feedback-fixes-01.md A-4 / C-1).
         readonly List<ScaleLabelSlot> _scaleLabels = new List<ScaleLabelSlot>();
 
         readonly ScaleTrain[] _scaleTrains = new ScaleTrain[SCALE_TRAIN_COUNT];
 
-        // 系統を gap の降順（= opacity の降順）に並べた索引。重複排除の走査順に使う（C-1）
+        // An index of trains sorted by descending gap (= descending opacity). Used for the dedup scan order (C-1).
         readonly int[] _scaleOrder = new int[SCALE_TRAIN_COUNT];
 
         readonly TweakGesture _gesture = new TweakGesture();
@@ -199,21 +199,21 @@ namespace Tweeq.UIToolkit
         bool _hovered;
         bool _editing;
 
-        // feedback-fixes-01.md C-2: 直近のフォーカスがポインタ由来かを覚える（CheckboxInput と同じ手）。
-        // Tab 由来なら編集モードへ入り、クリック／ドラッグ由来なら従来どおり PointerUp の判定に任せる
+        // feedback-fixes-01.md C-2: remembers whether the most recent focus originated from a pointer (same approach as CheckboxInput).
+        // If it originated from Tab, enter edit mode; if from a click/drag, leave it to PointerUp's judgment as before.
         bool _focusFromPointer;
 
-        // テキストのパースに失敗している間だけ立つ。次に有効な入力が来たら降ろす
+        // Set only while text parsing is failing. Cleared once a valid input comes in next.
         bool _parseFailed;
 
         #endregion
 
         #region Public API
 
-        /// <summary>ドラッグ終了・Enter・blur で発火する。矢印キーでは発火しない。</summary>
+        /// <summary>Fires on drag end, Enter, or blur. Does not fire on arrow keys.</summary>
         public event Action<float> Confirmed;
 
-        /// <summary>検証済みの出力値。</summary>
+        /// <summary>The validated output value.</summary>
         [UxmlAttribute]
         public float value
         {
@@ -231,7 +231,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>バーの下限。既定 -∞（バー無し）。</summary>
+        /// <summary>The bar's lower bound. Default -infinity (no bar).</summary>
         [UxmlAttribute]
         public double Min
         {
@@ -243,7 +243,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>バーの上限。既定 +∞（バー無し）。</summary>
+        /// <summary>The bar's upper bound. Default +infinity (no bar).</summary>
         [UxmlAttribute]
         public double Max
         {
@@ -255,7 +255,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>コミット値の量子化幅と矢印キーの増分。0 で無効。</summary>
+        /// <summary>The quantization step for the committed value, and the increment for arrow keys. Disabled at 0.</summary>
         [UxmlAttribute]
         public double Step
         {
@@ -267,7 +267,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>Q スナップの間隔。Shift の加速倍率も兼ねる。既定 10。</summary>
+        /// <summary>The Q-snap interval. Doubles as Shift's acceleration multiplier. Default 10.</summary>
         public double SnapStep
         {
             get => _snapStep;
@@ -278,8 +278,8 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>バーを表示するか。既定 true。</summary>
-        // UXML 名は bar-visible。真偽値なので「bar」だけでは表示切替と読めない
+        /// <summary>Whether to show the bar. Default true.</summary>
+        // The UXML name is bar-visible. Since it's a boolean, "bar" alone wouldn't read as a visibility toggle.
         [UxmlAttribute("bar-visible")]
         public bool Bar
         {
@@ -291,7 +291,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>バーの塗りの基点。既定 0。</summary>
+        /// <summary>The bar fill's origin point. Default 0.</summary>
         public double BarOrigin
         {
             get => _barOrigin;
@@ -302,7 +302,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>値を Min でクランプするか。false ならバー表示域の外へ出られる。</summary>
+        /// <summary>Whether to clamp the value to Min. If false, it can go outside the bar's display range.</summary>
         [UxmlAttribute]
         public bool ClampMin
         {
@@ -314,7 +314,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>値を Max でクランプするか。</summary>
+        /// <summary>Whether to clamp the value to Max.</summary>
         [UxmlAttribute]
         public bool ClampMax
         {
@@ -326,7 +326,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>静止時に表示する最大小数桁。既定 4。</summary>
+        /// <summary>The maximum decimal digits shown while idle. Default 4.</summary>
         [UxmlAttribute]
         public int Precision
         {
@@ -338,7 +338,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>非フォーカス時のオーバーレイに前置される文字列。</summary>
+        /// <summary>String prepended in the unfocused overlay.</summary>
         [UxmlAttribute]
         public string Prefix
         {
@@ -350,7 +350,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>非フォーカス時のオーバーレイに後置される文字列。</summary>
+        /// <summary>String appended in the unfocused overlay.</summary>
         [UxmlAttribute]
         public string Suffix
         {
@@ -362,7 +362,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>操作不能状態。</summary>
+        /// <summary>Non-interactive state.</summary>
         [UxmlAttribute]
         public bool Disabled
         {
@@ -377,7 +377,7 @@ namespace Tweeq.UIToolkit
                 _disabled = value;
                 if (_disabled)
                 {
-                    // 無効化の瞬間にドラッグが生きていると、離す手段が無くなる
+                    // If a drag is still alive at the moment of disabling, there would be no way left to release it.
                     CancelScrub(false);
                     SetEditing(false);
                 }
@@ -388,7 +388,7 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// スクラブ中のスケール表示。既定は本家忠実のドット列で、数字ラベルはオプトイン。
+        /// The scale display shown during a scrub. Defaults to the row of dots faithful to the original; numeric labels are opt-in.
         /// </summary>
         [UxmlAttribute("scale-style")]
         public NumberScaleStyle ScaleStyle
@@ -406,7 +406,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>外部から与える不正値表示。</summary>
+        /// <summary>Externally supplied invalid-value display.</summary>
         [UxmlAttribute]
         public bool Invalid
         {
@@ -418,7 +418,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>配色テーマ。null を渡した場合は Dark() にフォールバックする。</summary>
+        /// <summary>The color theme. Falls back to Dark() when null is passed.</summary>
         public TweeqTheme Theme
         {
             get => _theme;
@@ -431,8 +431,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 左端に常時表示する 1〜2 文字のラベル（軸名など。仕様 §5-4）。
-        /// Vue の leftIcon 相当なので grip のヒントアイコンは抑止するが、掴み代そのものは残る。
+        /// A 1-2 character label always shown at the left edge (e.g. an axis name; spec §5-4).
+        /// Equivalent to Vue's leftIcon, so the grip's hint icon is suppressed, but the grab zone itself remains.
         /// </summary>
         public string LeftLabel
         {
@@ -456,7 +456,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>横方向グループでの位置。設定すると角丸が仕様 §1 の表どおりに潰れる。</summary>
+        /// <summary>Position within a horizontal group. Setting this collapses the corner radius according to the spec §1 table.</summary>
         public TweeqBoxPosition InlinePosition
         {
             get => _inlinePosition;
@@ -472,7 +472,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>縦方向グループでの位置。</summary>
+        /// <summary>Position within a vertical group.</summary>
         public TweeqBoxPosition BlockPosition
         {
             get => _blockPosition;
@@ -488,12 +488,12 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>ChangeEvent を発火せずに値を設定する。生値も同期される。</summary>
+        /// <summary>Sets the value without firing ChangeEvent. The raw value is also synced.</summary>
         public void SetValueWithoutNotify(float newValue)
         {
             _value = newValue;
 
-            // 外部からの設定はドラッグ／編集セッションの外にあるので、累積器も揃えておく
+            // An external set happens outside any drag/edit session, so the accumulator is kept in sync too.
             _local = newValue;
             _parseFailed = false;
             SyncDisplayText(true);
@@ -508,8 +508,8 @@ namespace Tweeq.UIToolkit
         {
             this.AddToClassList("tweeq-number-input");
 
-            // 非編集時のドラッグ中に Q / Shift / Escape を受け取るため、ルート自身もフォーカス可能にする。
-            // ここへフォーカスしてもテキスト編集には入らない（仕様 §6 の「DOM フォーカスは移らない」）
+            // The root itself is made focusable too, in order to receive Q / Shift / Escape during a non-editing drag.
+            // Focusing here doesn't enter text-edit mode (spec §6's "DOM focus doesn't move").
             this.focusable = true;
             this.style.height = _theme.InputHeight;
             this.style.minWidth = _theme.InputHeight;
@@ -527,13 +527,13 @@ namespace Tweeq.UIToolkit
             this.RegisterCallback<PointerEnterEvent>(OnPointerEnter);
             this.RegisterCallback<PointerLeaveEvent>(OnPointerLeave);
 
-            // TextField より先に矢印・Enter・Escape を横取りするため TrickleDown で登録する
+            // Registered with TrickleDown to intercept arrows / Enter / Escape before TextField does.
             this.RegisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
             this.RegisterCallback<KeyUpEvent>(OnKeyUp, TrickleDown.TrickleDown);
 
-            // 矢印キーは KeyDown とは別に NavigationMoveEvent も飛ばし、そちらがフォーカスを
-            // 動かしてしまう（feedback-fixes-01.md A-5）。TrickleDown なら TextField 内の
-            // TextElement が target のときもここで先に潰せる
+            // Arrow keys also fire a NavigationMoveEvent separately from KeyDown, and that one moves
+            // focus (feedback-fixes-01.md A-5). With TrickleDown, this can suppress it here first
+            // even when the target is the TextElement inside TextField.
             this.RegisterCallback<NavigationMoveEvent>(OnNavigationMove, TrickleDown.TrickleDown);
 
             this.RegisterCallback<FocusInEvent>(OnFocusIn);
@@ -546,8 +546,8 @@ namespace Tweeq.UIToolkit
 
         void BuildChildren()
         {
-            // バーだけは実要素にする。Painter2D は色をトランジションできないが、
-            // 仕様 §5 は背景色の 0.15s 遷移を要求しているため（インライン transition で実現する）
+            // Only the bar is made a real element. Painter2D can't transition colors, but
+            // spec §5 requires a 0.15s transition on the background color, so this achieves it via an inline transition.
             _barFill = new VisualElement
             {
                 name = "tweeq-number-bar",
@@ -573,7 +573,7 @@ namespace Tweeq.UIToolkit
             _backLayer.generateVisualContent += OnGenerateBackContent;
             this.hierarchy.Add(_backLayer);
 
-            // ドットの直上・値テキストの直下に挟む（追加順がそのまま描画順になる）
+            // Inserted directly above the dots and directly below the value text (the add order becomes the draw order as-is).
             _scaleLabelLayer = new VisualElement
             {
                 name = "tweeq-number-scale-labels",
@@ -592,9 +592,9 @@ namespace Tweeq.UIToolkit
             {
                 name = "tweeq-number-text",
 
-                // 1 文字ごとに値へ反映する必要がある（仕様 §3「数字/. 入力は live で値更新」）。
-                // isDelayed = true だと Enter/blur まで ChangeEvent が来ないので false 固定にし、
-                // Enter の確定はこちら側の KeyDown で処理する
+                // Every character needs to reflect into the value (spec §3, "digit/. input updates the value live").
+                // isDelayed = true would delay ChangeEvent until Enter/blur, so this is fixed to false,
+                // and confirming on Enter is handled by our own KeyDown instead.
                 isDelayed = false,
                 multiline = false,
             };
@@ -614,8 +614,8 @@ namespace Tweeq.UIToolkit
 
             _textInput = _textField.Q(TEXT_INPUT_NAME);
 
-            // 実際に字を描くのは unity-text-input の中の TextElement。
-            // 縦潰れ（A-6）は input 側だけ直しても残るのでこちらにも同じ指定を掛ける
+            // The character actually gets drawn by the TextElement inside unity-text-input.
+            // Vertical squashing (A-6) persists even if only the input side is fixed, so the same setting is applied here too.
             _textElement = _textInput != null ? _textInput.Q<TextElement>() : null;
 
             _displayOverlay = new VisualElement
@@ -641,7 +641,7 @@ namespace Tweeq.UIToolkit
             _displayOverlay.Add(_suffixLabel);
             this.hierarchy.Add(_displayOverlay);
 
-            // 編集中も見えている必要があるので、オーバーレイではなく独立レイヤに置く
+            // Needs to stay visible during editing too, so it's placed on its own independent layer instead of the overlay.
             _leftLabel = new Label(string.Empty) { name = "tweeq-number-left-label" };
             _leftLabel.pickingMode = PickingMode.Ignore;
             _leftLabel.style.position = Position.Absolute;
@@ -660,8 +660,8 @@ namespace Tweeq.UIToolkit
             _leftLabel.style.display = DisplayStyle.None;
             this.hierarchy.Add(_leftLabel);
 
-            // フォーカスリングは要素の border で描く。ルート側に border を足すと
-            // 絶対配置の子（＝バーとハンドル）が 1px 内側へずれてしまうため、別レイヤに分ける
+            // The focus ring is drawn using the element's border. Adding a border on the root side would
+            // shift the absolutely-positioned children (the bar and handle) 1px inward, so it's split into a separate layer.
             _focusRing = TweeqFocusRing.Attach(this);
             _focusRing.name = "tweeq-number-focus-ring";
         }
@@ -691,8 +691,8 @@ namespace Tweeq.UIToolkit
             ApplyCornerRadius();
             TweeqInputBoxStyles.SetBorderColor(this, _theme.Border);
 
-            // 仕様 §5: 背景のみ 0.15s / cubic-bezier(0.4,0,0.2,1)。
-            // UI Toolkit に同一カーブが無いので EaseInOutCubic で近似する（RotaryInput と同じ判断）
+            // Spec §5: background only, 0.15s / cubic-bezier(0.4,0,0.2,1).
+            // UI Toolkit has no identical curve, so EaseInOutCubic is used as an approximation (same judgment as RotaryInput).
             TweeqInputBoxStyles.ApplyBackgroundTransition(this, _theme);
 
             if (_barFill != null)
@@ -702,10 +702,10 @@ namespace Tweeq.UIToolkit
 
             ApplyLeftLabelLayout();
 
-            // 高さ・余白・キャレット色の正規化は公開ヘルパへ寄せた（EXT-03-A）
+            // Normalization of height, padding, and caret color was moved into the shared public helper (EXT-03-A).
             TweeqInputBoxStyles.ApplyTextField(_textField, _theme);
 
-            // 数値欄は中央寄せ。整列と左右パディングだけは widget 固有なのでここで足す
+            // Number fields are center-aligned. Only the alignment and left/right padding are widget-specific, so they're added here.
             if (_textInput != null)
             {
                 _textInput.style.paddingLeft = TEXT_PADDING;
@@ -726,9 +726,9 @@ namespace Tweeq.UIToolkit
             ApplyFonts();
         }
 
-        // 数字が並ぶ箇所だけ FontNumeric にする（m7-wave2-spec.md のマッピング）。
-        // Prefix / Suffix は単位語なので UI フォント側に残す。
-        // テーマ適用時にしか呼ばないので、スクラブ中はここを通らない
+        // Only where digits are laid out gets FontNumeric (per m7-wave2-spec.md's mapping).
+        // Prefix / Suffix are unit words, so they stay on the UI font.
+        // This is only called when the theme is applied, so it's never hit during a scrub.
         void ApplyFonts()
         {
             if (_theme == null)
@@ -741,8 +741,8 @@ namespace Tweeq.UIToolkit
             TweeqFonts.Apply(_valueLabel, numeric);
             TweeqFonts.Apply(_textField, numeric);
 
-            // TextField の中身は自前で fontSize を明示している階層なので、
-            // 継承だけに頼らず input / TextElement にも同じ指定を降ろす
+            // TextField's contents form a hierarchy that explicitly sets its own fontSize,
+            // so rather than relying on inheritance alone, the same setting is pushed down to input / TextElement too.
             TweeqFonts.Apply(_textInput, numeric);
             TweeqFonts.Apply(_textElement, numeric);
 
@@ -766,14 +766,14 @@ namespace Tweeq.UIToolkit
         {
             TweeqInputBoxStyles.ApplyCornerRadius(this, _theme, _inlinePosition, _blockPosition);
 
-            // フォーカスリングは別レイヤなので同じ角丸を掛け直す
+            // The focus ring is a separate layer, so the same corner radius is reapplied to it.
             if (_focusRing != null)
             {
                 _focusRing.Apply(_theme, _inlinePosition, _blockPosition);
             }
         }
 
-        // 軸ラベルを置いた分だけ、テキストと表示オーバーレイを左から逃がす
+        // Offsets the text and display overlay from the left by however much space the axis label takes up.
         void ApplyLeftLabelLayout()
         {
             bool hasLabel = HasLeftLabel;
@@ -839,42 +839,42 @@ namespace Tweeq.UIToolkit
 
         double ValidMax => _clampMax ? _max : double.PositiveInfinity;
 
-        // 値が [min, max] の内側にあるか。外側にはハンドルが無いので、掴み代の作り方が変わる
+        // Whether the value is inside [min, max]. There's no handle outside that range, so how the grab zone is built changes.
         bool InsideRange => _min <= _value && _value <= _max;
 
-        // feedback-fixes-01.md A-1: スクラブ中は常に表示する。
-        // 旧（Vue 準拠）は step && clampMin && clampMax && range 完備なら非表示だったが、
-        // バー付きでは D-2改2 のハンドルアンカーによりバー座標に乗った「値のものさし」になるので、
-        // step 付きレンジ完備のフィールドでも出す意味がある
+        // feedback-fixes-01.md A-1: always shown during a scrub.
+        // The old (Vue-faithful) behavior hid it when step && clampMin && clampMax && a full range were all set,
+        // but with a bar, D-2 rev2's handle anchoring turns it into a "value ruler" laid over bar coordinates,
+        // so it's meaningful to show even for a fully-ranged field with a step.
         bool ShowTweakScale => true;
 
-        // ドットは本家 showTweakScale のゲートをそのまま持つ（数字ラベルと違い、
-        // 止まり位置が離散なフィールドでは連続感度の可視化に意味が無い）
+        // Dots keep the original's showTweakScale gate as-is (unlike numeric labels, visualizing continuous
+        // sensitivity has no meaning for a field whose resting positions are discrete).
         bool ScaleDotsVisible =>
             _scaleStyle == NumberScaleStyle.Dots
             && NumberLogic.ShowScaleDots(_step, _clampMin, _clampMax, _min, _max);
 
-        // 修飾キー由来の感度。TweakGesture 内部の keySpeed と同じ式（表示桁の計算に使う）
+        // Sensitivity from modifier keys. Same formula as TweakGesture's internal keySpeed (used to compute the displayed digit count).
         double KeySpeed => (_altHeld ? 0.1 : 1.0) * (_shiftHeld ? Math.Max(_snapStep, 1.0) : 1.0);
 
         double CurrentSpeed => KeySpeed * _gesture.Speed;
 
-        // feedback-fixes-01.md D-1: A-2（バー付きも step/20 に統一）を取り消し、バー付きは
-        // Vue 本来の「バー幅＝レンジ」へ戻す。speed=1 でハンドルがマウスに 1:1 で吸い付くほうが
-        // バー操作としては素直で、speed=1 で目盛りをバー座標に一致させる D-2改2 とも噛み合う。
-        // レンジなしは A-2 のまま（step/20 or 1）
+        // feedback-fixes-01.md D-1: reverts A-2 (which unified bar and no-bar to step/20) and restores the
+        // bar case to Vue's original "bar width = range." With speed=1, the handle sticking to the mouse
+        // 1:1 is more natural for bar manipulation, and it also meshes with D-2 rev2, which aligns the ticks
+        // to bar coordinates at speed=1. The no-range case stays as A-2 (step/20 or 1).
         double ScrubBaseSpeed => NumberLogic.BaseSpeed(BarVisible, _min, _max, Width, _step);
 
-        // feedback-fixes-01.md D-1 補足: Vue のレンジ有り minSpeed（step の px 密度由来）は
-        // Opacity のような「1step が 1px 以上」のバーで 1 に張り付き、縦ドラッグの感度調整が
-        // 死んでしまう。開始 1:1（maxSpeed=1）は維持しつつ、下限だけレンジなしと同じ
-        // 10^-precision まで下げられるようにする（意図的逸脱）
+        // feedback-fixes-01.md D-1 addendum: Vue's ranged minSpeed (derived from step's pixel density)
+        // pins to 1 for a bar like Opacity where "1 step is 1px or more," which kills the sensitivity
+        // adjustment from a vertical drag. The starting 1:1 (maxSpeed=1) is kept, but only the lower bound
+        // is allowed to drop as far as 10^-precision, same as the no-range case (an intentional deviation).
         double ScrubMinSpeed =>
             NumberLogic.MinSpeed(false, _min, _max, Width, _step, _precision);
 
         double ScrubMaxSpeed => NumberLogic.MaxSpeed(BarVisible);
 
-        // スクラブ中に「画面 1px が何値ぶんか」。目盛りの位相・値の刻み・到達値の共通分母（D-2改2）
+        // "How many values 1 screen px represents" during a scrub. The shared denominator for tick phase, value step, and reached value (D-2 rev2).
         double ScrubValuePerPixel => ScrubBaseSpeed * CurrentSpeed;
 
         bool ShowInvalid => (_invalid || _parseFailed) && !_scrubbing;
@@ -892,14 +892,14 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // C-2: this.Focus() や TextField のキャレット配置より前に立てる。
-            // 降ろすのは FocusOut のときだけ（＝「今のフォーカスはポインタで始まった」を意味する）
+            // C-2: set before this.Focus() and TextField's caret placement.
+            // Only cleared on FocusOut (i.e. it means "the current focus began from a pointer").
             _focusFromPointer = true;
 
             Vector2 position = LocalPosition(evt);
 
-            // 編集中はスクラブゾーンの上だけがドラッグ開始点。それ以外は
-            // 捕まえも止めもせず TextField のキャレット操作に委ねる（仕様 §1）
+            // While editing, only the area above the scrub zone is a drag start point. Elsewhere,
+            // it neither captures nor stops the event, leaving it to TextField's caret handling (spec §1).
             if (_editing && !IsInScrubZone(position))
             {
                 return;
@@ -922,8 +922,8 @@ namespace Tweeq.UIToolkit
 
             if (!_editing)
             {
-                // Q / Shift / Escape を受け取るためにルートへフォーカスする。
-                // テキスト編集へは入らないので、表示はオーバーレイのまま
+                // Focuses the root in order to receive Q / Shift / Escape.
+                // This doesn't enter text-edit mode, so the display stays on the overlay.
                 this.Focus();
             }
 
@@ -931,7 +931,7 @@ namespace Tweeq.UIToolkit
             {
                 this.CapturePointer(_pointerId);
 
-                // 閾値に届かなくても長押しでスクラブへ入る
+                // Enters a scrub via long-press even without reaching the movement threshold.
                 _holdItem = this.schedule.Execute(OnHoldElapsed).StartingIn(HOLD_DRAG_DELAY_MS);
             }
 
@@ -953,7 +953,7 @@ namespace Tweeq.UIToolkit
             {
                 if (_hovered)
                 {
-                    // ハンドルの太りはポインタ位置に追従するので、ホバー中は毎回描き直す
+                    // The handle's thickening follows the pointer position, so it's redrawn every time while hovered.
                     _backLayer?.MarkDirtyRepaint();
                 }
 
@@ -1006,7 +1006,7 @@ namespace Tweeq.UIToolkit
             }
             else if (!startedEditing)
             {
-                // 閾値未満で離した＝クリック。ここで初めてテキスト編集へ入る（仕様 §1）
+                // Released below the threshold means a click. This is where text-edit mode is first entered (spec §1).
                 BeginEditing();
             }
 
@@ -1053,7 +1053,7 @@ namespace Tweeq.UIToolkit
 
         void OnGeometryChanged(GeometryChangedEvent evt)
         {
-            // 幅が変わると baseSpeed も目盛り間隔も変わる
+            // A width change also changes both baseSpeed and the tick spacing.
             Refresh();
         }
 
@@ -1085,9 +1085,9 @@ namespace Tweeq.UIToolkit
             _gesture.Reset();
             StopHoldTimer();
 
-            // 非フォーカスで範囲内・ハンドル以外を押した場合だけ、押した位置へ即ジャンプする（仕様 §1）。
-            // Fit は t を [0,1] に畳んでから lerp するので結果は必ず [min,max] 内。
-            // D-3 のクランプを別途掛ける必要はない
+            // Jumps immediately to the pressed position only when unfocused, inside the range, and not on the handle (spec §1).
+            // Fit folds t into [0,1] before lerping, so the result is always within [min,max].
+            // There's no need to apply D-3's clamp separately.
             if (!_startedEditing && BarVisible && InsideRange && !_grabbedHandle)
             {
                 _local = Fit(_pressPosition.x, 0.0, Width, _min, _max);
@@ -1101,8 +1101,8 @@ namespace Tweeq.UIToolkit
         {
             GestureModifiers modifiers = new GestureModifiers(_altHeld, _shiftHeld, _snapKeyHeld);
 
-            // feedback-fixes-01.md D-1: バー付きは (max-min)/width、レンジなしは step/20。
-            // 幅は Scrub*Speed 側で毎フレーム読む（レイアウト変化に追従させる）
+            // feedback-fixes-01.md D-1: with a bar it's (max-min)/width; without a range it's step/20.
+            // The width is read every frame on the Scrub*Speed side (to track layout changes).
             double baseSpeed = ScrubBaseSpeed;
             double minSpeed = ScrubMinSpeed;
             double maxSpeed = ScrubMaxSpeed;
@@ -1112,9 +1112,10 @@ namespace Tweeq.UIToolkit
 
             _local += update.Delta;
 
-            // feedback-fixes-01.md D-3: Clamp が有効な側は、バー有無に関わらずドラッグ中も
-            // 生値ごと畳む（Vue は local 非クランプだが、範囲外の数字が見えるのは事故のもと）。
-            // Clamp 無効な側は据え置きなのでオーバーシュートでき、範囲外矢印がそのまま出る
+            // feedback-fixes-01.md D-3: on the side where Clamp is active, the raw value itself is folded
+            // during a drag regardless of whether there's a bar (Vue leaves local unclamped, but seeing
+            // an out-of-range number is a recipe for mistakes). The side where Clamp is inactive is left
+            // as-is, so it can overshoot and the out-of-range arrow shows as-is.
             if (_clampMin && TweeqMath.IsFinite(_min))
             {
                 _local = Math.Max(_local, _min);
@@ -1136,7 +1137,7 @@ namespace Tweeq.UIToolkit
 
             if (startedEditing)
             {
-                // テキスト編集へ戻す。打ち直しがそのまま置き換えになるよう選択し直す
+                // Returns to text-edit mode. Re-selects the text so retyping directly replaces it.
                 ScheduleSelectAll();
             }
         }
@@ -1160,7 +1161,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // ドラッグ中に通知した値を巻き戻すので、こちらも通知する
+            // The value notified during the drag is being rolled back, so notify this too.
             _local = restored;
             if (notify)
             {
@@ -1212,7 +1213,7 @@ namespace Tweeq.UIToolkit
 
         #region Value
 
-        // 生値を clamp → step → snap に通して出力へ反映する（仕様 §2: コミット時だけでなく毎フレーム）
+        // Runs the raw value through clamp -> step -> snap and reflects the result into the output (spec §2: every frame, not just on commit).
         void ApplyOutput()
         {
             NumberValidation result = NumberValidator.Validate(
@@ -1278,7 +1279,7 @@ namespace Tweeq.UIToolkit
 
             if (_textField != null)
             {
-                // display:none のままでは Focus() が通らないので、必ず表示を先に切り替える
+                // Focus() doesn't take effect while display:none, so the display is always switched first.
                 _textField.style.display = editing ? DisplayStyle.Flex : DisplayStyle.None;
                 _textField.pickingMode = editing ? PickingMode.Position : PickingMode.Ignore;
             }
@@ -1307,7 +1308,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // フォーカスが確定した次のフレームでないと選択範囲が上書きされる（Vue の nextTick 相当）
+            // The selection range gets overwritten unless this waits until the frame after focus is settled (equivalent to Vue's nextTick).
             this.schedule.Execute(() =>
             {
                 if (_textField != null && _editing)
@@ -1329,7 +1330,7 @@ namespace Tweeq.UIToolkit
             ApplyOutput();
         }
 
-        // 式入力モードはスコープ外（仕様 §7-2）。プレーンな数値パースのみ行う
+        // Expression-input mode is out of scope (spec §7-2). Only plain numeric parsing is performed.
         void ParseDisplay(string text)
         {
             if (double.TryParse(
@@ -1344,16 +1345,16 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // パース失敗時は値を据え置き、次に有効な入力が来るまで invalid 表示にする
+            // On parse failure, the value is left as-is and shown as invalid until a valid input comes in next.
             _parseFailed = true;
         }
 
-        // Enter / blur の確定。表示を出力値で組み直し、Confirmed を発火する
+        // Confirms on Enter / blur. Rebuilds the display from the output value and fires Confirmed.
         void Commit()
         {
             if (_editing && _textField != null)
             {
-                // 打鍵ごとに反映済みのはずだが、取りこぼしがあっても Enter/blur で必ず確定させる
+                // Should already be reflected on every keystroke, but Enter/blur always forces a commit in case anything slipped through.
                 ParseDisplay(_textField.value);
                 ApplyOutput();
             }
@@ -1387,7 +1388,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // feedback-fixes-01.md C-2: Tab でルートにフォーカスが来たらクリックと同じ編集状態へ入る
+            // feedback-fixes-01.md C-2: when focus reaches the root via Tab, enter the same editing state as a click.
             if (!ReferenceEquals(evt.target, this))
             {
                 return;
@@ -1396,9 +1397,9 @@ namespace Tweeq.UIToolkit
             ScheduleEnterEditingFromFocus();
         }
 
-        // ポインタ由来かどうかは「同じフレームの PointerDown を処理し終えたあと」でないと確定しない
-        // （パネル側のフォーカス移動と自前のハンドラのどちらが先かに依存しないようにする）。
-        // schedule はそのフレームのイベント処理がすべて終わってから走るので、そこで判定する（C-2）
+        // Whether it originated from a pointer isn't settled until "after this frame's PointerDown finishes
+        // processing" (so this doesn't depend on which comes first, the panel's focus move or our own handler).
+        // schedule runs only after all of this frame's event processing is done, so the check happens there (C-2).
         void ScheduleEnterEditingFromFocus()
         {
             if (this.panel == null || _disabled || _editing)
@@ -1413,13 +1414,13 @@ namespace Tweeq.UIToolkit
                     return;
                 }
 
-                // 1 tick の間に Tab がもう一度押されていたら、奪い返さない
+                // If Tab was pressed again within this one tick, don't steal focus back.
                 if (this.focusController == null || !ReferenceEquals(this.focusController.focusedElement, this))
                 {
                     return;
                 }
 
-                // クリック経路（OnPointerUp）と同じ入口。SelectAll もこの中で予約される
+                // Same entry point as the click path (OnPointerUp). SelectAll is also scheduled from within this.
                 BeginEditing();
             }).StartingIn(0);
         }
@@ -1431,13 +1432,13 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // C-2: フォーカスが抜けたらポインタ由来フラグも畳む。
-            // 次に来る FocusIn は「新しいフォーカスセッションの開始」として判定し直す
+            // C-2: once focus leaves, the pointer-origin flag is also cleared.
+            // The next FocusIn is re-evaluated as "the start of a new focus session."
             _focusFromPointer = false;
 
             if (!IsTextTarget(evt.target))
             {
-                // ルート自身のフォーカスが外れた場合は修飾キーの押しっぱなしだけ解除する
+                // If the root's own focus was lost, only release the modifier keys' held state.
                 _snapKeyHeld = false;
                 _shiftHeld = false;
                 _altHeld = false;
@@ -1484,7 +1485,7 @@ namespace Tweeq.UIToolkit
 
                     if (_scrubbing)
                     {
-                        // スナップの切り替えは出力へ即座に反映する（生値は動かさない）
+                        // Toggling snap reflects into the output immediately (the raw value isn't touched).
                         ApplyOutput();
                         evt.StopPropagation();
                     }
@@ -1555,9 +1556,9 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        // feedback-fixes-01.md A-5: ↑/↓ は値変更だけ。UI Toolkit は矢印キーで
-        // NavigationMoveEvent も飛ばすので、KeyDown の StopPropagation だけではフォーカスが移る。
-        // Next/Previous（Tab）は仕様 §3 の「Tab で blur → confirm」を残すため通す
+        // feedback-fixes-01.md A-5: Up/Down should only change the value. UI Toolkit also fires
+        // NavigationMoveEvent for arrow keys, so stopping propagation on KeyDown alone still lets focus move.
+        // Next/Previous (Tab) is let through in order to preserve spec §3's "Tab -> blur -> confirm."
         void OnNavigationMove(NavigationMoveEvent evt)
         {
             if (evt == null)
@@ -1575,8 +1576,8 @@ namespace Tweeq.UIToolkit
 
                 case NavigationMoveEvent.Direction.Left:
                 case NavigationMoveEvent.Direction.Right:
-                    // 編集中の ←→ はキャレット移動として TextField が処理する。
-                    // 非編集時はルートにフォーカスがあるだけなので、飛ばさず食い止める
+                    // During editing, Left/Right are handled by TextField as caret movement.
+                    // When not editing, focus is only on the root, so this stops it here rather than letting it through.
                     blocked = !_editing;
                     break;
 
@@ -1592,11 +1593,11 @@ namespace Tweeq.UIToolkit
 
             evt.StopPropagation();
 
-            // Unity 6 で「フォーカス移動そのもの」を止められるのはこちら（PreventDefault は非推奨）
+            // In Unity 6, this is what actually stops "the focus move itself" (PreventDefault is deprecated).
             this.focusController?.IgnoreEvent(evt);
         }
 
-        // 仕様 §3。Confirmed は発火しない
+        // Spec §3. Confirmed does not fire.
         void Increment(int direction)
         {
             if (_disabled)
@@ -1616,7 +1617,7 @@ namespace Tweeq.UIToolkit
 
         #region Display
 
-        // force=false のときは編集中のテキストを壊さない（Vue の watcher と同じ条件）
+        // When force=false, the text being edited isn't disturbed (same condition as Vue's watcher).
         void SyncDisplayText(bool force)
         {
             if (_editing && !_scrubbing && !force)
@@ -1644,12 +1645,12 @@ namespace Tweeq.UIToolkit
                 _step, _display ?? string.Empty, _min, _max, Width,
                 BarVisible, _scrubbing, CurrentSpeed, _precision);
 
-            // ドラッグ中の表示だけは生値（末尾ゼロ維持）。桁数がそのまま感度のフィードバックになる
+            // Only the display during a drag uses the raw value (trailing zeros preserved). The digit count itself becomes sensitivity feedback.
             double source = _scrubbing ? _local : _value;
 
-            // Format は入力が同じなら結果も同じ純粋関数。ポインタが止まっているフレームでも
-            // Refresh は走るので、キーが一致する限り文字列生成ごと省く。
-            // _display はテキスト入力でも書き換わるため、キャッシュは別フィールドに持つ
+            // Format is a pure function: the same input always gives the same result. Refresh still runs
+            // even on frames where the pointer isn't moving, so as long as the key matches, string generation is skipped entirely.
+            // _display also gets rewritten by text input, so the cache is kept in a separate field.
             if (_formatCache != null
                 && _formatCachePrecision == precision
                 && _formatCacheTweaking == _scrubbing
@@ -1682,8 +1683,8 @@ namespace Tweeq.UIToolkit
             UpdateOverlayLabels();
             UpdateTextColor();
 
-            // ラベルは要素なので、描画コールバック（generateVisualContent）ではなくここで置く。
-            // レイアウトを触る処理を repaint 中に混ぜると再レイアウトのループになる
+            // Labels are elements, so they're placed here rather than in a draw callback (generateVisualContent).
+            // Mixing layout-touching work into repaint would create a re-layout loop.
             UpdateScaleLabels();
 
             if (_focusRing != null)
@@ -1715,14 +1716,14 @@ namespace Tweeq.UIToolkit
 
             if (!BarVisible)
             {
-                // レイアウトは維持したまま隠す（仕様 §5）
+                // Hidden while keeping the layout intact (spec §5).
                 _barFill.style.visibility = Visibility.Hidden;
                 return;
             }
 
             _barFill.style.visibility = Visibility.Visible;
 
-            // 塗りは検証済みの出力値で決める（生値は使わない）
+            // The fill is determined by the validated output value (the raw value is not used).
             double originT = Clamp01(Invlerp(_min, _max, _barOrigin));
             double valueT = Clamp01(Invlerp(_min, _max, _value));
             double left = Math.Min(originT, valueT);
@@ -1777,7 +1778,7 @@ namespace Tweeq.UIToolkit
 
         #region Hit testing
 
-        // ハンドル中心の幅 24px。端では 24px 丸ごとがフィールド内に収まるよう寄せる（Vue の zoneStyle）
+        // A 24px width centered on the handle. Near the edges it's shifted so the full 24px still fits within the field (Vue's zoneStyle).
         bool IsInGrabZone(float x)
         {
             float width = Width;
@@ -1794,7 +1795,7 @@ namespace Tweeq.UIToolkit
             return x >= left && x <= left + GRAB_ZONE_WIDTH;
         }
 
-        // 上下のストリップ（中央はテキスト選択用に空ける）
+        // The top/bottom strips (the center is left open for text selection).
         bool IsInStrip(float y)
         {
             float height = Height;
@@ -1813,7 +1814,7 @@ namespace Tweeq.UIToolkit
             return float.IsNaN(size) || size <= 0f ? FALLBACK_FONT_SIZE : size;
         }
 
-        // 仕様 §1/§5: 編集中にドラッグを開始できる領域
+        // Spec §1/§5: the area where a drag can be started while editing.
         bool IsInScrubZone(Vector2 position)
         {
             if (_disabled)
@@ -1823,17 +1824,17 @@ namespace Tweeq.UIToolkit
 
             if (!BarVisible)
             {
-                // unranged は左端 24×24 の grip
+                // Unranged is a 24x24 grip at the left edge.
                 return position.x <= GRAB_ZONE_WIDTH;
             }
 
             if (!InsideRange)
             {
-                // 範囲外はハンドルが無いので全幅ストリップが掴み代になる
+                // There's no handle out of range, so the full-width strip becomes the grab zone.
                 return IsInStrip(position.y);
             }
 
-            // 端に張り付いたハンドルは角丸に食われるので、上下ではなく全高 1 本にする
+            // A handle stuck at the edge would get eaten by the corner radius, so instead of top/bottom, this uses one full-height zone.
             bool handleAtEdge = _value <= _min || _value >= _max;
             if (!IsInGrabZone(position.x))
             {
@@ -1843,7 +1844,7 @@ namespace Tweeq.UIToolkit
             return handleAtEdge || IsInStrip(position.y);
         }
 
-        // キャプチャ中も座標系がぶれないよう、パネル座標からローカルへ変換する
+        // Converts from panel coordinates to local so the coordinate system doesn't drift during capture either.
         Vector2 LocalPosition(IPointerEvent evt)
         {
             Vector3 position = evt.position;
@@ -1875,14 +1876,14 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 本家と同じ重ね順（バー → step 目盛り → スケール → ハンドル）。
-            // ScaleStyle=Values のときのスケールは要素（数字ラベル）なのでここには出ない
+            // Same stacking order as the original (bar -> step ticks -> scale -> handle).
+            // When ScaleStyle=Values, the scale is an element (numeric labels), so it doesn't show up here.
             PaintTicks(painter, width, height);
             PaintScaleDots(painter, width, height);
             PaintHandle(painter, width, height);
             PaintOutOfRangeArrows(painter, width, height);
 
-            // 軸ラベルが左端を占めている間はヒントを重ねない（Vue の leftIcon と同じ扱い）
+            // The hint isn't overlaid while the axis label occupies the left edge (same treatment as Vue's leftIcon).
             if (!BarVisible && _editing && !HasLeftLabel)
             {
                 PaintGripHint(painter, height);
@@ -1916,7 +1917,7 @@ namespace Tweeq.UIToolkit
                     continue;
                 }
 
-                // 1px 幅の線は中心を半ピクセルずらすと [x, x+1] を覆う
+                // Shifting a 1px-wide line's center by half a pixel makes it cover [x, x+1].
                 float px = (float)x + 0.5f;
                 painter.MoveTo(new Vector2(px, 0f));
                 painter.LineTo(new Vector2(px, height));
@@ -1925,8 +1926,8 @@ namespace Tweeq.UIToolkit
             painter.Stroke();
         }
 
-        // 本家の <line stroke-dasharray="0 gap" stroke-linecap="round"> は「円点の列」。
-        // Painter2D に dasharray が無いので円をそのまま置く（見た目は同じ）
+        // The original's <line stroke-dasharray="0 gap" stroke-linecap="round"> is "a row of round dots."
+        // Painter2D has no dasharray, so circles are placed directly instead (looks the same).
         void PaintScaleDots(Painter2D painter, float width, float height)
         {
             if (!_scrubbing || _disabled || !ScaleDotsVisible)
@@ -1934,8 +1935,8 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 位相はハンドルと同じ「検証済みの値」に載せる。生値だと step 付きフィールドで
-            // ハンドルとドットが半ステップずれて見える
+            // The phase is laid on the same "validated value" as the handle. Using the raw value would make
+            // the handle and dots appear half a step off from each other on a stepped field.
             double phase = NumberLogic.ScaleDotPhase(
                 BarVisible, _value, _min, _max, width, ScrubValuePerPixel);
             if (!TweeqMath.IsFinite(phase))
@@ -1975,8 +1976,8 @@ namespace Tweeq.UIToolkit
                         continue;
                     }
 
-                    // Arc は現在位置から弧の始点まで線を引くので、点ごとに MoveTo で
-                    // サブパスを開き直さないと円どうしが繋がってしまう
+                    // Arc draws a line from the current position to the arc's start point, so without a
+                    // MoveTo reopening a new subpath for each dot, the circles would end up connected to each other.
                     painter.MoveTo(new Vector2(x + radius, centerY));
                     painter.Arc(
                         new Vector2(x, centerY),
@@ -1996,13 +1997,13 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 位置は検証済みの出力値。範囲外はクランプせず overflow でクリップさせる
+            // The position is the validated output value. Out-of-range values aren't clamped; overflow clips them instead.
             float x = (width - 1f) * (float)Invlerp(_min, _max, _value);
 
             bool thick = _scrubbing || (_hovered && InsideRange && IsInGrabZone(_pointerPosition.x));
             float handleWidth = thick ? HANDLE_WIDTH_ACTIVE : HANDLE_WIDTH_IDLE;
 
-            // 3px は中心へ拡張する（Vue の margin-left: -1px）
+            // The 3px version expands toward the center (Vue's margin-left: -1px).
             float left = thick ? x - 1f : x;
 
             Color color = _theme.Accent;
@@ -2026,8 +2027,8 @@ namespace Tweeq.UIToolkit
             float centerY = height * 0.5f;
             painter.BeginPath();
 
-            // Vue の CSS（border-right/left 三角）どおり頂点が外側＝「値はこの先にある」を指す。
-            // 初版仕様書の「内向き」は誤記だった
+            // As in Vue's CSS (border-right/left triangle), the apex points outward, meaning "the value is further this way."
+            // The first version of the spec saying "inward" was a mistake.
             if (_value < _min)
             {
                 painter.MoveTo(new Vector2(ARROW_SIZE, centerY - ARROW_SIZE));
@@ -2049,22 +2050,22 @@ namespace Tweeq.UIToolkit
 
         #region Scale trains
 
-        /// <summary>1 フレーム分の目盛り列。3 系統が同じ原点を共有するのでまとめて組む。</summary>
+        /// <summary>One frame's worth of tick trains. Assembled together since all 3 trains share the same origin.</summary>
         struct ScaleTrain
         {
-            // 目盛り 1 つぶんの「値」の刻み。D-2改2 で 10 のべき乗に量子化されるので、
-            // 粗い系統の ValueGap は必ず細かい系統の整数倍になる（重複除去がこれで成立する）
+            // The "value" step per tick. D-2 rev2 quantizes this to a power of 10, so a coarse train's
+            // ValueGap is always an integer multiple of a fine train's (this is what makes dedup work).
             public double ValueGap;
 
-            // 画面上の間隔（px）= ValueGap / valuePerPixel
+            // The on-screen spacing (px) = ValueGap / valuePerPixel.
             public double ScreenGap;
 
-            // 値 0 の目盛りが載る x
+            // The x where the tick for value 0 lands.
             public double OriginX;
 
             public float Opacity;
 
-            // 画面左端（x=0）以降で最初に来る目盛りの序数。値 0 の目盛りが k=0
+            // The ordinal of the first tick at or after the screen's left edge (x=0). The value-0 tick is k=0.
             public int FirstIndex;
 
             public ScaleTrain(
@@ -2079,10 +2080,10 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// プールされたラベル 1 個ぶんの直近の状態。text / color の再設定はレイアウトや
-        /// 頂点の作り直しを誘発するので、変化したときだけ書き戻すために持つ（C-1 の負荷対策）。
-        /// TickValue / Digits は文字列比較の手前で弾くための数値キー。これが一致する限り
-        /// Format 自体を呼ばないので、感度クロスフェードで dv が動いたときだけ文字列が作られる。
+        /// The most recent state for one pooled label. Re-setting text / color triggers layout and
+        /// vertex rebuilding, so this exists to write back only when something actually changed (C-1's load mitigation).
+        /// TickValue / Digits are numeric keys used to short-circuit before a string comparison. As long as
+        /// these match, Format itself is never called, so a string is only generated when dv moves during a sensitivity crossfade.
         /// </summary>
         struct ScaleLabelSlot
         {
@@ -2094,12 +2095,12 @@ namespace Tweeq.UIToolkit
             public bool Visible;
         }
 
-        // 縦ドラッグ中（感度変更中）は色を TextSubtle 側へ寄せる（仕様 §5）
+        // During a vertical drag (sensitivity adjustment), the color leans toward TextSubtle (spec §5).
         float ScaleOffsetWeight => (float)TweeqMath.Clamp(_gesture.HorizontalWeight, 0.0, 1.0);
 
         Color ScaleColor => Color.Lerp(_theme.Accent, _theme.TextSubtle, ScaleOffsetWeight);
 
-        // 有効な系統だけを _scaleTrains の先頭へ詰め、その本数を返す
+        // Packs only the active trains at the front of _scaleTrains and returns their count.
         int BuildScaleTrains(float width)
         {
             if (_theme == null || width <= 0f)
@@ -2113,17 +2114,18 @@ namespace Tweeq.UIToolkit
                 return 0;
             }
 
-            // 位相は baseSpeed でも割る（gestureSpeed だけで割ると目盛りがマウス移動量と 1:1 で流れない）
+            // The phase is also divided by baseSpeed (dividing by gestureSpeed alone would make ticks not scroll 1:1 with mouse movement).
             double valuePerPixel = ScrubValuePerPixel;
             if (!TweeqMath.IsFinite(valuePerPixel) || valuePerPixel <= 0.0)
             {
                 return 0;
             }
 
-            // feedback-fixes-01.md D-2改2: バー付きはハンドル位置がアンカー。
-            // x(v) = anchorX + (v - local)/vpp なので、speed=1（vpp=(max-min)/width）のとき
-            // x(v) = (v-min)/(max-min)*width ＝ バー座標と完全一致する。
-            // レンジなしは従来どおり中央アンカー。表示値 _value は step 量子化で飛ぶので生値 _local を使う
+            // feedback-fixes-01.md D-2 rev2: with a bar, the handle position is the anchor.
+            // x(v) = anchorX + (v - local)/vpp, so at speed=1 (vpp=(max-min)/width),
+            // x(v) = (v-min)/(max-min)*width, matching bar coordinates exactly.
+            // Without a range it's still center-anchored as before. The displayed _value jumps due to step
+            // quantization, so the raw value _local is used instead.
             double anchorX = BarVisible
                 ? Clamp01(Invlerp(_min, _max, _local)) * width
                 : width * 0.5;
@@ -2147,8 +2149,8 @@ namespace Tweeq.UIToolkit
                     continue;
                 }
 
-                // D-2改2: 値の刻みを 10 のべき乗へ量子化する。ラベルが k*dv の真値になり、
-                // 0.348 刻みのような中途半端な数が並ばなくなる（画面間隔は理想の 1/√10〜√10 倍）
+                // D-2 rev2: quantizes the value step to a power of 10. This makes each label the exact
+                // value k*dv, so awkward numbers like a 0.348 step no longer line up (screen spacing ends up 1/sqrt(10) to sqrt(10) times the ideal).
                 double logValueGap = Math.Log10(idealGapPx * valuePerPixel);
                 if (!TweeqMath.IsFinite(logValueGap))
                 {
@@ -2167,8 +2169,8 @@ namespace Tweeq.UIToolkit
                     continue;
                 }
 
-                // D-2改2: 濃さは precision ではなく「実際に見える間隔」から決める。
-                // 量子化で間隔が理想からずれるので、precision 由来だと濃さと密度が食い違う
+                // D-2 rev2: opacity is decided from "the spacing actually visible on screen," not from precision.
+                // Quantization shifts the spacing away from the ideal, so deriving it from precision would make opacity and density disagree.
                 float opacity = Mathf.Sqrt(
                     (float)TweeqMath.Smoothstep(1.0, 2.0, Math.Log10(screenGap)));
                 if (opacity < SCALE_MIN_OPACITY)
@@ -2190,10 +2192,10 @@ namespace Tweeq.UIToolkit
             return count;
         }
 
-        // feedback-fixes-01.md C-1 / D-2改2: 系統を ValueGap の降順に並べ替えて _scaleOrder に入れる。
-        // 全系統が同じ valuePerPixel を共有するので ValueGap 降順＝ ScreenGap 降順であり、
-        // opacity = sqrt(smoothstep(1,2,log10(screenGap))) は単調増加なので opacity 降順にもなる。
-        // 重複排除で「粗い＝濃いほうを残す」がこの順序だけで成立する
+        // feedback-fixes-01.md C-1 / D-2 rev2: sorts trains by descending ValueGap into _scaleOrder.
+        // Since all trains share the same valuePerPixel, descending ValueGap equals descending ScreenGap,
+        // and since opacity = sqrt(smoothstep(1,2,log10(screenGap))) is monotonically increasing, that's also descending opacity.
+        // This ordering alone is what makes "keep the coarser = more opaque one" hold during dedup.
         void SortScaleTrainsByValueGap(int trainCount)
         {
             for (int i = 0; i < trainCount; i++)
@@ -2201,7 +2203,7 @@ namespace Tweeq.UIToolkit
                 _scaleOrder[i] = i;
             }
 
-            // 高々 3 要素なので挿入ソートで十分（毎フレーム走るのでアロケーションを作らない）
+            // At most 3 elements, so insertion sort is enough (runs every frame, so no allocation is created).
             for (int i = 1; i < trainCount; i++)
             {
                 int current = _scaleOrder[i];
@@ -2217,10 +2219,10 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        // C-1 / D-2改2: 粗い系統の目盛りは細かい系統の目盛りの部分集合なので、同じ x に同じ値が
-        // 二重に出る。判定は px オフセットではなく目盛りの値そのもので行う（dv が 10 のべき乗に
-        // 量子化されたので、粗い系統の dv は必ず細かい系統の dv の整数倍＝十進の入れ子になる）。
-        // 全系統が原点を共有するため、値の一致はそのまま x の一致でもある
+        // C-1 / D-2 rev2: a coarse train's ticks are a subset of a fine train's ticks, so the same value
+        // would show up twice at the same x. The check is done on the tick's value itself, not a px offset
+        // (since dv is quantized to a power of 10, a coarse train's dv is always an integer multiple of a
+        // fine train's dv, i.e. decimally nested). All trains share the origin, so a matching value is directly a matching x too.
         bool IsCoveredByCoarserTrain(int orderIndex, double tickValue)
         {
             for (int i = 0; i < orderIndex; i++)
@@ -2241,7 +2243,7 @@ namespace Tweeq.UIToolkit
             return false;
         }
 
-        // ラベルが重ならないよう 1 / 2 / 4 個おきに間引く。4 個おきでも足りなければ諦める（A-4）
+        // Thins labels out to every 1st / 2nd / 4th so they don't overlap. Gives up if even every 4th isn't enough (A-4).
         static int LabelStride(double gap)
         {
             for (int stride = 1; stride <= SCALE_LABEL_MAX_STRIDE; stride *= 2)
@@ -2255,8 +2257,8 @@ namespace Tweeq.UIToolkit
             return 0;
         }
 
-        // feedback-fixes-01.md C-1 / D-2改2: 各目盛りの位置に「そこまでドラッグしたときの到達値」を出す。
-        // 3 系統すべてが数字になり、系統の opacity がそのまま数字のフェードになる
+        // feedback-fixes-01.md C-1 / D-2 rev2: shows "the value reached if dragged this far" at each tick's position.
+        // All 3 trains become numbers, and a train's opacity directly becomes the number's fade.
         void UpdateScaleLabels()
         {
             if (_scaleLabelLayer == null)
@@ -2264,7 +2266,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // Values 以外は数字を一切置かない。ここから下は従来の到達値ラベル実装そのまま
+            // Nothing outside Values places any numbers at all. Everything below this is the reached-value label implementation unchanged.
             if (_scaleStyle != NumberScaleStyle.Values)
             {
                 HideScaleLabelsFrom(0);
@@ -2296,11 +2298,12 @@ namespace Tweeq.UIToolkit
 
             Color baseColor = ScaleColor;
 
-            // D-2改2: Clamp が効いている側の範囲外は D-3 で内部値ごと畳まれる＝到達不能なので描かない
+            // D-2 rev2: out-of-range on the side where Clamp is active gets folded along with the internal
+            // value by D-3, i.e. it's unreachable, so it isn't drawn.
             bool clipMin = _clampMin && TweeqMath.IsFinite(_min);
             bool clipMax = _clampMax && TweeqMath.IsFinite(_max);
 
-            // C-1: 数字がドットに代わる主目盛りになったので、注釈位置ではなく縦中央に置く
+            // C-1: since the numbers now serve as the primary tick mark in place of dots, they're placed at vertical center rather than an annotation position.
             float top = Mathf.Max((height - SCALE_LABEL_HEIGHT) * 0.5f, 0f);
 
             int used = 0;
@@ -2308,8 +2311,8 @@ namespace Tweeq.UIToolkit
             {
                 ScaleTrain train = _scaleTrains[_scaleOrder[order]];
 
-                // C-1: 薄すぎる系統はラベルごと出さない（BuildScaleTrains でも弾いているが、
-                // ラベル側の閾値としても明示しておく）
+                // C-1: a train that's too faint doesn't show its label at all (BuildScaleTrains already
+                // filters this out too, but it's made explicit here as a threshold on the label side as well).
                 if (train.Opacity < SCALE_MIN_OPACITY)
                 {
                     continue;
@@ -2321,14 +2324,14 @@ namespace Tweeq.UIToolkit
                     continue;
                 }
 
-                // dv は 10 のべき乗なので、その桁数で出せば表示値＝目盛りの真値になる（D-2改2）
+                // dv is a power of 10, so displaying with that many digits makes the shown value exactly the tick's true value (D-2 rev2).
                 int digits = TweeqMath.PrecisionOf(train.ValueGap);
                 double rangeEpsilon = train.ValueGap * SCALE_TICK_RANGE_EPSILON;
 
                 Color color = baseColor;
 
-                // 列の opacity をそのままアルファに掛ける。感度を振ると系統が入れ替わるので、
-                // これだけで数字がクロスフェードする（C-1）
+                // The train's opacity is multiplied straight into alpha. Since swinging sensitivity swaps
+                // which train is active, this alone produces the numbers' crossfade (C-1).
                 color.a *= train.Opacity;
 
                 int placed = 0;
@@ -2342,11 +2345,11 @@ namespace Tweeq.UIToolkit
                         break;
                     }
 
-                    // 目盛り k の値。x(v) = OriginX + (v - local)/vpp の逆写像そのものなので、
-                    // ここまでドラッグすれば実際に v_k に届く（速度によらず保存される）
+                    // The value at tick k. This is exactly the inverse mapping of x(v) = OriginX + (v - local)/vpp,
+                    // so dragging this far actually reaches v_k (preserved regardless of speed).
                     double tickValue = k * train.ValueGap;
 
-                    // 到達不能な目盛りは値の増加方向へ並ぶので、上限側は打ち切ってよい
+                    // Unreachable ticks line up in the direction of increasing value, so it's fine to break out on the upper-bound side.
                     if (clipMax && tickValue > _max + rangeEpsilon)
                     {
                         break;
@@ -2384,7 +2387,7 @@ namespace Tweeq.UIToolkit
             _scaleLabelLayer.style.display = used > 0 ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
-        // 位置は毎フレーム動くので素直に書く。text と color だけ前回値と比べて据え置く（C-1）
+        // Position moves every frame, so it's written directly. Only text and color are compared against the previous value and left alone if unchanged (C-1).
         void ApplyScaleLabel(int index, double tickValue, int digits, Color color, float left, float top)
         {
             ScaleLabelSlot slot = GetScaleLabel(index);
@@ -2394,13 +2397,13 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 文字列を作る前に数値キーで弾く。目盛りは値も桁数も 10 のべき乗刻みで安定しているので、
-            // ドラッグ中の大半のフレームはここで抜ける
+            // Short-circuits on a numeric key before building a string. Ticks are stable at power-of-10
+            // steps for both value and digit count, so most frames during a drag exit right here.
             if (slot.Digits != digits || !TweeqFormat.SameValueBits(slot.TickValue, tickValue))
             {
                 string text = TweeqFormat.Format(tickValue, digits, false);
 
-                // 桁数違いでも trim 後に同じ文字列になることがあるので、element への書き戻しは従来どおり比較する
+                // Even with a different digit count, trimming can still produce the same string, so writing back to element is still compared as before.
                 if (!string.Equals(slot.Text, text, StringComparison.Ordinal))
                 {
                     element.text = text;
@@ -2454,7 +2457,7 @@ namespace Tweeq.UIToolkit
                 created.style.whiteSpace = WhiteSpace.NoWrap;
                 created.style.display = DisplayStyle.None;
 
-                // プールの伸長は初回だけなので、ここでフォントを貼ってもスクラブ中の常設コストにならない
+                // The pool only ever grows on first use, so applying the font here doesn't become a recurring cost during a scrub.
                 if (_theme != null)
                 {
                     TweeqFonts.Apply(created, _theme.FontNumeric);
@@ -2462,8 +2465,8 @@ namespace Tweeq.UIToolkit
 
                 _scaleLabelLayer.Add(created);
 
-                // Text は null、Digits は -1（PrecisionOf が返さない値）にしておくと、
-                // 最初の 1 回だけ確実に Format と text= が走る
+                // Leaving Text as null and Digits as -1 (a value PrecisionOf never returns) guarantees
+                // Format and text= both run exactly once, on the first pass.
                 _scaleLabels.Add(new ScaleLabelSlot
                 {
                     Element = created,
@@ -2504,7 +2507,7 @@ namespace Tweeq.UIToolkit
 
         #region Painting (misc)
 
-        // unranged の grip ヒント（⇄）。フォント依存を避けるため図形で描く
+        // The unranged grip hint (<->). Drawn as a shape to avoid depending on a font.
         void PaintGripHint(Painter2D painter, float height)
         {
             Color color = _theme.TextMuted;
@@ -2567,7 +2570,7 @@ namespace Tweeq.UIToolkit
             return TweeqMath.Clamp(value, 0.0, 1.0);
         }
 
-        // ドット序数の間引き判定用。C# の % は負値で負を返すので符号を揃える
+        // Used for judging dot-ordinal thinning. C#'s % returns a negative result for negative values, so the sign is normalized here.
         static int UnsignedMod(int value, int modulo)
         {
             if (modulo <= 0)

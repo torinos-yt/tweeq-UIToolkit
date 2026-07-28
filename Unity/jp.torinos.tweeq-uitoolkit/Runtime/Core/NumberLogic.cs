@@ -3,20 +3,20 @@ using System;
 namespace Tweeq.Core
 {
     /// <summary>
-    /// InputNumber の表示桁・ドラッグ感度・矢印キー増分。UnityEngine 非依存・すべて double。
+    /// InputNumber's display digit count, drag sensitivity, and arrow-key increment. No UnityEngine dependency; all double.
     /// </summary>
     public static class NumberLogic
     {
         #region Constants
 
-        /// <summary>バー無しフィールドで 1 step 進むのに必要なピクセル数。</summary>
+        /// <summary>Pixels needed to advance 1 step in a field without a bar.</summary>
         public const double PX_PER_STEP = 20.0;
 
         #endregion
 
         #region Precision
 
-        /// <summary>表示文字列の小数桁数。最後の '.' 以降が数字だけのときその桁数、それ以外は 0。</summary>
+        /// <summary>Number of decimal digits in the display string. If everything after the last '.' is digits, that count; otherwise 0.</summary>
         public static int PrecisionOfDisplay(string display)
         {
             if (string.IsNullOrEmpty(display))
@@ -30,7 +30,7 @@ namespace Tweeq.Core
                 return 0;
             }
 
-            // TS 版の /\.[0-9]*$/ 相当。指数表記など末尾が数字でない場合は桁数として扱わない。
+            // Equivalent to /\.[0-9]*$/ in the original's TypeScript implementation. When the tail isn't all digits (e.g. exponential notation), it isn't treated as a digit count.
             for (int i = dot + 1; i < display.Length; i++)
             {
                 char c = display[i];
@@ -44,7 +44,7 @@ namespace Tweeq.Core
         }
 
         /// <summary>
-        /// 仕様 §4 の precision()。step があれば常にそれが最優先。
+        /// precision() from spec §4. If a step is present, it always takes top priority.
         /// </summary>
         public static int GetDisplayPrecision(
             double step, string display, double min, double max, double width,
@@ -64,7 +64,7 @@ namespace Tweeq.Core
 
             if (tweaking)
             {
-                // ドラッグ中は感度そのものが桁の下限になる（細かい速度なら細かく見せる）。
+                // While dragging, the sensitivity itself becomes the lower bound on digits (a finer speed shows finer digits).
                 return Math.Max(displayPrecision, Math.Max(sliderPrecision, TweeqMath.PrecisionOf(speed)));
             }
 
@@ -77,11 +77,10 @@ namespace Tweeq.Core
         #region Format
 
         /// <summary>
-        /// tweaking 中は末尾ゼロを維持した固定小数、静止時は末尾ゼロ・末尾ドットをトリムし -0 を "0" に正規化する。
+        /// While tweaking, fixed-point with trailing zeroes kept; when idle, trailing zeroes and a trailing dot are trimmed and -0 is normalized to "0".
         /// </summary>
         /// <remarks>
-        /// 実体は <see cref="TweeqFormat.Format"/>。文字列生成をここに残すと ZString 版と二重管理になるので、
-        /// 既存呼び出し互換のための薄い転送だけを置いている。
+        /// The actual implementation is <see cref="TweeqFormat.Format"/>. Keeping the string-generation logic here as well would mean maintaining it in two places alongside the ZString version, so this is just a thin forwarder kept for compatibility with existing call sites.
         /// </remarks>
         public static string Format(double value, int precision, bool tweaking)
         {
@@ -92,7 +91,7 @@ namespace Tweeq.Core
 
         #region Speed
 
-        /// <summary>px あたりの値変化量。バー有りはレンジ全体を幅に写し、無しは step ベース。</summary>
+        /// <summary>Value change per px. With a bar, the full range maps onto the width; without one, it's step-based.</summary>
         public static double BaseSpeed(bool barVisible, double min, double max, double width, double step)
         {
             if (barVisible && width > 0.0 && TweeqMath.IsFinite(min) && TweeqMath.IsFinite(max))
@@ -112,7 +111,7 @@ namespace Tweeq.Core
             return 1.0;
         }
 
-        /// <summary>縦ドラッグで下げられる感度の下限。step 付きバーは「1 step が何 px か」で決まる。</summary>
+        /// <summary>Lower bound on sensitivity reachable by dragging vertically down. For a bar with a step, this is determined by "how many px is 1 step".</summary>
         public static double MinSpeed(
             bool barVisible, double min, double max, double width, double step, int precisionLimit)
         {
@@ -135,7 +134,7 @@ namespace Tweeq.Core
             return Math.Pow(10.0, -precision);
         }
 
-        /// <summary>縦ドラッグで上げられる感度の上限。バー有りはレンジを超えて加速しても無意味なので 1。</summary>
+        /// <summary>Upper bound on sensitivity reachable by dragging vertically up. With a bar, accelerating past the range is meaningless, so it's 1.</summary>
         public static double MaxSpeed(bool barVisible)
         {
             return barVisible ? 1.0 : 1000.0;
@@ -145,32 +144,32 @@ namespace Tweeq.Core
 
         #region Scale dots
 
-        /// <summary>ドット列の帯を巡回させる周期。3 本の帯が 1 桁ずつずれて重なる。</summary>
+        /// <summary>Period over which the dot-row bands cycle. Three bands overlap, offset by one digit each.</summary>
         public const double SCALE_DOT_PRECISION_CYCLE = 3.0;
 
         /// <summary>
-        /// 1 帯あたりの点数の安全弁。opacity ゲートを通った帯は間隔が 10px 以上になるので、
-        /// 通常の幅ではここに届かない（位相が壊れたときだけの保険）。
+        /// Safety valve for the number of dots per band. A band that passes the opacity gate has a spacing of at least 10px,
+        /// so under normal widths this cap is never reached (it's only a safeguard for when the phase breaks down).
         /// </summary>
         public const int SCALE_DOT_MAX_PER_LAYER = 256;
 
-        // 位相が double の刻み幅より粗い領域まで飛ぶと mod の結果が意味を失う。
-        // そこまで行くのは画面外なので帯ごと捨てる
+        // If the phase jumps into a region coarser than double's step granularity, the mod result loses meaning.
+        // Reaching that point means it's off-screen anyway, so the whole band is discarded.
         const double SCALE_DOT_MAX_PHASE = 1e15;
 
-        /// <summary>スケールドット 1 帯ぶんの幾何。ドラッグ中に毎フレーム組み直すので struct。</summary>
+        /// <summary>Geometry for one band of scale dots. It's a struct because it's rebuilt every frame while dragging.</summary>
         public struct ScaleDotLayer
         {
-            /// <summary>点の間隔（px）。</summary>
+            /// <summary>Spacing between dots (px).</summary>
             public double Gap;
 
-            /// <summary>フィールド左端（x=0）以降で最初に来る点の中心 x。</summary>
+            /// <summary>Center x of the first dot at or after the field's left edge (x=0).</summary>
             public double FirstX;
 
-            /// <summary>幅に収まる点の数。</summary>
+            /// <summary>Number of dots that fit within the width.</summary>
             public int Count;
 
-            /// <summary>帯の不透明度（0〜1）。</summary>
+            /// <summary>Band opacity (0 to 1).</summary>
             public double Opacity;
 
             public ScaleDotLayer(double gap, double firstX, int count, double opacity)
@@ -181,7 +180,7 @@ namespace Tweeq.Core
                 Opacity = opacity;
             }
 
-            /// <summary>index 番目（0 始まり）の点の中心 x。</summary>
+            /// <summary>Center x of the dot at the given (0-based) index.</summary>
             public double DotX(int index)
             {
                 return FirstX + index * Gap;
@@ -189,8 +188,8 @@ namespace Tweeq.Core
         }
 
         /// <summary>
-        /// 帯 offset の「桁」。感度が 1 桁変わるごとに帯が 1 つぶん送られ、
-        /// 3 本が入れ替わりながら循環する。非有限な感度では NaN を返す。
+        /// The "digit" for band offset. Every time sensitivity shifts by one digit, the band advances by one,
+        /// and the three bands cycle while swapping. Returns NaN for a non-finite sensitivity.
         /// </summary>
         public static double ScaleDotPrecision(double gestureSpeed, int offset)
         {
@@ -203,7 +202,7 @@ namespace Tweeq.Core
                 -Math.Log10(gestureSpeed) + offset, SCALE_DOT_PRECISION_CYCLE);
         }
 
-        /// <summary>帯の濃さ。密になる（桁が小さい）ほど消え、粗くなるほど濃くなる。</summary>
+        /// <summary>Band opacity. Fades out as it gets denser (smaller digit) and becomes more opaque as it gets coarser.</summary>
         public static double ScaleDotOpacity(double precision)
         {
             if (!TweeqMath.IsFinite(precision))
@@ -215,8 +214,8 @@ namespace Tweeq.Core
         }
 
         /// <summary>
-        /// 点列の基準位相（フィールドローカル x）。バー有りはハンドル位置、無しは
-        /// 「値 0 が中央に来る」位置。点はここから gap 刻みで敷かれるので、値に整列する。
+        /// The dot row's reference phase (field-local x). With a bar, this is the handle position; without one,
+        /// it's the position where "value 0 sits at the center". Dots are laid out from here in gap-sized steps, so they align with the value.
         /// </summary>
         public static double ScaleDotPhase(
             bool barVisible, double value, double min, double max, double width, double valuePerPixel)
@@ -242,8 +241,8 @@ namespace Tweeq.Core
         }
 
         /// <summary>
-        /// 帯 offset の点列を組む。濃さが minOpacity に届かない帯は「見えないのに数百点になる」
-        /// 側なので、丸ごと捨てて false を返す。
+        /// Builds the dot row for band offset. A band whose opacity doesn't reach minOpacity would end up as
+        /// "invisible yet hundreds of dots", so it's discarded entirely and false is returned.
         /// </summary>
         public static bool TryBuildScaleDotLayer(
             double gestureSpeed, int offset, double phase, double width, double minOpacity,
@@ -307,8 +306,8 @@ namespace Tweeq.Core
         }
 
         /// <summary>
-        /// スケールドットを出してよいか。step 付きで両端が Clamp されたフィールドは
-        /// 離散的な止まり位置しか持たないので、連続感度を表すドットに意味が無い。
+        /// Whether scale dots may be shown. A field with a step where both ends are clamped only has
+        /// discrete stopping positions, so dots representing continuous sensitivity are meaningless.
         /// </summary>
         public static bool ShowScaleDots(
             double step, bool clampMin, bool clampMax, double min, double max)
@@ -325,7 +324,7 @@ namespace Tweeq.Core
         #region Keyboard
 
         /// <summary>
-        /// ↑/↓ キーの新しい値。direction は ±1。戻り値は [validMin, validMax] にクランプ済み。
+        /// New value for the up/down arrow keys. direction is ±1. The return value is already clamped to [validMin, validMax].
         /// </summary>
         public static double ArrowIncrement(
             double current, int direction, double step, double snap,
@@ -342,7 +341,7 @@ namespace Tweeq.Core
             double next;
             if (step != 0.0 && TweeqMath.IsFinite(step))
             {
-                // step 有りでは Alt(×0.1) を無効化したいので max(1, ·) を通す。
+                // With a step present, we want to disable Alt (×0.1), so this is passed through max(1, ·).
                 next = current + direction * step * Math.Max(1.0, keyMultiplier);
             }
             else
@@ -351,7 +350,7 @@ namespace Tweeq.Core
                 double span = validMax - validMin;
                 if (TweeqMath.IsFinite(span) && span <= 1.0)
                 {
-                    // 0〜1 のような狭いレンジで 1 刻みは粗すぎるため、さらに一桁落とす。
+                    // For a narrow range like 0 to 1, a step of 1 is too coarse, so drop one more digit.
                     multiplier *= 0.1;
                 }
 

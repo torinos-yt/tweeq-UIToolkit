@@ -2,16 +2,16 @@ using System;
 
 namespace Tweeq.Core
 {
-    /// <summary>比率ロック適用後のサイズと、適用後のロック状態。</summary>
+    /// <summary>The size after applying the ratio lock, and the lock state after applying it.</summary>
     public readonly struct SizeApplyResult
     {
-        /// <summary>適用後の 0 軸（幅）。</summary>
+        /// <summary>Axis 0 (width) after applying.</summary>
         public readonly double X;
 
-        /// <summary>適用後の 1 軸（高さ）。</summary>
+        /// <summary>Axis 1 (height) after applying.</summary>
         public readonly double Y;
 
-        /// <summary>適用後の比率ロック状態。自動解除された場合のみ入力と異なる。</summary>
+        /// <summary>The ratio lock state after applying. Differs from the input only when it was automatically released.</summary>
         public readonly bool KeepRatio;
 
         public SizeApplyResult(double x, double y, bool keepRatio)
@@ -23,16 +23,16 @@ namespace Tweeq.Core
     }
 
     /// <summary>
-    /// InputSize の比率ロック（Vue InputSize.vue onUpdate）。
-    /// ロック中に片軸だけ動かしたときの他軸の追従と、両軸同時変更による自動解除を担う。
+    /// InputSize's ratio lock (Vue's InputSize.vue onUpdate).
+    /// Handles the other axis following along when only one axis moves while locked, and automatic release when both axes change at once.
     /// </summary>
     public static class SizeLogic
     {
         #region Constants
 
-        // 比率は 100 倍・0.01 倍と桁が大きく振れるので、絶対誤差ではなく相対誤差で見る。
-        // linearly の scalar.approx は絶対 1e-6 固定だが、それだと大きな比率で誤検知して
-        // ロックが勝手に外れる（意図的逸脱）
+        // The ratio can swing wildly in magnitude, e.g. 100x or 0.01x, so this looks at relative error rather than absolute error.
+        // linearly's scalar.approx uses a fixed absolute 1e-6, but that would misfire at large ratios and cause
+        // the lock to release itself (an intentional deviation)
         const double RATIO_TOLERANCE = 1e-6;
 
         #endregion
@@ -40,10 +40,10 @@ namespace Tweeq.Core
         #region Public API
 
         /// <summary>
-        /// 直前値 <paramref name="previousX"/>/<paramref name="previousY"/> から
-        /// <paramref name="nextX"/>/<paramref name="nextY"/> への変更を比率ロックに通す。
-        /// 基準値はジェスチャ開始時の値ではなく直前値になるので、
-        /// ドラッグ中の連続適用では <see cref="Apply(double,double,double,double,double,double,bool)"/> を使うこと。
+        /// Runs the change from the previous values <paramref name="previousX"/>/<paramref name="previousY"/>
+        /// to <paramref name="nextX"/>/<paramref name="nextY"/> through the ratio lock.
+        /// The baseline ends up being the previous value rather than the value at gesture start, so for
+        /// continuous application during a drag, use <see cref="Apply(double,double,double,double,double,double,bool)"/> instead.
         /// </summary>
         public static SizeApplyResult Apply(
             double previousX, double previousY, double nextX, double nextY, bool keepRatio)
@@ -52,9 +52,10 @@ namespace Tweeq.Core
         }
 
         /// <summary>
-        /// 比率ロックを適用する。<paramref name="baselineX"/>/<paramref name="baselineY"/> は
-        /// 編集開始時に記録した値（Vue の valueOnEdit）。
-        /// ドラッグ中に直前値を基準にすると倍率が積み上がって誤差が溜まるため、基準は固定して渡す。
+        /// Applies the ratio lock. <paramref name="baselineX"/>/<paramref name="baselineY"/> are
+        /// the values recorded at edit start (Vue's valueOnEdit).
+        /// If the previous value were used as the baseline during a drag, the multiplier would compound and error would build up,
+        /// so a fixed baseline is passed in instead.
         /// </summary>
         public static SizeApplyResult Apply(
             double previousX,
@@ -68,8 +69,8 @@ namespace Tweeq.Core
             bool changedX = previousX != nextX;
             bool changedY = previousY != nextY;
 
-            // 両軸が同時に動いて比率まで変わったのは「ユーザーが比率を崩しに来た」入力。
-            // ここでロックを外さないと入力を打ち消し続けてしまう（Vue onUpdate 準拠）
+            // Both axes moving at once, changing the ratio itself, is input where "the user came to break the ratio".
+            // If the lock isn't released here, the input keeps getting cancelled out (in line with Vue's onUpdate)
             if (keepRatio && changedX && changedY
                 && !ApproximatelySameRatio(previousX / previousY, nextX / nextY))
             {
@@ -81,7 +82,7 @@ namespace Tweeq.Core
                 return new SizeApplyResult(nextX, nextY, false);
             }
 
-            // Vue は「0 軸が変わっていなければ 1 軸が動いた」とみなす（両軸変化時は 0 軸が主）
+            // Vue treats it as "axis 1 moved" whenever axis 0 hasn't changed (axis 0 takes priority when both axes change)
             bool primaryIsX = changedX;
             double primaryBaseline = primaryIsX ? baselineX : baselineY;
             double primaryNext = primaryIsX ? nextX : nextY;
@@ -89,7 +90,7 @@ namespace Tweeq.Core
             double ratio = primaryNext / primaryBaseline;
             if (!TweeqMath.IsFinite(ratio))
             {
-                // 基準が 0（0 除算）なら比率を作れないので倍率 1 = 他軸据え置きで素通しする
+                // If the baseline is 0 (division by zero), no ratio can be formed, so pass through with multiplier 1 = the other axis left unchanged
                 ratio = 1.0;
             }
 
@@ -104,8 +105,8 @@ namespace Tweeq.Core
 
         static bool ApproximatelySameRatio(double left, double right)
         {
-            // 0 幅・0 高さでは比率が ±∞ / NaN になる。同じ非有限値どうしは「変わっていない」扱いにして、
-            // 0 を跨いだときだけ解除する
+            // With 0 width or 0 height, the ratio becomes +/-Infinity / NaN. The same non-finite values are treated as "unchanged",
+            // and the lock is released only when crossing over 0
             if (left == right)
             {
                 return true;

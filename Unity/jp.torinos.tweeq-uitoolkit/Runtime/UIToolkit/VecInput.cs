@@ -5,21 +5,24 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// 次元数を実行時に決める数値タプル（仕様 §2）。軸数が固定なら
-    /// <see cref="Vec2Input"/> / <see cref="Vec3Input"/> / <see cref="Vec4Input"/> を使う。
+    /// A numeric tuple whose dimension count is decided at runtime (spec §2). If the axis
+    /// count is fixed, use <see cref="Vec2Input"/> / <see cref="Vec3Input"/> / <see cref="Vec4Input"/> instead.
     /// </summary>
     /// <remarks>
-    /// 値型が配列なので <c>INotifyValueChanged&lt;T&gt;</c> は採用していない（仕様 §5-3 の意図的逸脱）。
-    /// 出入りは常に防御的コピーで、内部配列の参照は外へ出さない。
-    /// そのぶん通知のたびに配列を 1 本作るので、ドラッグ中の GC を嫌う用途では typed 版を選ぶ。
+    /// Since the value type is an array, <c>INotifyValueChanged&lt;T&gt;</c> is not adopted
+    /// here (intentional deviation from spec §5-3). Both directions always go through a
+    /// defensive copy, and the internal array's reference is never exposed outward. As a
+    /// trade-off, this allocates one array per notification, so choose the typed version for
+    /// use cases that dislike GC during drags.
     /// </remarks>
     [UxmlElement]
     public partial class VecInput : VecInputBase
     {
         #region Constants
 
-        // UXML 経由（＝パラメータなし生成）の軸数。Dimensions は配列を確保した後は動かせないので
-        // UXML 属性にできず、既定を最小軸数に置く
+        // The axis count used via UXML (i.e. parameterless construction). Dimensions can't be
+        // moved once the array is allocated, so it can't be a UXML attribute; the default is
+        // set to the minimum axis count.
         const int UXML_DIMENSIONS = 2;
 
         #endregion
@@ -27,18 +30,18 @@ namespace Tweeq.UIToolkit
         #region Public API
 
         /// <summary>
-        /// 値が変わるたびに発火する。1 ジェスチャで動くのは 1 軸だけなので、
-        /// 仕様 §2 の「1 フレーム 1 回」はコアレスなしで満たされる。
+        /// Fires every time the value changes. Since only 1 axis moves per gesture, spec §2's
+        /// "once per frame" is satisfied without needing coalescing.
         /// </summary>
         public event Action<float[]> ValueChanged;
 
-        /// <summary>ドラッグ確定・Enter・blur で 1 回だけ発火する（軸数ぶんは発火しない）。</summary>
+        /// <summary>Fires exactly once on drag confirm, Enter, or blur (not once per axis).</summary>
         public event Action<float[]> Confirmed;
 
         /// <summary>
-        /// 現在値。get は複製を返し、set は複製を受け取る。
-        /// UXML から与える場合は長さを軸数（既定 <see cref="UXML_DIMENSIONS"/>）に合わせる
-        /// （合わない配列は警告を出して無視される）。
+        /// The current value. get returns a copy, and set receives a copy.
+        /// When supplied from UXML, the length must match the axis count (default
+        /// <see cref="UXML_DIMENSIONS"/>) (a mismatched array is ignored with a warning).
         /// </summary>
         [UxmlAttribute]
         public float[] Value
@@ -55,7 +58,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>イベントを発火せずに値を設定する。長さが軸数と違う場合は無視する。</summary>
+        /// <summary>Sets the value without firing events. Ignored if the length doesn't match the axis count.</summary>
         public void SetValueWithoutNotify(float[] value)
         {
             SetValueWithoutNotifyInternal(value);
@@ -66,8 +69,8 @@ namespace Tweeq.UIToolkit
         #region Construction
 
         /// <summary>
-        /// UXML / UI Builder から生成するための既定コンストラクタ。軸数は
-        /// <see cref="UXML_DIMENSIONS"/>。軸数を選ぶなら <see cref="VecInput(int)"/> を使う。
+        /// The default constructor for construction from UXML / UI Builder. The axis count is
+        /// <see cref="UXML_DIMENSIONS"/>. Use <see cref="VecInput(int)"/> if you want to choose the axis count.
         /// </summary>
         public VecInput() : base(UXML_DIMENSIONS)
         {
@@ -83,7 +86,7 @@ namespace Tweeq.UIToolkit
 
         protected override void OnAxesChanged(int changedAxis, float previousAxisValue)
         {
-            // 配列版は「どの軸が」を区別しないので、そのまま現在値を配って終わり
+            // The array version doesn't distinguish "which axis", so it just distributes the current value as-is and is done
             RaiseValueChanged();
         }
 
@@ -116,7 +119,7 @@ namespace Tweeq.UIToolkit
                 return false;
             }
 
-            // 軸数は 2〜4 に丸められているので、超過分は基底が捨てる
+            // The axis count is clamped to 2-4, so any excess is discarded by the base class
             this.SetAxesWithoutNotify(
                 value[0],
                 value[1],

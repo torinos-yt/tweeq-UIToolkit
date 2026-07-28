@@ -6,14 +6,15 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// TranslateInput の契約（m6-wave2-spec.md「テスト契約」の TranslateInput 項目）。
+    /// Contract for TranslateInput (the TranslateInput item in the "test contract" section of m6-wave2-spec.md).
     ///
-    /// ドラッグセッションは panel 非依存の命令的 API（BeginTranslateDrag / UpdateTranslateDrag /
-    /// EndTranslateDrag / CancelTranslateDrag）として持たせてあるので、感度・軸ロック・クランプ・
-    /// 通知回数はここで完結する。以下は panel と描画が要るので Play Mode 側の担当:
-    /// - ポインタ押下でセッションが始まりカーソルが消えること
-    /// - オーバーレイのドットグリッドと gridScale の補間
-    /// - X / Y キーの押下追従とフォーカスリング
+    /// The drag session is exposed as a panel-independent imperative API (BeginTranslateDrag / UpdateTranslateDrag /
+    /// EndTranslateDrag / CancelTranslateDrag), so sensitivity, axis locking, clamping, and
+    /// notification counts are all self-contained here. The following require a panel and rendering, so they are
+    /// the responsibility of the Play Mode side instead:
+    /// - That a pointer press starts a session and hides the cursor
+    /// - The overlay's dot grid and the interpolation of gridScale
+    /// - Tracking X / Y key presses and the focus ring
     /// </summary>
     public class TranslateInputTests
     {
@@ -32,14 +33,14 @@ namespace Tweeq.UIToolkit.Tests
             Assert.AreEqual(expected.y, actual.y, EPSILON, "y");
         }
 
-        // ドラッグ中はカーソルを隠すので、途中で失敗しても Editor に隠れたまま残さない
+        // The cursor is hidden during a drag, so restore it even if a test fails midway, or it stays hidden in the Editor
         [TearDown]
         public void RestoreCursor()
         {
             UnityEngine.Cursor.visible = true;
         }
 
-        #region 感度
+        #region Sensitivity
 
         [Test]
         public void Drag_DefaultSpeedIsOneToOne()
@@ -50,7 +51,7 @@ namespace Tweeq.UIToolkit.Tests
             input.UpdateTranslateDrag(new Vector2(10f, 4f));
             input.EndTranslateDrag();
 
-            // Y は「上ドラッグ = +Y」の Unity 合わせ逸脱（m6-wave2-spec.md）。下 4px は −4
+            // Y deliberately deviates from Unity convention as "dragging up = +Y" (m6-wave2-spec.md). Dragging down 4px yields -4
             AssertVector(new Vector2(10f, -4f), input.value);
         }
 
@@ -102,7 +103,7 @@ namespace Tweeq.UIToolkit.Tests
             input.UpdateTranslateDrag(new Vector2(10f, 0f));
             input.EndTranslateDrag();
 
-            // 既に積んだぶんは遡って掛け直さない（Vue の累積方式）
+            // The amount already accumulated is not retroactively rescaled (the Vue original's cumulative approach)
             AssertVector(new Vector2(60f, 0f), input.value);
         }
 
@@ -122,7 +123,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region 軸ロック
+        #region Axis Lock
 
         [Test]
         public void Drag_XLockDropsTheVerticalComponent()
@@ -180,7 +181,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region クランプ
+        #region Clamp
 
         [Test]
         public void Clamp_VectorRangeStopsBothAxes()
@@ -191,7 +192,7 @@ namespace Tweeq.UIToolkit.Tests
 
             input.BeginTranslateDrag();
 
-            // 下 100px = −Y 方向なので min.y=−2 側でクランプ
+            // Dragging down 100px is the -Y direction, so it clamps at the min.y=-2 side
             input.UpdateTranslateDrag(new Vector2(100f, 100f));
             AssertVector(new Vector2(3f, -2f), input.value);
 
@@ -210,7 +211,7 @@ namespace Tweeq.UIToolkit.Tests
 
             input.BeginTranslateDrag();
 
-            // 上 100px = +Y 方向なので両軸とも max=5 側でクランプ
+            // Dragging up 100px is the +Y direction, so both axes clamp at the max=5 side
             input.UpdateTranslateDrag(new Vector2(100f, -100f));
             input.EndTranslateDrag();
 
@@ -220,7 +221,7 @@ namespace Tweeq.UIToolkit.Tests
         [Test]
         public void Clamp_ValueRecoversAsSoonAsTheDragComesBack()
         {
-            // 「開始値 + 総移動量」方式だと端で押し続けたぶんの遅れが出る。Vue の累積方式では出ない
+            // A "start value + total movement" approach would introduce lag from continuing to push against the edge. The Vue original's cumulative approach does not have this problem
             TranslateInput input = Create(Vector2.zero);
             input.SetMax(5f);
 
@@ -246,7 +247,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region 通知
+        #region Notifications
 
         [Test]
         public void Drag_RaisesValueChangedPerMoveAndConfirmsOnce()
@@ -335,7 +336,7 @@ namespace Tweeq.UIToolkit.Tests
             input.BeginTranslateDrag();
             input.UpdateTranslateDrag(new Vector2(5f, 0f));
 
-            // 二重開始で開始値を取り直すと Escape の戻り先がずれる
+            // If a double Begin re-captures the start value, the Escape rollback target would shift
             input.BeginTranslateDrag();
             input.CancelTranslateDrag();
 
@@ -344,7 +345,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region Escape 復元
+        #region Escape Restore
 
         [Test]
         public void Cancel_RestoresTheStartValueWithoutConfirming()
@@ -365,7 +366,7 @@ namespace Tweeq.UIToolkit.Tests
         [Test]
         public void Cancel_NotifiesTheRollback()
         {
-            // ドラッグ中に通知した値を巻き戻すので、戻したことも通知しないと外側が置いていかれる
+            // The value notified during the drag is rolled back, so the rollback itself must also be notified or outside listeners would be left behind
             TranslateInput input = Create(Vector2.zero);
             List<Vector2> changed = new List<Vector2>();
             input.ValueChanged += value => changed.Add(value);
@@ -393,7 +394,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region 値
+        #region Value
 
         [Test]
         public void Value_SetterNotifiesOnce()
@@ -438,7 +439,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region グループ融合
+        #region Group Fusion
 
         [Test]
         public void InlinePosition_StartFlattensTheTrailingCorners()
@@ -535,7 +536,7 @@ namespace Tweeq.UIToolkit.Tests
         [Test]
         public void Disabled_DoesNotBlockTheProgrammaticValue()
         {
-            // 外部からの代入は「操作」ではないので通す（NumberInput と同じ扱い）
+            // Assignment from outside is not "operation", so it passes through (same treatment as NumberInput)
             TranslateInput input = Create(Vector2.zero);
             input.Disabled = true;
 

@@ -4,24 +4,24 @@ namespace Tweeq.Core
 {
     #region Data
 
-    /// <summary>色相・彩度・明度・不透明度。UnityEngine 非依存・すべて double。</summary>
+    /// <summary>Hue, saturation, value, and alpha. No UnityEngine dependency; all double.</summary>
     /// <remarks>
-    /// 原典（Vue / egui）は h を 0〜1 で持つが、ここは 0〜360 の度数にしてある。
-    /// ピッカーの H フィールドと Hue スライダーが度数表示で、境界で 1/360 を掛け直すより
-    /// 内部を度数に揃えたほうが丸め誤差の入る箇所が減るため。
+    /// The Vue original (and another reference implementation) hold h in the 0-1 range, but here it's kept in degrees, 0-360.
+    /// The picker's H field and Hue slider both display degrees, and keeping the internal representation in degrees
+    /// leaves fewer places where rounding error can creep in than re-multiplying by 1/360 at the boundary.
     /// </remarks>
     public struct Hsva
     {
-        /// <summary>色相（度）。[0, 360)。</summary>
+        /// <summary>Hue (degrees). [0, 360).</summary>
         public double H;
 
-        /// <summary>彩度。[0, 1]。</summary>
+        /// <summary>Saturation. [0, 1].</summary>
         public double S;
 
-        /// <summary>明度。[0, 1]。</summary>
+        /// <summary>Value. [0, 1].</summary>
         public double V;
 
-        /// <summary>不透明度。[0, 1]。</summary>
+        /// <summary>Alpha. [0, 1].</summary>
         public double A;
 
         public Hsva(double h, double s, double v, double a)
@@ -33,7 +33,7 @@ namespace Tweeq.Core
         }
     }
 
-    /// <summary>ストレート（非乗算済み）アルファの RGBA。各成分 [0, 1]。</summary>
+    /// <summary>RGBA with straight (non-premultiplied) alpha. Each channel [0, 1].</summary>
     public struct Rgba
     {
         public double R;
@@ -56,7 +56,7 @@ namespace Tweeq.Core
     #endregion
 
     /// <summary>
-    /// 色空間変換と HEX の相互変換。純関数のみで、UnityEngine 非依存・すべて double。
+    /// Color space conversion and HEX interconversion. Pure functions only; no UnityEngine dependency; all double.
     /// </summary>
     public static class TweeqColorLogic
     {
@@ -66,21 +66,21 @@ namespace Tweeq.Core
         const double SEXTANT = 60.0;
         const double BYTE_SCALE = 255.0;
 
-        // '#' + RRGGBBAA。FormatHex はこの長さのスタックバッファ 1 枚で完結させる
+        // '#' + RRGGBBAA. FormatHex builds within a single stack buffer of this length.
         const int HEX_MAX_LENGTH = 9;
         const int HEX_OPAQUE_LENGTH = 7;
 
-        // Vue の chroma 出力に合わせて小文字。テーブル引きなので分岐も加算も要らない
+        // Lowercase to match Vue's chroma output. Table lookup, so no branching or addition needed.
         const string HEX_DIGITS = "0123456789abcdef";
 
         #endregion
 
         #region Conversion
 
-        /// <summary>HSVA → RGBA。h は自動で [0, 360) に、s/v/a は [0, 1] に丸め込む。</summary>
+        /// <summary>HSVA to RGBA. h is auto-normalized to [0, 360); s/v/a are clamped to [0, 1].</summary>
         public static Rgba HsvaToRgba(Hsva hsva)
         {
-            // 0〜6 の連続量（sextant）に落としてから整数部で枝分かれする。原典と同じ形
+            // Reduce to a continuous 0-6 quantity (sextant), then branch on its integer part. Same shape as the original.
             double sextant = NormalizeHue(hsva.H) / SEXTANT;
             double saturation = Clamp01(hsva.S);
             double value = Clamp01(hsva.V);
@@ -131,7 +131,7 @@ namespace Tweeq.Core
         }
 
         /// <summary>
-        /// RGBA → HSVA。無彩色（灰色・黒・白）は色相が定義できないので 0 を返す。
+        /// RGBA to HSVA. For achromatic colors (gray, black, white) hue can't be defined, so 0 is returned.
         /// </summary>
         public static Hsva RgbaToHsva(Rgba rgba)
         {
@@ -139,12 +139,12 @@ namespace Tweeq.Core
         }
 
         /// <summary>
-        /// RGBA → HSVA。無彩色のとき previous の色相を、明度 0 のとき previous の彩度を引き継ぐ。
+        /// RGBA to HSVA. Carries over previous's hue when achromatic, and previous's saturation when value is 0.
         /// </summary>
         /// <remarks>
-        /// 原典は色相・彩度が定義できない場合に NaN を返し、呼び出し側で直前の値に差し戻している。
-        /// NaN を持ち回るとクランプや比較のたびに漏れるので、引き継ぎ元を引数で受け取る形にした。
-        /// SV パッドを下端（v=0）まで引いても色相が黒に飲まれないのはこの経路。
+        /// The original returns NaN when hue/saturation can't be defined, and the caller falls back to the previous value.
+        /// Carrying NaN around would leak through every clamp and comparison, so this instead takes the carry-over source as an argument.
+        /// This is also the path by which dragging the SV pad down to its bottom edge (v=0) doesn't let hue get swallowed by black.
         /// </remarks>
         public static Hsva RgbaToHsva(Rgba rgba, Hsva previous)
         {
@@ -157,8 +157,8 @@ namespace Tweeq.Core
             double delta = maximum - minimum;
 
             double hue;
-            // 完全一致（delta == 0）ではなく機械イプシロンで切るのは、非正規化数レベルの
-            // delta で割ると色相が無限大に飛ぶため。その領域の色相はどのみち意味を持たない
+            // Cutting off at machine epsilon rather than exact equality (delta == 0) is because dividing by a delta
+            // at the denormal level would send hue flying off to infinity. Hue in that region is meaningless anyway.
             if (delta <= TweeqMath.MACHINE_EPSILON)
             {
                 hue = NormalizeHue(previous.H);
@@ -183,7 +183,7 @@ namespace Tweeq.Core
                     sector = (red - green) / delta + 4.0;
                 }
 
-                // sector は [0, 6) に収まるので、ここで剰余を取り直すと丸め誤差が増えるだけ
+                // sector already fits within [0, 6), so taking the remainder again here would only add rounding error.
                 hue = sector * SEXTANT;
             }
 
@@ -199,18 +199,18 @@ namespace Tweeq.Core
         #region Hex
 
         /// <summary>
-        /// #RGB / #RRGGBB / #RRGGBBAA を解釈する。'#' は省略可、前後の空白は無視。
-        /// 失敗時は false を返し、rgba には不透明な黒を入れる。
+        /// Parses #RGB / #RRGGBB / #RRGGBBAA. The '#' is optional; leading/trailing whitespace is ignored.
+        /// On failure returns false and sets rgba to opaque black.
         /// </summary>
         public static bool TryParseHex(string text, out Rgba rgba)
         {
-            // AsSpan() は null でも空スパンを返すので、null チェックはここで完結する
+            // AsSpan() returns an empty span for null too, so the null check is fully handled here.
             return TryParseHex(text.AsSpan(), out rgba);
         }
 
         /// <summary>
-        /// <see cref="TryParseHex(string, out Rgba)"/> のスパン版。
-        /// テキストフィールドの編集中に部分文字列を切り出さずに判定するための入口。
+        /// Span version of <see cref="TryParseHex(string, out Rgba)"/>.
+        /// An entry point for validating during text field editing without slicing out a substring.
         /// </summary>
         public static bool TryParseHex(ReadOnlySpan<char> text, out Rgba rgba)
         {
@@ -229,7 +229,7 @@ namespace Tweeq.Core
 
             if (body.Length == 3)
             {
-                // #RGB は 1 桁を 2 桁へ複製する（0xA → 0xAA）。×17 がその複製にあたる
+                // #RGB duplicates each 1-digit value into 2 digits (0xA -> 0xAA). Multiplying by 17 performs that duplication.
                 if (!TryReadDigit(body, 0, out red)
                     || !TryReadDigit(body, 1, out green)
                     || !TryReadDigit(body, 2, out blue))
@@ -265,12 +265,12 @@ namespace Tweeq.Core
         }
 
         /// <summary>
-        /// 小文字の HEX 文字列。α が 255 未満なら 8 桁、それ以外は 6 桁。
+        /// Lowercase HEX string. 8 digits if alpha is less than 255, otherwise 6 digits.
         /// </summary>
         /// <remarks>
-        /// 桁数の判定を「α&lt;1」ではなく量子化後の 255 未満で行うのは、
-        /// FormatHex → TryParseHex → FormatHex が同じ文字列に戻る（冪等になる）ようにするため。
-        /// α=0.999 を 8 桁にすると "…ff" と書いて読み戻すと 6 桁になり、HEX 欄が編集のたびに揺れる。
+        /// The digit-count decision is based on "less than 255 after quantization" rather than "alpha &lt; 1"
+        /// so that FormatHex -> TryParseHex -> FormatHex returns to the same string (i.e. is idempotent).
+        /// If alpha=0.999 produced 8 digits, it would write "...ff" and read back as 6 digits, making the HEX field wobble on every edit.
         /// </remarks>
         public static string FormatHex(Rgba rgba)
         {
@@ -279,7 +279,7 @@ namespace Tweeq.Core
             int blue = ToByte(rgba.B);
             int alpha = ToByte(rgba.A);
 
-            // 中間文字列を作らずスタック上で組み立て、string 化は最後の 1 回だけ
+            // Assemble on the stack without creating an intermediate string; string conversion happens only once, at the end.
             Span<char> buffer = stackalloc char[HEX_MAX_LENGTH];
             buffer[0] = '#';
             WritePair(buffer, 1, red);
@@ -343,13 +343,13 @@ namespace Tweeq.Core
 
         #region Channels
 
-        /// <summary>[0, 1] のチャンネルを 0〜255 へ。丸めは TweeqMath.Quantize と同じ AwayFromZero。</summary>
+        /// <summary>Converts a [0, 1] channel to 0-255. Rounding uses AwayFromZero, same as TweeqMath.Quantize.</summary>
         public static int ToByte(double channel)
         {
             return (int)Math.Round(Clamp01(channel) * BYTE_SCALE, MidpointRounding.AwayFromZero);
         }
 
-        /// <summary>0〜255 を [0, 1] のチャンネルへ。範囲外は飽和させる。</summary>
+        /// <summary>Converts 0-255 to a [0, 1] channel. Out-of-range values are saturated.</summary>
         public static double FromByte(int value)
         {
             if (value <= 0)
@@ -360,7 +360,7 @@ namespace Tweeq.Core
             return value >= 255 ? 1.0 : value / BYTE_SCALE;
         }
 
-        /// <summary>色相を [0, 360) へ。非有限値は 0（＝赤）に倒す。</summary>
+        /// <summary>Normalizes hue to [0, 360). Non-finite values fall back to 0 (= red).</summary>
         public static double NormalizeHue(double hue)
         {
             if (!TweeqMath.IsFinite(hue))
@@ -371,8 +371,8 @@ namespace Tweeq.Core
             return TweeqMath.UnsignedMod(hue, FULL_TURN);
         }
 
-        // NaN は「無彩色」の印として原典から流れてくることがあるので 0 に倒す。
-        // ±∞ は Clamp に任せれば 1 / 0 に飽和する
+        // NaN can flow in from the original as a marker of "achromatic," so it falls back to 0.
+        // For ±infinity, leaving it to Clamp saturates it to 1 / 0.
         static double Clamp01(double value)
         {
             if (double.IsNaN(value))

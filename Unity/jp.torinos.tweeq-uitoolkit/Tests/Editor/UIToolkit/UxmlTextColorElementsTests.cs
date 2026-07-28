@@ -6,17 +6,19 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// テキスト／カラー系コンポーネントの UXML 実体化（m7-wave2-spec.md「UXML 対応」）。
-    /// [UxmlElement] の属性名が UXML 側の綴りと一致していること・値が要素へ届くことを見る。
+    /// UXML instantiation of the text/color components (m7-wave2-spec.md "UXML support").
+    /// Checks that [UxmlElement]'s attribute names match the UXML-side spelling, and that
+    /// values reach the elements.
     /// </summary>
     /// <remarks>
-    /// UXML から要素を作るには VisualTreeAsset が必要で、その生成は UXML インポータ
-    /// （＝AssetDatabase）しか行えない。そのため一時アセットを書き出してインポートし、
-    /// TearDown で消す。Editor 専用テストアセンブリなのでこの手が使える。
+    /// Creating an element from UXML requires a VisualTreeAsset, and only the UXML importer
+    /// (i.e. AssetDatabase) can produce one. So this writes out a temporary asset and imports
+    /// it, then deletes it in TearDown. This trick works because this is an Editor-only test
+    /// assembly.
     /// </remarks>
     public class UxmlTextColorElementsTests
     {
-        // 別班の UXML テストと同じフォルダを掴まないよう、この班専用の名前にする
+        // Named specifically for this group of tests so it doesn't collide with another group's UXML test folder
         const string TEMP_FOLDER_NAME = "TweeqUxmlTextColorTests";
         const string TEMP_FOLDER = "Assets/" + TEMP_FOLDER_NAME;
 
@@ -87,7 +89,7 @@ namespace Tweeq.UIToolkit.Tests
 
             NumberInput number = root.Q<NumberInput>();
 
-            // Min / Max の既定は ±∞。UXML に書かれていない属性で 0 に潰されないこと
+            // Min / Max default to ±∞. An attribute not written in UXML must not collapse them to 0
             Assert.AreEqual(double.NegativeInfinity, number.Min);
             Assert.AreEqual(double.PositiveInfinity, number.Max);
             Assert.AreEqual(4, number.Precision);
@@ -176,7 +178,7 @@ namespace Tweeq.UIToolkit.Tests
             Assert.AreEqual(2, shuffle.Options.Length);
             Assert.AreEqual("a", shuffle.value);
 
-            // UXML だけで組んでも押せば値が動く（Generate を配線しなくてよい）
+            // Even when built purely from UXML, pressing it moves the value (no need to wire up Generate)
             shuffle.PerformClick();
 
             Assert.AreEqual("b", shuffle.value);

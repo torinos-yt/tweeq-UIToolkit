@@ -4,14 +4,15 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// 任意の要素にツールチップを付けるための入口（Vue 版 v-tooltip ディレクティブ相当）。
-    /// 実体はパネルごとの <see cref="TweeqTooltipRoot"/> 1 個を全員で使い回す。
+    /// Entry point for attaching a tooltip to an arbitrary element (equivalent to the Vue
+    /// version's v-tooltip directive). The actual implementation is a single
+    /// <see cref="TweeqTooltipRoot"/> per panel, shared by everyone.
     /// </summary>
     public static class TweeqTooltip
     {
         #region Fields
 
-        // 要素 → 購読の対応表。Detach で確実に取り除くので、ここが唯一の保持元になる
+        // Map from element → subscription. Detach reliably removes entries, so this is the sole holder.
         static readonly Dictionary<VisualElement, TooltipBinding> Bindings =
             new Dictionary<VisualElement, TooltipBinding>();
 
@@ -20,8 +21,8 @@ namespace Tweeq.UIToolkit
         #region Public API
 
         /// <summary>
-        /// target にツールチップを付ける。既に付いていれば文言の差し替えとして働く
-        /// （表示中ならその場で反映される）。
+        /// Attaches a tooltip to target. If one is already attached, this acts as a text
+        /// replacement (reflected immediately if currently shown).
         /// </summary>
         public static void Attach(VisualElement target, string text)
         {
@@ -40,8 +41,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// target からツールチップを外す。表示中なら即座に閉じ、購読も全て解除するので
-        /// 参照が残らない。
+        /// Removes the tooltip from target. If currently shown, it closes immediately, and
+        /// all subscriptions are unregistered too, so no reference lingers.
         /// </summary>
         public static void Detach(VisualElement target)
         {
@@ -59,15 +60,16 @@ namespace Tweeq.UIToolkit
             binding.Dispose();
         }
 
-        /// <summary>target にツールチップが付いているか。</summary>
+        /// <summary>Whether a tooltip is attached to target.</summary>
         public static bool IsAttached(VisualElement target)
         {
             return target != null && Bindings.ContainsKey(target);
         }
 
         /// <summary>
-        /// context のパネルで共有しているツールチップの配色を差し替える。
-        /// 実体が 1 個なので、アプリ起動時に一度呼べば全要素へ効く。
+        /// Replaces the color scheme of the tooltip shared within context's panel.
+        /// Since there's only a single instance, calling this once at app startup affects
+        /// all elements.
         /// </summary>
         public static void SetTheme(VisualElement context, TweeqTheme theme)
         {
@@ -84,7 +86,7 @@ namespace Tweeq.UIToolkit
 
         #region Binding
 
-        /// <summary>1 要素ぶんの購読。デリゲートは生成時に確保して登録／解除で使い回す。</summary>
+        /// <summary>The subscription for a single element. Delegates are allocated at construction and reused for register/unregister.</summary>
         sealed class TooltipBinding
         {
             #region Fields
@@ -165,7 +167,7 @@ namespace Tweeq.UIToolkit
                 RequestHide();
             }
 
-            // パネルから外れた要素は leave を受け取れないので、ここで取り残しを断つ
+            // An element removed from the panel can't receive a leave event, so this cuts off any leftover state here
             void OnDetachFromPanel(DetachFromPanelEvent evt)
             {
                 TweeqTooltipRoot.CloseAnyFor(_target);

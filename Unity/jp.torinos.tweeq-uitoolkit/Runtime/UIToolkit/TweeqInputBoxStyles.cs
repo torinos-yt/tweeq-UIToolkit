@@ -5,31 +5,32 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// 入力欄の「クローム」（枠・角丸・背景）を組み立てるヘルパ。
+    /// Helper that assembles the input field's "chrome" (border, corner radius, background).
     /// </summary>
     /// <remarks>
-    /// 実装は NumberInput を正典として抽出したもので、見た目はビット単位で同一。
-    /// 外部 asmdef のカスタムウィジェットが tweeq の入力欄と同じ外装を持てるように
-    /// public 化した（ext-custom-widgets-spec.md EXT-01-A）。
+    /// The implementation was extracted using NumberInput as the canonical source, so the
+    /// appearance is bit-for-bit identical. Made public so that custom widgets in external
+    /// asmdefs can have the same exterior as tweeq's input fields (ext-custom-widgets-spec.md EXT-01-A).
     /// </remarks>
     public static class TweeqInputBoxStyles
     {
         #region Constants
 
-        /// <summary>入力欄のテキストサイズ（px）。</summary>
+        /// <summary>Input field text size (px).</summary>
         public const float TEXT_FONT_SIZE = 12f;
 
-        /// <summary>disabled 時のインセット枠の太さ（px）。</summary>
+        /// <summary>Thickness of the inset border when disabled (px).</summary>
         public const float DISABLED_BORDER_WIDTH = 1f;
 
-        // TextField の内側要素。背景・枠を消して 24px の高さを使い切るために触る
+        // The inner element of TextField. Touched to remove the background/border and make
+        // full use of the 24px height.
         const string TEXT_INPUT_NAME = "unity-text-input";
 
         #endregion
 
         #region Edge helpers
 
-        /// <summary>4 辺の border 幅を一括で設定する。</summary>
+        /// <summary>Sets the border width on all 4 sides at once.</summary>
         public static void SetBorderWidth(VisualElement element, float width)
         {
             if (element == null)
@@ -43,7 +44,7 @@ namespace Tweeq.UIToolkit
             element.style.borderBottomWidth = width;
         }
 
-        /// <summary>4 辺の border 色を一括で設定する。</summary>
+        /// <summary>Sets the border color on all 4 sides at once.</summary>
         public static void SetBorderColor(VisualElement element, Color color)
         {
             if (element == null)
@@ -57,7 +58,7 @@ namespace Tweeq.UIToolkit
             element.style.borderBottomColor = color;
         }
 
-        /// <summary>4 隅の角丸半径を一括で設定する。</summary>
+        /// <summary>Sets the corner radius on all 4 corners at once.</summary>
         public static void SetCornerRadius(VisualElement element, float radius)
         {
             SetCornerRadius(element, radius, true, true, true, true);
@@ -68,11 +69,13 @@ namespace Tweeq.UIToolkit
         #region Chrome
 
         /// <summary>
-        /// グループ内での位置に応じて角丸を潰す（仕様 §1 の角丸表）。
+        /// Flattens corner radii depending on position within a group (see the corner-radius
+        /// table in spec §1).
         /// </summary>
         /// <remarks>
-        /// 両軸の指定は OR で合成する（片方でも「潰す」なら潰す）。
-        /// フォーカスリングのように別レイヤで枠を描く要素にも同じ引数で掛けること。
+        /// The two axes are combined with OR (if either axis says "flatten", it's flattened).
+        /// Apply the same arguments to elements that draw a border on a separate layer, like
+        /// the focus ring.
         /// </remarks>
         public static void ApplyCornerRadius(
             VisualElement element,
@@ -136,11 +139,11 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 背景色だけをトランジションさせる（仕様 §5: 0.15s / cubic-bezier(0.4,0,0.2,1)）。
+        /// Transitions only the background color (spec §5: 0.15s / cubic-bezier(0.4,0,0.2,1)).
         /// </summary>
         /// <remarks>
-        /// UI Toolkit に同一カーブが無いので EaseInOutCubic で近似する
-        /// （NumberInput / RotaryInput と同じ判断）。
+        /// UI Toolkit has no identical curve, so this approximates it with EaseInOutCubic
+        /// (the same call made for NumberInput / RotaryInput).
         /// </remarks>
         public static void ApplyBackgroundTransition(VisualElement element, TweeqTheme theme)
         {
@@ -157,10 +160,11 @@ namespace Tweeq.UIToolkit
                 new List<EasingFunction> { new EasingFunction(EasingMode.EaseInOutCubic) });
         }
 
-        /// <summary>ホバー状態に応じた入力欄の背景色を返す。</summary>
+        /// <summary>Returns the input field's background color according to hover state.</summary>
         /// <remarks>
-        /// disabled は「背景透明 + 1px Border のインセット枠」で色ではなく構成が変わるため、
-        /// ここでは扱わない（呼び出し側が分岐して <see cref="SetBorderWidth"/> を掛ける）。
+        /// disabled changes the composition rather than the color — "transparent background +
+        /// 1px border inset" — so it isn't handled here (the caller branches and applies
+        /// <see cref="SetBorderWidth"/>).
         /// </remarks>
         public static Color ResolveBackground(TweeqTheme theme, bool hovered)
         {
@@ -173,11 +177,13 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// disabled 表現の付け外し（仕様 §5: 背景透明 + 1px Border のインセット枠）。
+        /// Toggles the disabled appearance on/off (spec §5: transparent background + 1px
+        /// border inset).
         /// </summary>
         /// <remarks>
-        /// 解除側で通常の背景色を塗り直さないのは、hover 状態を知っているのが呼び出し側だから。
-        /// 解除後は <see cref="ResolveBackground"/> の結果を背景へ入れること。
+        /// The disable-removal path doesn't repaint the normal background color, because the
+        /// caller is the one that knows the hover state. After removing it, put the result of
+        /// <see cref="ResolveBackground"/> into the background.
         /// </remarks>
         public static void ApplyDisabledChrome(VisualElement element, TweeqTheme theme, bool disabled)
         {
@@ -206,17 +212,20 @@ namespace Tweeq.UIToolkit
         #region Text field
 
         /// <summary>
-        /// 常時表示の <see cref="TextField" /> を入力欄の 24px 枠に収める正規化一式。
+        /// A set of normalizations that fit an always-visible <see cref="TextField" /> into
+        /// the input field's 24px frame.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// UI Toolkit 既定の USS は上下 padding と auto 高さを入れてくるので、
-        /// そのままだと 24px の枠内で行が潰れて読めなくなる（feedback-fixes-01.md A-6）。
-        /// 高さ・余白・文字サイズを明示し、背景と枠は外側の箱に任せる。
+        /// UI Toolkit's default USS adds top/bottom padding and an auto height, so left as-is
+        /// the line gets crushed and unreadable within the 24px frame (feedback-fixes-01.md A-6).
+        /// Height, margins, and font size are set explicitly, and the background/border are
+        /// left to the outer box.
         /// </para>
         /// <para>
-        /// 左右 padding は 0 に倒す。値の中央寄せ幅は widget ごとに違うので、
-        /// 必要な側が呼び出し後に上書きする（NumberInput / StringInput は 0.5em ぶん入れる）。
+        /// Left/right padding is forced to 0. The centering width for the value differs per
+        /// widget, so whichever side needs it overrides after the call (NumberInput /
+        /// StringInput add 0.5em).
         /// </para>
         /// </remarks>
         public static void ApplyTextField(TextField field, TweeqTheme theme)
@@ -260,8 +269,9 @@ namespace Tweeq.UIToolkit
                 textInput.style.whiteSpace = WhiteSpace.NoWrap;
             }
 
-            // 実際に字を描くのは unity-text-input の中の TextElement。
-            // 縦潰れは input 側だけ直しても残るのでこちらにも同じ指定を掛ける
+            // The actual glyph drawing is done by the TextElement inside unity-text-input.
+            // Vertical crushing remains even if only the input side is fixed, so the same
+            // settings are applied here too.
             TextElement textElement = textInput != null ? textInput.Q<TextElement>() : null;
             if (textElement != null)
             {
@@ -279,10 +289,11 @@ namespace Tweeq.UIToolkit
 
         #region Internals
 
-        // キャレット・選択色は USS 既定（黒）のままだと暗背景で見えない。
-        // selectionColor は obsolete だが、推奨の --unity-selection-color は C# から
-        // インスタンス単位で設定できない（テーマは TweeqTheme 駆動）ため使い続ける。
-        // 警告の抑止をこの 1 メソッドに閉じ込めるのが公開 API 化の目的の一つ
+        // If the caret/selection color is left at the USS default (black), it's invisible on
+        // a dark background. selectionColor is obsolete, but the recommended
+        // --unity-selection-color can't be set per-instance from C# (theming is driven by
+        // TweeqTheme), so this keeps using it. Confining the warning suppression to this one
+        // method is one of the goals of making this API public.
         static void ApplyTextSelectionColors(TextField field, TweeqTheme theme)
         {
             if (theme == null)

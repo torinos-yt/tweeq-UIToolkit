@@ -4,39 +4,39 @@ using Tweeq.Core;
 using UnityEngine;
 using UnityEngine.UIElements;
 
-// 選択肢の行は Label で作る。他の Input と表記を揃えるため別名にする
+// Build option rows with Label. Aliased to keep naming consistent with other Inputs
 using UILabel = UnityEngine.UIElements.Label;
 
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// ドロップダウン選択（popover-spec.md「DropdownInput&lt;T&gt;」）。
-    /// 閉状態は入力枠 1 行、開状態は macOS 風に「選択中の option がフィールドに重なる」位置へ
-    /// ポップアップを出す。
+    /// Dropdown selection (popover-spec.md "DropdownInput&lt;T&gt;").
+    /// The closed state is a single input row; the open state pops up macOS-style, positioned so the
+    /// selected option overlaps the field.
     ///
-    /// 開閉の状態機械（<see cref="Open"/> / <see cref="Close"/> / <see cref="Commit"/> /
-    /// <see cref="Cancel"/> / <see cref="MoveSelection"/> / <see cref="PerformPointerUp"/>）は
-    /// panel 非依存にしてある。ポップアップの表示はその上に乗るだけなので、panel 未接続でも
-    /// 例外を出さずに状態だけが進む（EditMode テストはこの層を叩く）。
+    /// The open/close state machine (<see cref="Open"/> / <see cref="Close"/> / <see cref="Commit"/> /
+    /// <see cref="Cancel"/> / <see cref="MoveSelection"/> / <see cref="PerformPointerUp"/>) is
+    /// panel-independent. The popup display just rides on top of it, so even without a panel attached
+    /// the state still advances without throwing (EditMode tests exercise this layer directly).
     /// </summary>
     public class DropdownInput<T> : VisualElement, INotifyValueChanged<T>, ITweeqInputBox, ITweeqThemed
     {
         #region Constants
 
-        // Vue InputDropdown.vue 53-55 の定数。SELECT_CHROME（=2）は Vue の .select の
-        // margin+border 実測値なので、こちらでは実際の padding+border を測って渡す
+        // Constants from Vue InputDropdown.vue 53-55. SELECT_CHROME (=2) is a measured
+        // margin+border value from Vue's .select, so here we measure and pass the actual padding+border instead
         const float VIEWPORT_MARGIN = 6f;
         const float AUTO_SCROLL_SPEED = 8f;
 
-        // Vue は requestAnimationFrame。UI Toolkit のスケジューラには「毎フレーム」が無いので
-        // 60fps 相当の間隔で近似する（Every の item は使い回すので確保は 1 回だけ）
+        // Vue uses requestAnimationFrame. UI Toolkit's scheduler has no "every frame" option, so
+        // approximate it with a ~60fps interval (the Every item is reused, so it's only allocated once)
         const long AUTO_SCROLL_INTERVAL_MS = 16;
 
-        // Vue onPointerupWhileOpen: 開いてこの時間以内の pointerup は「押しっぱなしドラッグ選択の
-        // 途中」とみなして無視する。超えていれば確定して閉じる
+        // Vue onPointerupWhileOpen: a pointerup within this time of opening is treated as
+        // "still mid-drag-select" and ignored. Past this time, it commits and closes
         const long CONFIRM_GRACE_MS = 500;
 
-        // Vue の $chevron-width = .7 * inputHeight
+        // Vue's $chevron-width = .7 * inputHeight
         const float CHEVRON_WIDTH_RATIO = 0.7f;
         const float CHEVRON_IDLE_OPACITY = 0.4f;
         const float CHEVRON_TRIANGLE_WIDTH = 8f;
@@ -47,24 +47,24 @@ namespace Tweeq.UIToolkit
         const float DISABLED_BORDER_WIDTH = 1f;
         const float POPUP_BORDER_WIDTH = 1f;
 
-        // option 行の左右余白（Vue は左 .5em / 右 chevron 幅だが、中央揃えなので左右対称にする）
+        // Left/right padding for option rows (Vue uses left .5em / right chevron width, but here it's centered so kept symmetric)
         const float OPTION_PADDING = 6f;
 
         const float TEXT_FONT_SIZE = 12f;
 
-        // box-shadow が無いので、半透明角丸を数枚重ねて 0 0 20px を近似する（popover-spec.md）
+        // There's no box-shadow, so approximate "0 0 20px" by stacking several translucent rounded layers (popover-spec.md)
         const float SHADOW_SPREAD = 20f;
         const int SHADOW_LAYERS = 5;
 
-        // スクロール端の判定に使う遊び（Vue updateScrollArrows の 0.5px）
+        // Slack used to judge scroll-edge state (the 0.5px from Vue's updateScrollArrows)
         const float SCROLL_EPSILON = 0.5f;
 
         const float SCROLL_ARROW_RATIO = 0.7f;
 
-        // フィルタ用 TextField の内側要素（背景・枠を消して高さを使い切るために触る）
+        // Inner element of the filter TextField (touched to strip its background/border and use up the full height)
         const string TEXT_INPUT_NAME = "unity-text-input";
 
-        // フィルタ入力の左右余白。option 行と同じ 6px にして、打鍵中も字の位置が飛ばないようにする
+        // Left/right padding of the filter input. Matches the option row's 6px so text position doesn't jump while typing
         const float FILTER_PADDING = OPTION_PADDING;
 
         #endregion
@@ -84,7 +84,7 @@ namespace Tweeq.UIToolkit
         string _suffix = string.Empty;
         string _displayText = string.Empty;
 
-        // _value の options 内での位置。見つからなければ -1。毎フレーム探索しないよう保持する
+        // Position of _value within options. -1 if not found. Cached so it isn't searched for every frame
         int _valueIndex = -1;
 
         bool _disabled;
@@ -95,13 +95,13 @@ namespace Tweeq.UIToolkit
         TweeqBoxPosition _inlinePosition = TweeqBoxPosition.None;
         TweeqBoxPosition _blockPosition = TweeqBoxPosition.None;
 
-        // フィールド側
+        // Field side
         UILabel _fieldLabel;
         VisualElement _chevron;
         VisualElement _focusRing;
 
-        // フィルタ（ファジー検索）。TextField は初回のフィルタまで作らない。
-        // 一度も打鍵されないドロップダウンに TextField の内部階層を持たせないため
+        // Filter (fuzzy search). The TextField isn't created until the first filter.
+        // This keeps a dropdown that's never had a keystroke from carrying a TextField's internal hierarchy
         TextField _filterField;
         VisualElement _filterInput;
         TextElement _filterText;
@@ -109,10 +109,10 @@ namespace Tweeq.UIToolkit
         bool _filtering;
         string _filterQuery = string.Empty;
 
-        // 絞り込み結果（options のインデックス列）。打鍵ごとに詰め直すので List は使い回す
+        // Filtered results (a list of indices into options). Re-packed on every keystroke, so the List is reused
         readonly List<int> _filtered = new List<int>();
 
-        // ポップアップ側（options 変更時にだけ組み直し、開閉では使い回す）
+        // Popup side (rebuilt only when options change; reused across open/close)
         TweeqPopover _popover;
         VisualElement _surface;
         VisualElement _shadowLayer;
@@ -125,38 +125,38 @@ namespace Tweeq.UIToolkit
         bool _open;
         T _valueAtStart;
 
-        // 開いた時点の値の位置。current 表示のたびに線形探索しないよう Open で 1 回だけ引く
+        // Position of the value at the moment it opened. Looked up once in Open() so it isn't linearly searched every current-display
         int _valueAtStartIndex = -1;
         long _openTimeMs;
 
-        // popover の内部構造に依存せず「もう入れたか」を覚える
+        // Remembers "has it already been added" without depending on popover's internal structure
         bool _popupAttached;
 
         float _scrollOffset;
         float _visibleHeight;
         float _listHeight;
 
-        // オートスクロールの scheduled item は 1 個だけ作って Resume/Pause で使い回す
+        // Only one scheduled item for auto-scroll is created; it's reused via Resume/Pause
         IVisualElementScheduledItem _autoScrollItem;
         int _autoScrollDirection;
 
-        // スクロール矢印の上で離した時は確定させない（Vue の @pointerup.stop 相当）
+        // Don't commit when released over a scroll arrow (equivalent to Vue's @pointerup.stop)
         bool _pointerOverArrow;
 
-        // 開いている間だけ panel root に付ける外側クリック／リリースの検知
+        // Outside-click/release detection attached to the panel root only while open
         VisualElement _dismissRoot;
 
         #endregion
 
         #region Public API
 
-        /// <summary>値が変わるたびに発火する。矢印キー・ホバー選択でも飛ぶ。</summary>
+        /// <summary>Fires every time the value changes. Also fires for arrow-key and hover selection.</summary>
         public event Action<T> ValueChanged;
 
-        /// <summary>クリック確定・Enter 確定のときだけ、1 操作につき 1 回発火する。</summary>
+        /// <summary>Fires only once per operation, on click-confirm or Enter-confirm.</summary>
         public event Action<T> Confirmed;
 
-        /// <summary>選択中の値。</summary>
+        /// <summary>The currently selected value.</summary>
         public T value
         {
             get => _value;
@@ -175,9 +175,9 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 選択肢。設定・取得ともにコピーを通す（呼び出し側の配列と内部状態を切り離す）。
-        /// 現在値が新しい選択肢に含まれない場合も値は動かさない（勝手な通知を出さないため）。
-        /// フィールドには <see cref="Labelizer"/> 経由の表示だけが残る。
+        /// The options. Both get and set go through a copy (decoupling the caller's array from internal state).
+        /// The value is left untouched even if the current value isn't among the new options (to avoid firing an unwanted notification).
+        /// The field only retains the display produced via <see cref="Labelizer"/>.
         /// </summary>
         public T[] Options
         {
@@ -202,14 +202,14 @@ namespace Tweeq.UIToolkit
 
                 RebuildLabelCache();
 
-                // 絞り込み結果は「旧 options のインデックス列」なので、行を組み直す前に引き直す。
-                // 先に RebuildRows へ入ると範囲外のインデックスを参照してしまう
+                // The filtered results are "indices into the old options", so re-derive them before rebuilding rows.
+                // Entering RebuildRows first would reference out-of-range indices
                 RefreshFilterResults();
 
                 RebuildRows();
                 _valueIndex = IndexOf(_value);
 
-                // 選択肢が消えたらポップアップの中身も意味を失う
+                // If the options disappear, the popup's contents become meaningless too
                 if (_options.Length == 0 && _open)
                 {
                     Close();
@@ -221,8 +221,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 値からラベルを作る関数。<see cref="Labels"/> より優先される。
-        /// 結果は options 変更時に一括生成してキャッシュするので、毎フレームは呼ばれない。
+        /// A function that builds a label from a value. Takes priority over <see cref="Labels"/>.
+        /// Results are generated in bulk and cached when options change, so this isn't called every frame.
         /// </summary>
         public Func<T, string> Labelizer
         {
@@ -238,7 +238,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>options とインデックスで対応するラベル列。<see cref="Labelizer"/> 未設定時に使う。</summary>
+        /// <summary>A label array corresponding to options by index. Used when <see cref="Labelizer"/> isn't set.</summary>
         public string[] Labels
         {
             get => _labels;
@@ -253,7 +253,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>フィールド表示に前置される文字列。option 行には付かない（Vue の InputString 側の責務）。</summary>
+        /// <summary>String prepended to the field display. Not applied to option rows (that's Vue's InputString's responsibility).</summary>
         public string Prefix
         {
             get => _prefix;
@@ -265,7 +265,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>フィールド表示に後置される文字列。</summary>
+        /// <summary>String appended to the field display.</summary>
         public string Suffix
         {
             get => _suffix;
@@ -277,7 +277,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>操作不能状態。</summary>
+        /// <summary>Non-interactive state.</summary>
         public bool Disabled
         {
             get => _disabled;
@@ -292,7 +292,7 @@ namespace Tweeq.UIToolkit
 
                 if (_disabled)
                 {
-                    // 無効化の瞬間に開いたままだと閉じる手段が無くなる
+                    // If it stays open at the moment it's disabled, there'd be no way left to close it
                     Close();
                 }
 
@@ -302,12 +302,12 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 外部から与える不正値表示。文字色を Error にするだけで、枠・シェブロンは変えない。
+        /// External invalid-value display. Only changes the text color to Error; leaves the border and chevron alone.
         /// </summary>
         /// <remarks>
-        /// Vue の InputDropdown は表示を内部 InputString へ委譲しているので invalid も持つ
-        /// （m7-disabled-invalid-spec.md）。ここでは委譲先が無いため、フィールドのラベルと
-        /// フィルタ用 TextField の両方に <see cref="StringInput"/> と同じ表現を掛ける。
+        /// Vue's InputDropdown delegates display to an internal InputString, so it carries invalid too
+        /// (m7-disabled-invalid-spec.md). There's no delegate here, so the same styling as
+        /// <see cref="StringInput"/> is applied to both the field's label and the filter TextField.
         /// </remarks>
         public bool Invalid
         {
@@ -319,7 +319,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>配色テーマ。null を渡した場合は Dark() にフォールバックする。</summary>
+        /// <summary>Color theme. Falls back to Dark() when null is passed.</summary>
         public TweeqTheme Theme
         {
             get => _theme;
@@ -331,7 +331,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>横方向グループでの位置。</summary>
+        /// <summary>Position within a horizontal group.</summary>
         public TweeqBoxPosition InlinePosition
         {
             get => _inlinePosition;
@@ -347,7 +347,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>縦方向グループでの位置。</summary>
+        /// <summary>Position within a vertical group.</summary>
         public TweeqBoxPosition BlockPosition
         {
             get => _blockPosition;
@@ -363,22 +363,22 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>ポップアップが開いているか（論理状態。panel が無くても進む）。</summary>
+        /// <summary>Whether the popup is open (logical state; advances even without a panel).</summary>
         public bool IsOpen => _open;
 
-        /// <summary>フィールドに出ている文字列（Prefix + ラベル + Suffix）。フィルタ中は隠れている。</summary>
+        /// <summary>The string shown in the field (Prefix + label + Suffix). Hidden while filtering.</summary>
         public string DisplayText => _displayText;
 
-        /// <summary>ファジー検索で絞り込んでいる最中か。</summary>
+        /// <summary>Whether currently narrowing down via fuzzy search.</summary>
         public bool IsFiltering => _filtering;
 
-        /// <summary>フィルタ中に打ち込まれているクエリ。非フィルタ時は空文字。</summary>
+        /// <summary>The query being typed while filtering. Empty string when not filtering.</summary>
         public string FilterQuery => _filterQuery;
 
-        /// <summary>ポップアップに出ている候補の件数。非フィルタ時は選択肢の総数。</summary>
+        /// <summary>Number of candidates shown in the popup. The total option count when not filtering.</summary>
         public int VisibleCount => _filtering ? _filtered.Count : _options.Length;
 
-        /// <summary>表示上 visibleIndex 番目の候補が options の何番目か。範囲外は -1。</summary>
+        /// <summary>Which index into options the visibleIndex-th displayed candidate corresponds to. -1 if out of range.</summary>
         public int OptionIndexAt(int visibleIndex)
         {
             if (visibleIndex < 0)
@@ -400,16 +400,16 @@ namespace Tweeq.UIToolkit
             return index >= 0 && index < _options.Length ? index : -1;
         }
 
-        /// <summary>開いた時点の値。Escape のロールバック先。</summary>
+        /// <summary>The value at the moment it opened. The rollback target for Escape.</summary>
         public T ValueAtStart => _valueAtStart;
 
         /// <summary>
-        /// ミリ秒時刻の供給元。既定は Time.realtimeSinceStartup。
-        /// 500ms ルールを EditMode で検証できるよう差し替え可能にしてある。
+        /// Source of the millisecond timestamp. Defaults to Time.realtimeSinceStartup.
+        /// Made replaceable so the 500ms rule can be verified in EditMode.
         /// </summary>
         public Func<long> TimeSource { get; set; }
 
-        /// <summary>ChangeEvent / ValueChanged を発火せずに値を設定する。</summary>
+        /// <summary>Sets the value without firing ChangeEvent / ValueChanged.</summary>
         public void SetValueWithoutNotify(T newValue)
         {
             _value = newValue;
@@ -419,8 +419,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// ポップアップを開く。開いた時点の値を <see cref="ValueAtStart"/> に控え、
-        /// 500ms ルールの起点を打つ。選択肢が空・無効化中は何もしない。
+        /// Opens the popup. Records the value at this moment into <see cref="ValueAtStart"/> and
+        /// marks the starting point of the 500ms rule. Does nothing when options are empty or while disabled.
         /// </summary>
         public void Open()
         {
@@ -439,7 +439,7 @@ namespace Tweeq.UIToolkit
             Refresh();
         }
 
-        /// <summary>確定せずに閉じる。現在値はそのまま（Vue の外側クリック相当）。</summary>
+        /// <summary>Closes without committing. The current value is left as-is (equivalent to Vue's outside click).</summary>
         public void Close()
         {
             if (!_open)
@@ -451,15 +451,15 @@ namespace Tweeq.UIToolkit
             _pointerOverArrow = false;
             StopAutoScroll();
 
-            // 仕様 §B: どの経路で閉じてもフィルタは解除し、表示はラベルへ戻す。
-            // 行の表示を戻してから popup を畳む（次に開いたとき全件で始まる）
+            // Spec §B: regardless of which path it closes through, clear the filter and revert the display to the label.
+            // Restore row display before collapsing the popup (so it starts with the full list next time it opens)
             EndFilter();
 
             HidePopup();
             Refresh();
         }
 
-        /// <summary>現在値を確定して閉じる。Confirmed は 1 操作につきここでだけ 1 回発火する。</summary>
+        /// <summary>Commits the current value and closes. Confirmed fires exactly once per operation, only here.</summary>
         public void Commit()
         {
             if (!_open)
@@ -471,7 +471,7 @@ namespace Tweeq.UIToolkit
             Confirmed?.Invoke(_value);
         }
 
-        /// <summary>開いた時点の値へロールバックして閉じる（Escape）。Confirmed は発火しない。</summary>
+        /// <summary>Rolls back to the value at open time and closes (Escape). Confirmed does not fire.</summary>
         public void Cancel()
         {
             if (!_open)
@@ -479,15 +479,15 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 変更済みなら戻す方向の ValueChanged も出す（ドラッグのキャンセルと同じ扱い）
+            // If already changed, also fire ValueChanged for the reverting direction (same handling as canceling a drag)
             this.value = _valueAtStart;
             Close();
         }
 
         /// <summary>
-        /// 隣接候補へラップアラウンドで移動する（direction: -1=前 / +1=次）。
-        /// 開閉どちらでも値が動く（Vue の onPressArrow と同じく active == 現在値）。
-        /// フィルタ中は絞り込み結果の中だけでラップする。
+        /// Moves to an adjacent candidate with wraparound (direction: -1=previous / +1=next).
+        /// The value moves whether open or closed (same as Vue's onPressArrow, where active == the current value).
+        /// While filtering, wraps only within the filtered results.
         /// </summary>
         public void MoveSelection(int direction)
         {
@@ -504,7 +504,7 @@ namespace Tweeq.UIToolkit
 
             int current = VisibleIndexOfValue();
 
-            // 現在値が候補に無い（options 外・絞り込みで落ちた）。どちら向きでも先頭から始める
+            // The current value isn't among the candidates (outside options, or dropped by filtering). Start from the top regardless of direction
             int next = current < 0 ? 0 : WrapIndex(current + (direction > 0 ? 1 : -1), count);
 
             int option = OptionIndexAt(next);
@@ -522,8 +522,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// ポインタを離した時の共通経路。開いてから 500ms 以内なら押しっぱなしドラッグ選択の
-        /// 途中とみなして無視し、超えていれば確定して閉じる（Vue onPointerupWhileOpen）。
+        /// Common path for pointer release. Within 500ms of opening it's treated as
+        /// still mid-drag-select and ignored; past that it commits and closes (Vue onPointerupWhileOpen).
         /// </summary>
         public void PerformPointerUp()
         {
@@ -545,8 +545,8 @@ namespace Tweeq.UIToolkit
         #region Filter session
 
         /// <summary>
-        /// ファジー検索モードへ入り、クエリを query で置き換える。閉じていれば開く（Vue 準拠）。
-        /// 選択肢が空・無効化中は何もしない。
+        /// Enters fuzzy-search mode and replaces the query with query. Opens if closed (matches Vue).
+        /// Does nothing when options are empty or while disabled.
         /// </summary>
         public void BeginFilter(string query)
         {
@@ -557,8 +557,8 @@ namespace Tweeq.UIToolkit
 
             if (!_filtering)
             {
-                // Open() が valueAtStart を控える前に絞り込みが値を動かすと Escape の戻り先がずれる。
-                // 「開くのが先・絞り込むのが後」の順序はここで固定する
+                // If filtering moves the value before Open() records valueAtStart, Escape's rollback target gets thrown off.
+                // The order "open first, then filter" is fixed here
                 _filtering = true;
                 ShowFilterField();
                 Open();
@@ -568,8 +568,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// フィルタ中のクエリを差し替えて絞り込み直す。フィルタ中でなければ何もしない。
-        /// 空クエリは「絞り込み無し（全件）」。
+        /// Swaps the query while filtering and re-filters. Does nothing when not filtering.
+        /// An empty query means "no filtering (all items)".
         /// </summary>
         public void SetFilterQuery(string query)
         {
@@ -584,8 +584,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// フィルタを解除し、フィールドの表示をラベルへ戻す。候補も全件に戻る。
-        /// ポップアップの開閉には触らない（閉じるのは <see cref="Close"/> の責務）。
+        /// Clears the filter and reverts the field display to the label. Candidates also revert to the full list.
+        /// Doesn't touch popup open/close (closing is <see cref="Close"/>'s responsibility).
         /// </summary>
         public void EndFilter()
         {
@@ -604,12 +604,12 @@ namespace Tweeq.UIToolkit
             Refresh();
         }
 
-        // 打鍵ごとに通る経路。文字列も List も作らず、使い回しのバッファへ詰め直すだけ
+        // Path taken on every keystroke. Doesn't allocate strings or a List — just re-packs the reused buffer
         void ApplyFilter()
         {
             RefreshFilterResults();
 
-            // Vue: 絞り込みから現在値が外れたら先頭へ寄せる。↑↓ の起点を必ず候補内に置くため
+            // Vue: if the current value falls out of the filtered results, snap to the top. This keeps the up/down starting point always within the candidates
             if (_filtered.Count > 0 && VisibleIndexOfValue() < 0)
             {
                 this.value = _options[_filtered[0]];
@@ -617,7 +617,7 @@ namespace Tweeq.UIToolkit
 
             ApplyRowTexts();
 
-            // 絞り込み直後は必ず先頭から見せる（Vue の scrollTop = 0）
+            // Right after filtering, always show from the top (Vue's scrollTop = 0)
             SetScroll(0f);
 
             RelayoutPopup();
@@ -634,7 +634,7 @@ namespace Tweeq.UIToolkit
             FuzzySearch.Filter(_filterQuery, _labelCache, _filtered);
         }
 
-        // 現在値が「表示上の何番目か」。非フィルタ時は options のインデックスそのもの
+        // The current value's position "in display order". When not filtering, this is just the options index itself
         int VisibleIndexOfValue()
         {
             if (_valueIndex < 0)
@@ -666,7 +666,7 @@ namespace Tweeq.UIToolkit
         {
             this.AddToClassList("tweeq-dropdown-input");
 
-            // 矢印・Enter・Escape を受け取るためルート自身がフォーカスを持つ
+            // The root itself holds focus so it can receive arrow keys, Enter, and Escape
             this.focusable = true;
             this.style.flexShrink = 0f;
             this.style.overflow = Overflow.Hidden;
@@ -677,12 +677,12 @@ namespace Tweeq.UIToolkit
             this.RegisterCallback<PointerDownEvent>(OnPointerDown);
             this.RegisterCallback<PointerEnterEvent>(OnPointerEnter);
             this.RegisterCallback<PointerLeaveEvent>(OnPointerLeave);
-            // フィルタ中はフォーカスが内側の TextField にあるので、Enter / Escape / ↑↓ を
-            // TextField より先に横取りする必要がある（NumberInput と同じ TrickleDown 登録）
+            // While filtering, focus is on the inner TextField, so Enter / Escape / up-down
+            // need to be intercepted before the TextField (same TrickleDown registration as NumberInput)
             this.RegisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
 
-            // 矢印キーは KeyDown とは別に NavigationMoveEvent も飛ばし、そちらがフォーカスを
-            // 動かしてしまう（feedback-fixes-01.md A-5 / NumberInput と同じ手当て）
+            // Arrow keys also fire a NavigationMoveEvent separate from KeyDown, and that event
+            // moves focus on its own (feedback-fixes-01.md A-5 / same fix as NumberInput)
             this.RegisterCallback<NavigationMoveEvent>(OnNavigationMove, TrickleDown.TrickleDown);
             this.RegisterCallback<FocusInEvent>(OnFocusIn);
             this.RegisterCallback<FocusOutEvent>(OnFocusOut);
@@ -734,7 +734,7 @@ namespace Tweeq.UIToolkit
             _chevron.generateVisualContent += OnGenerateChevron;
             this.hierarchy.Add(_chevron);
 
-            // フォーカスリングはルートの border ではなく別レイヤで描く（NumberInput と同じ理由）
+            // The focus ring is drawn on a separate layer rather than the root's border (same reason as NumberInput)
             _focusRing = new VisualElement
             {
                 name = "tweeq-dropdown-focus-ring",
@@ -773,7 +773,7 @@ namespace Tweeq.UIToolkit
 
             if (_fieldLabel != null)
             {
-                // シェブロンぶんだけ左右から逃がして、テキストの中心を枠の中心に保つ
+                // Inset from left and right by the chevron's width, keeping the text's center aligned with the box's center
                 _fieldLabel.style.paddingLeft = chevronWidth;
                 _fieldLabel.style.paddingRight = chevronWidth;
             }
@@ -787,7 +787,7 @@ namespace Tweeq.UIToolkit
             ApplyPopupStyles();
         }
 
-        // 仕様 §1 の角丸表。両軸の指定は OR で合成する
+        // The corner-radius table from Spec §1. Settings on both axes are combined with OR
         void ApplyCornerRadius()
         {
             float radius = _theme != null ? _theme.InputRadius : 0f;
@@ -849,11 +849,11 @@ namespace Tweeq.UIToolkit
 
         #region Filter field
 
-        // NumberInput の編集モード切替と同じ二段構え（表示は Label、打鍵中だけ TextField）。
-        // StringInput のように TextField を常時前面へ置くと、フィールドの押下＝ポップアップを開く
-        // という Dropdown の主操作と ↑↓ の横取りが TextField 側に吸われる。
-        // Dropdown はクリック位置キャレットを必要としない（打ち始めは常に空クエリ）ので、
-        // StringInput が二段構えを避けた理由がこちらには当てはまらない
+        // Same two-tier setup as NumberInput's edit-mode switch (display is a Label, TextField only while typing).
+        // If a TextField were kept permanently up front like StringInput, the Dropdown's primary
+        // operation — pressing the field opens the popup — and the interception of up/down would get absorbed by the TextField.
+        // Dropdown doesn't need a click-position caret (typing always starts from an empty query),
+        // so the reason StringInput avoids the two-tier setup doesn't apply here
         void EnsureFilterField()
         {
             if (_filterField != null)
@@ -865,7 +865,7 @@ namespace Tweeq.UIToolkit
             {
                 name = "tweeq-dropdown-filter",
 
-                // 1 打鍵ごとに絞り込む必要がある。isDelayed = true だと Enter まで変更が来ない
+                // Needs to filter on every keystroke. With isDelayed = true, the change wouldn't arrive until Enter
                 isDelayed = false,
                 multiline = false,
             };
@@ -885,8 +885,8 @@ namespace Tweeq.UIToolkit
 
             _filterInput = _filterField.Q(TEXT_INPUT_NAME);
 
-            // 実際に字を描くのは unity-text-input の中の TextElement。
-            // 縦潰れ（feedback-fixes-01.md A-6）は input 側だけ直しても残る
+            // The actual glyph drawing happens in the TextElement inside unity-text-input.
+            // Vertical squashing (feedback-fixes-01.md A-6) persists even if only the input side is fixed
             _filterText = _filterInput != null ? _filterInput.Q<TextElement>() : null;
 
             ApplyFilterFieldStyles();
@@ -907,14 +907,14 @@ namespace Tweeq.UIToolkit
                 SetBorderWidth(_filterInput, 0f);
                 SetBorderColor(_filterInput, Color.clear);
 
-                // 閉状態のラベルと同じくシェブロン幅ぶん逃がして、モード切替で字が横に飛ばないようにする
+                // Inset by the chevron width just like the closed-state label, so text doesn't jump sideways when switching modes
                 _filterInput.style.paddingLeft = chevronWidth + FILTER_PADDING;
                 _filterInput.style.paddingRight = chevronWidth + FILTER_PADDING;
                 _filterInput.style.marginLeft = 0f;
                 _filterInput.style.marginRight = 0f;
                 _filterInput.style.unityTextAlign = TextAnchor.MiddleCenter;
 
-                // A-6: 既定 USS の上下 padding／auto 高さのままだと 24px の枠内で行が潰れる
+                // A-6: with default USS top/bottom padding and auto height left as-is, the row collapses within a 24px box
                 _filterInput.style.height = Length.Percent(100f);
                 _filterInput.style.minHeight = 0f;
                 _filterInput.style.paddingTop = 0f;
@@ -940,9 +940,9 @@ namespace Tweeq.UIToolkit
             _filterField.style.unityTextAlign = TextAnchor.MiddleCenter;
             _filterField.style.fontSize = TEXT_FONT_SIZE;
 
-            // キャレット・選択色は USS 既定（黒）のままだと暗背景で見えない。
-            // selectionColor は obsolete だが、推奨の --unity-selection-color は
-            // C# からインスタンス単位で設定できない（NumberInput / StringInput と同じ判断）
+            // The caret/selection colors default to USS black, which is invisible on a dark background.
+            // selectionColor is obsolete, but the recommended --unity-selection-color can't be
+            // set per-instance from C# (same judgment call as NumberInput / StringInput)
 #pragma warning disable 618
             _filterField.textSelection.cursorColor = _theme.Text;
             _filterField.textSelection.selectionColor = _theme.AccentSoft;
@@ -955,7 +955,7 @@ namespace Tweeq.UIToolkit
             _filterField.style.minHeight = 0f;
             _filterField.style.alignItems = Align.Stretch;
 
-            // 初回のフィルタ生成はここを直接通る（Refresh を経ない）ので、文字色を貼り直す
+            // The first filter creation passes through here directly (bypassing Refresh), so the text color is reapplied
             UpdateFilterTextColor();
         }
 
@@ -973,7 +973,7 @@ namespace Tweeq.UIToolkit
                 _fieldLabel.style.display = DisplayStyle.None;
             }
 
-            // display:none のままでは Focus() が通らないので、必ず表示を先に切り替える
+            // Focus() won't take effect while display:none, so the display must be switched first
             _filterField.style.display = DisplayStyle.Flex;
             _filterField.pickingMode = PickingMode.Position;
 
@@ -1002,16 +1002,16 @@ namespace Tweeq.UIToolkit
             _filterField.style.display = DisplayStyle.None;
             _filterField.pickingMode = PickingMode.Ignore;
 
-            // フィルタ中のフォーカスは TextField 側にある。畳んだあとも Enter / ↑↓ を
-            // 受け取り続けられるよう、ルートへ戻す
+            // Focus while filtering sits on the TextField side. Return it to the root so
+            // Enter / up-down keep being received even after collapsing
             if (hadFocus && this.panel != null)
             {
                 this.Focus();
             }
         }
 
-        // 先頭の 1 文字はこちらが流し込むので、フォーカス直後のキャレットを末尾へ送る。
-        // フォーカスが確定した次のフレームでないと選択範囲が上書きされる（NumberInput と同じ）
+        // Since this side feeds in the first character, send the caret to the end right after focus.
+        // The selection gets overwritten unless it's the frame after focus is confirmed (same as NumberInput)
         void ScheduleCaretToEnd()
         {
             if (this.panel == null)
@@ -1062,7 +1062,7 @@ namespace Tweeq.UIToolkit
             return focused != null && (focused == _filterField || _filterField.Contains(focused));
         }
 
-        // フィルタ中はキャレットを持つ TextField、それ以外はルートがキー入力の受け皿
+        // While filtering, the caret-holding TextField receives key input; otherwise the root does
         void FocusSelf()
         {
             if (this.panel == null)
@@ -1083,8 +1083,8 @@ namespace Tweeq.UIToolkit
 
         #region Labels
 
-        // options / labelizer / labels のどれかが変わった時だけ走る。ここで一括生成して
-        // 以降は配列参照で済ませる（毎フレーム Format しない）
+        // Runs only when options / labelizer / labels changes. Generated in bulk here so
+        // subsequent access is just an array reference (no per-frame Format)
         void RebuildLabelCache()
         {
             if (_labelCache.Length != _options.Length)
@@ -1100,7 +1100,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        // 優先順は Labelizer > Labels > value.ToString()（popover-spec.md）
+        // Priority order is Labelizer > Labels > value.ToString() (popover-spec.md)
         string ComposeLabel(T option, int index)
         {
             if (_labelizer != null)
@@ -1122,7 +1122,7 @@ namespace Tweeq.UIToolkit
                 ? _labelCache[_valueIndex]
                 : ComposeLabel(_value, -1);
 
-            // 前後が空なら連結せずキャッシュをそのまま使う（値変更ごとの string 確保を避ける）
+            // If prefix and suffix are both empty, use the cache as-is instead of concatenating (avoids allocating a string on every value change)
             _displayText = _prefix.Length == 0 && _suffix.Length == 0
                 ? label
                 : _prefix + label + _suffix;
@@ -1150,7 +1150,7 @@ namespace Tweeq.UIToolkit
 
         #region Popup construction
 
-        // option 行は options 変更時にだけ作り直す。開閉では使い回すので、開くたびの確保は無い
+        // Option rows are only rebuilt when options changes. Reused across open/close, so nothing is allocated on every open
         void RebuildRows()
         {
             EnsurePopupElements();
@@ -1167,7 +1167,7 @@ namespace Tweeq.UIToolkit
                 {
                     name = "tweeq-dropdown-option",
 
-                    // 当たり判定は _list 側で layout の y から引く（行ごとのコールバックを持たない）
+                    // Hit testing is derived from the layout's y on the _list side (rows don't carry per-row callbacks)
                     pickingMode = PickingMode.Ignore,
                 };
                 ApplyRowStyles(row);
@@ -1178,8 +1178,8 @@ namespace Tweeq.UIToolkit
             ApplyRowTexts();
         }
 
-        // 行プールは options 数のまま据え置き、絞り込みで余った行だけ畳む。
-        // 打鍵ごとに要素を作り直さないので、フィルタ中の確保はゼロ
+        // The row pool stays sized to the option count; only rows left over from filtering are collapsed.
+        // Elements aren't recreated on every keystroke, so allocation while filtering is zero
         void ApplyRowTexts()
         {
             int visible = VisibleCount;
@@ -1210,10 +1210,10 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 位置決めは popover の責務なので、ここでは絶対配置にしない
+            // Positioning is the popover's responsibility, so no absolute positioning here
             _surface = new VisualElement { name = "tweeq-dropdown-popup" };
 
-            // 影は surface の外へはみ出して描くので、クリップは掛けない
+            // The shadow is drawn overflowing outside surface, so no clipping is applied
             _surface.style.overflow = Overflow.Visible;
 
             _shadowLayer = new VisualElement
@@ -1248,7 +1248,7 @@ namespace Tweeq.UIToolkit
             _list.style.top = 0f;
             _viewport.Add(_list);
 
-            // 矢印は list より後に足す＝上に重なる
+            // Arrows are added after list, meaning they layer on top
             _arrowUp = new VisualElement { name = "tweeq-dropdown-scroll-up" };
             SetupScrollArrow(_arrowUp, true);
             _arrowUp.generateVisualContent += OnGenerateArrowUp;
@@ -1314,7 +1314,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // ブラーが無い UITK では半透明 Surface だと背面の行が透けて読める → 不透明合成
+            // UI Toolkit has no blur, so a translucent Surface would let rows behind it show through → composite opaque instead
             _surface.style.backgroundColor = _theme.SurfaceOpaque;
             SetBorderWidth(_surface, POPUP_BORDER_WIDTH);
             SetBorderColor(_surface, _theme.Border);
@@ -1352,7 +1352,7 @@ namespace Tweeq.UIToolkit
         {
             if (this.panel == null || _theme == null)
             {
-                // panel 未接続なら見た目は出せない。論理状態だけ進めて例外は出さない
+                // Without a panel attached, nothing visual can be shown. Just advance the logical state without throwing
                 return;
             }
 
@@ -1361,8 +1361,8 @@ namespace Tweeq.UIToolkit
 
             if (_popover == null)
             {
-                // popover-spec.md: Dropdown は LightDismiss=false。閉じるのは所有者（＝ここ）の責務。
-                // 外装は行幅とフィールドの位置合わせのため自前で描くので Chrome=false の素通しホストにする
+                // popover-spec.md: Dropdown uses LightDismiss=false. Closing is the owner's (i.e. here) responsibility.
+                // The chrome is drawn by us to align row width with the field, so use a pass-through host with Chrome=false
                 _popover = new TweeqPopover { Context = this, LightDismiss = false, Chrome = false };
                 _popover.Closed += OnPopoverClosed;
             }
@@ -1378,7 +1378,7 @@ namespace Tweeq.UIToolkit
 
             AttachDismissHandlers();
 
-            // 初回はレイアウト未確定なので、サイズが決まった次のフレームで貼り直す
+            // Layout isn't settled on the first pass, so reapply on the next frame once size is determined
             this.schedule.Execute(RelayoutPopup).StartingIn(0);
         }
 
@@ -1396,7 +1396,7 @@ namespace Tweeq.UIToolkit
 
         void OnPopoverClosed()
         {
-            // Popover 側から閉じられた場合も状態を揃える（LightDismiss=false なので通常は来ない）
+            // Keep state in sync even when closed from the popover side (shouldn't normally happen with LightDismiss=false)
             if (!_open)
             {
                 return;
@@ -1416,8 +1416,8 @@ namespace Tweeq.UIToolkit
             _popover.Open(position);
         }
 
-        // 選択中の option がフィールドに重なる位置を Core に逆算させ、
-        // 収まらない分は内部スクロールへ回す（popover-spec.md「macOS 風配置」）
+        // Has Core back-calculate the position where the selected option overlaps the field,
+        // and shifts whatever doesn't fit into internal scrolling (popover-spec.md "macOS-style placement")
         Vector2 Layout()
         {
             float itemHeight = _theme.InputHeight;
@@ -1443,16 +1443,16 @@ namespace Tweeq.UIToolkit
             double top;
             if (_filtering)
             {
-                // 仕様 §B: 打鍵で絞り込んでいる間は macOS 風の逆算をやめてフィールド直下に落とす。
-                // 候補が入れ替わるたびに「選択項目をフィールドへ重ねる」と popup が跳ね回るため（Vue 準拠）
+                // Spec §B: while narrowing down by typing, drop the macOS-style back-calculation and place it directly below the field.
+                // Overlapping "the selected item onto the field" every time candidates change would make the popup jump around (matches Vue)
                 top = fieldTop + fieldHeight;
             }
             else
             {
-                // Core の純関数。selectChrome には popup 自身の上端クロム（border + padding）を渡す。
-                // listHeight を省略すると下端クランプが「未実測＝リスト過大」の安全側に倒れるため必ず渡す
-                // fieldInset=0: UIToolkit 版フィールドは Vue の border+outline 2px を持たない。
-                // 行の worldBound がフィールドと完全一致することが E2E の検証条件
+                // A pure function from Core. selectChrome is passed the popup's own top-edge chrome (border + padding).
+                // Omitting listHeight makes the bottom-edge clamp fall back to the safe side of "unmeasured = list too tall", so it's always passed
+                // fieldInset=0: the UI Toolkit version of the field doesn't carry Vue's border+outline 2px.
+                // The E2E verification condition is that a row's worldBound exactly matches the field
                 top = DropdownLogic.GetDropdownTop(
                     fieldTop,
                     index,
@@ -1467,13 +1467,13 @@ namespace Tweeq.UIToolkit
             float available = viewportHeight - (float)top - VIEWPORT_MARGIN - chromeTop * 2f;
             _visibleHeight = Mathf.Max(itemHeight, Mathf.Min(_listHeight, available));
 
-            // 行の幅をフィールドと一致させたいので、padding と border のぶんだけ外へ広げる
+            // Row width should match the field, so widen outward by exactly the padding and border
             _surface.style.width = fieldWidth + chromeTop * 2f;
             _viewport.style.height = _visibleHeight;
 
             if (_filtering)
             {
-                // 絞り込み結果は常に先頭から見せる（Vue の scrollTop = 0）
+                // Always show filtered results from the top (Vue's scrollTop = 0)
                 SetScroll(0f);
             }
             else
@@ -1498,7 +1498,7 @@ namespace Tweeq.UIToolkit
             return Screen.height > 0 ? Screen.height : 0f;
         }
 
-        // Vue alignCurrentToTrigger: 選択中の行がフィールドの上に来るようスクロールを合わせる
+        // Vue alignCurrentToTrigger: aligns scroll so the selected row lands over the field
         void AlignActiveToField(float fieldTop, float listTop, float itemHeight)
         {
             int index = _valueIndex < 0 ? 0 : _valueIndex;
@@ -1585,7 +1585,7 @@ namespace Tweeq.UIToolkit
 
             if (_autoScrollItem == null)
             {
-                // scheduled item は 1 個だけ作って使い回す（毎フレームのクロージャ確保を避ける）
+                // Only one scheduled item is created and reused (avoids allocating a closure every frame)
                 _autoScrollItem = this.schedule
                     .Execute(OnAutoScrollTick)
                     .Every(AUTO_SCROLL_INTERVAL_MS);
@@ -1615,8 +1615,8 @@ namespace Tweeq.UIToolkit
 
         #region Popup interaction
 
-        // 行ごとにコールバックを持たず、リスト内のローカル y から引く（RadioInput と同じ手）。
-        // 返すのは「表示上の何番目か」なので、options のインデックスへは OptionIndexAt で変換する
+        // No per-row callback; derived from the local y within the list instead (same trick as RadioInput).
+        // Returns "position in display order", so convert to an options index via OptionIndexAt
         int RowIndexAt(float localY)
         {
             int visible = VisibleCount;
@@ -1652,11 +1652,11 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // ポップアップ内の押下は外側クリック扱いにしない。
-            // 併せてフィールドへフォーカスを戻し、Enter / Escape を効かせ続ける
+            // A press inside the popup isn't treated as an outside click.
+            // Also return focus to the field so Enter / Escape keep working
             SelectRowAt(evt);
 
-            // フィルタ中はキャレットを持つ TextField を、それ以外はルートを受け皿に戻す
+            // While filtering, return to the caret-holding TextField; otherwise return to the root
             FocusSelf();
 
             evt.StopPropagation();
@@ -1664,7 +1664,7 @@ namespace Tweeq.UIToolkit
 
         void SelectRowAt(IPointerEvent evt)
         {
-            // 矢印の上のイベントも viewport までバブルしてくる。帯に隠れた行を掴まない
+            // Events over the arrows also bubble up to viewport. Don't grab a row hidden behind the band
             if (_pointerOverArrow)
             {
                 return;
@@ -1678,7 +1678,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // Vue は option の pointerenter で model を更新する（ホバーが即プレビューになる）
+            // Vue updates the model on an option's pointerenter (hover becomes an instant preview)
             this.value = _options[option];
         }
 
@@ -1715,8 +1715,8 @@ namespace Tweeq.UIToolkit
 
         #region Dismiss handling
 
-        // popover は LightDismiss=false なので、外側クリックとリリースはこちらで拾う。
-        // pointerup は BubbleUp で受けて「矢印の上で離した時だけ無視」を成立させる
+        // Since popover uses LightDismiss=false, outside clicks and releases are caught here.
+        // pointerup is received via BubbleUp so "ignore only when released over an arrow" can be enforced
         void AttachDismissHandlers()
         {
             if (this.panel == null || _dismissRoot != null)
@@ -1759,9 +1759,10 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 外側クリックは valueAtStart へロールバック（Vue の onPopoverUpdateOpen 準拠）。
-            // ホバー・↑↓・フィルタ入力で値がライブに動くため、確定操作（Enter / option クリック）
-            // 以外で閉じたら開いた時点へ戻す（2026-07-27 ユーザー裁定で M5 の「現在値のまま」から変更）
+            // An outside click rolls back to valueAtStart (matches Vue's onPopoverUpdateOpen).
+            // Because hover / up-down / filter input move the value live, closing by anything
+            // other than a commit operation (Enter / option click) reverts to the value at open time
+            // (changed from M5's "keep the current value" by user decision on 2026-07-27)
             Cancel();
         }
 
@@ -1798,13 +1799,13 @@ namespace Tweeq.UIToolkit
 
             if (_filtering)
             {
-                // フィルタ中のフィールド押下はキャレット操作。TextField へ素通しする
+                // A field press while filtering is a caret operation. Passed straight through to the TextField
                 return;
             }
 
             if (this.panel != null)
             {
-                // ポインタは掴まない。掴むとポップアップの行が PointerMove を受け取れなくなる
+                // Don't capture the pointer. Capturing it would stop popup rows from receiving PointerMove
                 this.Focus();
             }
 
@@ -1872,10 +1873,10 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        // 仕様 §B: フォーカス中の印字可能文字でフィルタモードへ入り、閉じていても開く。
-        // Unity は 1 打鍵につき「keyCode 付き（character = '\0'）」と「character 付き
-        // （keyCode = None）」の 2 発を投げるので、character 側だけを拾う。
-        // フィルタ開始後の打鍵は TextField が直接受けるので、ここは初回の 1 文字だけを扱う
+        // Spec §B: a printable character while focused enters filter mode, opening even if closed.
+        // Unity fires two events per keystroke — one with a keyCode (character = '\0') and one with a
+        // character (keyCode = None) — so only the character-side event is picked up.
+        // Keystrokes after filtering starts are received directly by the TextField, so only the first character is handled here
         void TryBeginFilterFromKey(KeyDownEvent evt)
         {
             if (_filtering || _options.Length == 0)
@@ -1883,7 +1884,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // Ctrl/Cmd 併用はショートカットであって文字入力ではない
+            // A Ctrl/Cmd combo is a shortcut, not character input
             const EventModifiers commandKeys = EventModifiers.Control | EventModifiers.Command;
             if ((evt.modifiers & commandKeys) != 0)
             {
@@ -1901,11 +1902,11 @@ namespace Tweeq.UIToolkit
 
         static bool IsPrintable(char character)
         {
-            // '\0'（keyCode 側のイベント）と Enter / Tab / Backspace / Escape / DEL を弾く
+            // Rejects '\0' (the keyCode-side event) and Enter / Tab / Backspace / Escape / DEL
             return character >= ' ' && character != (char)127;
         }
 
-        // feedback-fixes-01.md A-5: ↑↓ は選択変更だけ。フォーカスは動かさない
+        // feedback-fixes-01.md A-5: up/down only change the selection. Focus doesn't move
         void OnNavigationMove(NavigationMoveEvent evt)
         {
             if (evt == null)
@@ -1925,7 +1926,7 @@ namespace Tweeq.UIToolkit
 
             evt.StopPropagation();
 
-            // Unity 6 で「フォーカス移動そのもの」を止められるのはこちら（PreventDefault は非推奨）
+            // In Unity 6, this is what actually stops "the focus move itself" (PreventDefault is deprecated)
             this.focusController?.IgnoreEvent(evt);
         }
 
@@ -1935,9 +1936,9 @@ namespace Tweeq.UIToolkit
             Refresh();
         }
 
-        // ポップアップ内の要素は非フォーカスなので、option をクリックした瞬間にここへ来る。
-        // ここで Close すると click 確定が成立しないため、閉じるのは外側クリック・Escape・
-        // detach の 3 経路だけに任せる（Vue も blur では閉じない）
+        // Elements inside the popup aren't focusable, so this fires the instant an option is clicked.
+        // Closing here would prevent the click-commit from taking effect, so closing is left to only
+        // three paths — outside click, Escape, and detach (Vue doesn't close on blur either)
         void OnFocusOut(FocusOutEvent evt)
         {
             _focused = false;
@@ -1955,8 +1956,8 @@ namespace Tweeq.UIToolkit
                 Close();
             }
 
-            // 開いていなくてもフィルタだけ残っていることは無いはずだが、
-            // 剥がされた要素に打鍵状態を持ち越さないよう畳んでおく
+            // The filter shouldn't be left active while closed, but
+            // collapse it anyway so a detached element doesn't carry over keystroke state
             EndFilter();
 
             _hovered = false;
@@ -1976,7 +1977,7 @@ namespace Tweeq.UIToolkit
 
             if (_disabled)
             {
-                // 仕様 §5: 背景透明 + 1px Border のインセット枠
+                // Spec §5: transparent background + a 1px inset border
                 this.style.backgroundColor = Color.clear;
                 SetBorderWidth(this, DISABLED_BORDER_WIDTH);
                 SetBorderColor(this, _theme.Border);
@@ -2010,7 +2011,7 @@ namespace Tweeq.UIToolkit
             RefreshRows();
         }
 
-        // disabled が invalid より強い（無効なフィールドの赤字は「操作できる不正値」と読み違えられる）
+        // disabled overrides invalid (red text on a disabled field could be misread as "an interactable invalid value")
         Color TextColor
         {
             get
@@ -2055,7 +2056,7 @@ namespace Tweeq.UIToolkit
             {
                 if (i >= visible)
                 {
-                    // 畳んである行は塗り直す意味がない
+                    // No point repainting a row that's collapsed
                     continue;
                 }
 
@@ -2089,7 +2090,7 @@ namespace Tweeq.UIToolkit
 
         #region Painting
 
-        // mdi:unfold-more-horizontal 相当。フォント依存を避けるため上下の小三角で描く
+        // Equivalent to mdi:unfold-more-horizontal. Drawn as small up/down triangles to avoid depending on a font
         void OnGenerateChevron(MeshGenerationContext context)
         {
             if (context == null || _theme == null || _chevron == null)
@@ -2141,8 +2142,8 @@ namespace Tweeq.UIToolkit
             PaintScrollArrow(context, _arrowDown, false);
         }
 
-        // 切れている端を覆う帯 + 三角。Vue は linear-gradient だが、UI Toolkit の
-        // インラインスタイルにグラデーションが無いので Surface のべた塗りで代用する
+        // A band + triangle covering the cut-off edge. Vue uses a linear-gradient, but UI Toolkit's
+        // inline styles have no gradient support, so a flat Surface fill substitutes for it
         void PaintScrollArrow(MeshGenerationContext context, VisualElement arrow, bool up)
         {
             if (context == null || _theme == null || arrow == null)
@@ -2163,7 +2164,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // ポップアップ面（SurfaceOpaque）と同色にしないと矢印の下で継ぎ目が見える
+            // Must match the popup face's color (SurfaceOpaque), or a seam shows under the arrow
             painter.fillColor = _theme.SurfaceOpaque;
             painter.BeginPath();
             painter.MoveTo(new Vector2(0f, 0f));
@@ -2189,7 +2190,7 @@ namespace Tweeq.UIToolkit
             painter.Fill();
         }
 
-        // box-shadow が無いので、外側へ広がる角丸を数枚重ねて 0 0 20px を近似する
+        // There's no box-shadow, so approximate "0 0 20px" by stacking several outward-growing rounded layers
         void OnGenerateShadow(MeshGenerationContext context)
         {
             if (context == null || _theme == null || _shadowLayer == null)
@@ -2218,7 +2219,7 @@ namespace Tweeq.UIToolkit
                 float grow = SHADOW_SPREAD * i / SHADOW_LAYERS;
                 Color layer = shadow;
 
-                // 外側ほど薄い。重ね合わせでおおよそガウス状の減衰になる
+                // Thinner toward the outside. Stacking them approximates a Gaussian-like falloff
                 layer.a = shadow.a / SHADOW_LAYERS;
                 painter.fillColor = layer;
 
@@ -2263,7 +2264,7 @@ namespace Tweeq.UIToolkit
             return (long)(Time.realtimeSinceStartupAsDouble * 1000.0);
         }
 
-        // C# の % は負値で負を返すので符号を揃える
+        // C#'s % returns negative for negative values, so the sign is normalized
         static int WrapIndex(int index, int count)
         {
             if (count <= 0)

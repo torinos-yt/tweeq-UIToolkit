@@ -9,7 +9,7 @@ namespace Tweeq.Core.Tests
 
         const double TOLERANCE = 1e-12;
 
-        // 色相は 0〜360 スケールなので [0,1] のチャンネルより緩い許容で見る
+        // Hue is on a 0-360 scale, so it's checked with a looser tolerance than the [0,1] channels.
         const double HUE_TOLERANCE = 1e-9;
 
         static Oklch FromHex(string hex)
@@ -30,7 +30,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void SrgbToOklch_MatchesReferenceValues()
         {
-            // colorjs.io 0.5.2 の実測値（移植元 radix.ts が使っている版）
+            // Measured values from colorjs.io 0.5.2 (the version used by the porting source radix.ts).
             Oklch gray = FromHex("#8B8D98");
             Assert.That(gray.L, Is.EqualTo(0.645313935869397).Within(TOLERANCE));
             Assert.That(gray.C, Is.EqualTo(0.016454192211054913).Within(TOLERANCE));
@@ -45,8 +45,8 @@ namespace Tweeq.Core.Tests
         [Test]
         public void SrgbToOklch_AchromaticHasUndefinedHue()
         {
-            // 無彩色の色相は NaN。getButtonHoverColor がこの NaN を見て彩度の扱いを変えるので、
-            // 0 に潰してはいけない
+            // An achromatic color's hue is NaN. getButtonHoverColor looks at this NaN to change how it
+            // handles saturation, so it must never be collapsed to 0.
             Assert.That(double.IsNaN(FromHex("#ffffff").H), Is.True, "white");
             Assert.That(double.IsNaN(FromHex("#000000").H), Is.True, "black");
             Assert.That(double.IsNaN(FromHex("#808080").H), Is.True, "mid gray");
@@ -83,7 +83,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void LabD50RoundTrip_IsStable()
         {
-            // スケール混合が通る経路（OKLab → CIE Lab(D50) → OKLab）が可逆であること
+            // The path scale mixing goes through (OKLab -> CIE Lab(D50) -> OKLab) must be reversible.
             Oklch source = FromHex("#46a758");
             Oklab oklab = TweeqOklch.OklchToOklab(source);
             Oklab restored = TweeqOklch.LabD50ToOklab(TweeqOklch.OklabToLabD50(oklab));
@@ -96,8 +96,8 @@ namespace Tweeq.Core.Tests
         [Test]
         public void P3ToOklch_MatchesEmbeddedPaletteData()
         {
-            // RadixPaletteData は @radix-ui/colors の display-p3 値を同じ変換で焼き込んだもの。
-            // どちらかを差し替えたときにずれたら気づけるようにしておく
+            // RadixPaletteData bakes in @radix-ui/colors's display-p3 values through this same conversion.
+            // This is kept in place so a mismatch becomes noticeable if either side ever gets swapped out.
             const int BLUE = 16;
             Assert.That(RadixPaletteData.ScaleNames[BLUE], Is.EqualTo("blue"));
 
@@ -117,7 +117,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void OklchToBytes_MapsOutOfGamutIntoSrgb()
         {
-            // 彩度 0.4 の青は sRGB に収まらない。CSS Color 4 の Gamut Mapping を通した結果
+            // A blue with 0.4 chroma doesn't fit within sRGB. This is the result after passing it through CSS Color 4's Gamut Mapping.
             Assert.That(ToHex(TweeqOklch.OklchToBytes(new Oklch(0.5, 0.4, 264.0))),
                 Is.EqualTo("#0033ff"));
             Assert.That(ToHex(TweeqOklch.OklchToBytes(new Oklch(0.65, 0.35, 30.0))),
@@ -206,8 +206,8 @@ namespace Tweeq.Core.Tests
         [Test]
         public void ContrastApca_ThresholdSplitsWhiteTextReadability()
         {
-            // radix.ts の getTextColor は |Lc| < 40 で「白では読めない」に落とす。
-            // 濃い青は白文字が乗り、明るい琥珀は乗らない側に来ること
+            // radix.ts's getTextColor falls back to "unreadable in white" when |Lc| < 40.
+            // A dark blue should end up on the side that gets white text, and a light amber on the side that doesn't.
             double onBlue = Math.Abs(TweeqOklch.ContrastApca(1.0, 1.0, 1.0, 0.0, 0.0, 1.0));
             double onAmber = Math.Abs(
                 TweeqOklch.ContrastApca(1.0, 1.0, 1.0, 0xFF / 255.0, 0xC5 / 255.0, 0x3D / 255.0));
@@ -232,7 +232,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void CubicBezier_MatchesReferenceValues()
         {
-            // bezier-easing（gre/bezier-easing）の実測値。Radix が使う 2 本のカーブ
+            // Measured values from bezier-easing (gre/bezier-easing). The two curves Radix uses.
             CubicBezierEasing light = new CubicBezierEasing(0.0, 2.0, 0.0, 2.0);
             Assert.That(light.Evaluate(0.25), Is.EqualTo(1.6486615717323203).Within(1e-9));
             Assert.That(light.Evaluate(0.5), Is.EqualTo(1.482440006219979).Within(1e-9));
@@ -246,7 +246,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void CubicBezier_IsIdentityWhenLinear()
         {
-            // ダークの ease は背景が明るいと [0,0,0,0] まで潰れる。そのとき線形として扱われること
+            // The dark ease collapses to [0,0,0,0] when the background is light. It must be treated as linear in that case.
             CubicBezierEasing easing = new CubicBezierEasing(0.0, 0.0, 0.0, 0.0);
 
             for (int i = 0; i <= 10; i++)

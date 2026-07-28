@@ -3,14 +3,14 @@ using System;
 namespace Tweeq.Core
 {
     /// <summary>
-    /// Rotary のドラッグ累積。スナップ結果をドラッグ状態に還元しないための分離。
+    /// Rotary's drag accumulation. Kept separate so the snapped result is never fed back into the drag state.
     /// </summary>
     public static class RotaryLogic
     {
         /// <summary>
-        /// ポインタ由来の delta を累積する。
-        /// local は常に生の累積値（スナップしない）で、スナップは output にのみ適用する。
-        /// こうしないとスナップ解除時に値が飛ぶ。
+        /// Accumulates a delta originating from the pointer.
+        /// local is always the raw accumulated value (never snapped); snapping is applied only to output.
+        /// Otherwise the value would jump when snapping is turned off.
         /// </summary>
         public static (double local, double output) GetDragValue(
             double local, double delta, double snap, bool shouldSnap)
@@ -21,7 +21,7 @@ namespace Tweeq.Core
                 return (nextLocal, nextLocal);
             }
 
-            // Rust 側の quantize と丸め方向を揃える（C# 既定の銀行家丸めを避ける）。
+            // Aligns the rounding direction with the reference implementation's quantize (avoiding C#'s default banker's rounding).
             double output = Math.Round(nextLocal / snap, MidpointRounding.AwayFromZero) * snap;
             return (nextLocal, TweeqMath.NormalizeZero(output));
         }

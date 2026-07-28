@@ -5,12 +5,13 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// 2D 位置の複合入力（M6 第2波仕様 §C）。
-    /// 左に <see cref="TranslateInput"/>、右に <see cref="Vec2Input"/> を並べ、値を双方向に同期する。
+    /// A composite 2D position input (M6 wave-2 spec §C).
+    /// Places a <see cref="TranslateInput"/> on the left and a <see cref="Vec2Input"/> on the right,
+    /// keeping their values synchronized bidirectionally.
     /// </summary>
     /// <remarks>
-    /// 通知は 1 系統に集約する。どちらの子で操作しても ValueChanged は毎更新 1 回、
-    /// Confirmed は 1 ジェスチャ 1 回だけになる。
+    /// Notifications are consolidated into a single stream. Regardless of which child is operated,
+    /// ValueChanged fires once per update and Confirmed fires only once per gesture.
     /// </remarks>
     [UxmlElement]
     public partial class PositionInput : VisualElement, INotifyValueChanged<Vector2>, ITweeqThemed
@@ -26,20 +27,20 @@ namespace Tweeq.UIToolkit
         bool _invalid;
         TweeqTheme _theme = TweeqTheme.Dark();
 
-        // 子へ書き戻している最中の通知を自分の入力と誤認しないためのガード
+        // A guard so notifications received while writing back to children aren't mistaken for our own input
         bool _syncing;
 
         #endregion
 
         #region Public API
 
-        /// <summary>値が変わるたびに発火する。</summary>
+        /// <summary>Fires every time the value changes.</summary>
         public event Action<Vector2> ValueChanged;
 
-        /// <summary>ドラッグ確定・Enter・blur で 1 ジェスチャ 1 回だけ発火する。</summary>
+        /// <summary>Fires only once per gesture, on drag confirm, Enter, or blur.</summary>
         public event Action<Vector2> Confirmed;
 
-        /// <summary>現在値。</summary>
+        /// <summary>The current value.</summary>
         [UxmlAttribute]
         public Vector2 value
         {
@@ -57,13 +58,13 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>左のドラッグスクラバー。オーバーレイ設定などを個別に触りたい場合に使う。</summary>
+        /// <summary>The drag scrubber on the left. Use this to tweak things like overlay settings individually.</summary>
         public TranslateInput Translate => _translate;
 
-        /// <summary>右の数値タプル。軸ごとの Precision などを触りたい場合に使う。</summary>
+        /// <summary>The numeric tuple on the right. Use this to tweak per-axis Precision and the like.</summary>
         public Vec2Input Field => _field;
 
-        /// <summary>配色テーマ。子へそのまま伝播する。</summary>
+        /// <summary>Color theme. Propagated to children as-is.</summary>
         public TweeqTheme Theme
         {
             get => _theme;
@@ -77,7 +78,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>下限。スクラバーと数値欄の両方に効く。</summary>
+        /// <summary>Lower bound. Applies to both the scrubber and the numeric field.</summary>
         [UxmlAttribute]
         public Vector2 Min
         {
@@ -89,7 +90,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>上限。スクラバーと数値欄の両方に効く。</summary>
+        /// <summary>Upper bound. Applies to both the scrubber and the numeric field.</summary>
         [UxmlAttribute]
         public Vector2 Max
         {
@@ -101,7 +102,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>数値欄の量子化幅（両軸共通）。スクラバー側は px 1:1 なので影響しない。</summary>
+        /// <summary>Quantization step for the numeric field (shared by both axes). Doesn't affect the scrubber side, which is px 1:1.</summary>
         [UxmlAttribute]
         public double Step
         {
@@ -114,7 +115,7 @@ namespace Tweeq.UIToolkit
             set => _field.Step = new[] { value };
         }
 
-        /// <summary>数値欄の静止時表示桁（両軸共通）。</summary>
+        /// <summary>Display digits for the numeric field at rest (shared by both axes).</summary>
         [UxmlAttribute]
         public int Precision
         {
@@ -122,7 +123,7 @@ namespace Tweeq.UIToolkit
             set => _field.Precision = value;
         }
 
-        /// <summary>操作不能状態。スクラバーと数値欄の両方へ配る。</summary>
+        /// <summary>Disabled state. Distributed to both the scrubber and the numeric field.</summary>
         [UxmlAttribute]
         public bool Disabled
         {
@@ -140,7 +141,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>不正値表示。数値欄だけに配る（スクラバーは Vue にも invalid 表現が無い）。</summary>
+        /// <summary>Invalid-value display. Distributed only to the numeric field (the original has no invalid representation for the scrubber either).</summary>
         [UxmlAttribute]
         public bool Invalid
         {
@@ -158,8 +159,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 数値欄側のジェスチャ確定を発火する。NumberInput の確定は panel 上のキー／ポインタ操作でしか
-        /// 起きないため、外部ドライバとテストのために口を開けてある。
+        /// Fires the numeric field's gesture confirmation. Because NumberInput can only confirm via
+        /// keyboard/pointer operations on the panel, this is exposed for external drivers and tests.
         /// </summary>
         public void PerformFieldConfirm()
         {
@@ -171,7 +172,7 @@ namespace Tweeq.UIToolkit
             OnChildConfirmed(_value);
         }
 
-        /// <summary>ChangeEvent を発火せずに値を設定する。</summary>
+        /// <summary>Sets the value without firing a ChangeEvent.</summary>
         public void SetValueWithoutNotify(Vector2 newValue)
         {
             _value = newValue;
@@ -199,11 +200,11 @@ namespace Tweeq.UIToolkit
                 name = "tweeq-position-translate",
                 Theme = _theme,
 
-                // Vue InputPosition は常にラベル付きで呼ぶ
+                // The original InputPosition always calls this with a label
                 ShowOverlayLabel = true,
             };
 
-            // スクラバーは 24px 固定。InputGroup の等分割に巻き込ませない
+            // The scrubber is fixed at 24px. Keep it out of InputGroup's equal-split distribution
             _translate.style.flexGrow = 0f;
             _translate.style.flexShrink = 0f;
 
@@ -222,8 +223,8 @@ namespace Tweeq.UIToolkit
             _group.Add(_field);
             this.hierarchy.Add(_group);
 
-            // Vec2Input は ITweeqInputBox ではないので、InputGroup は端の角丸を割り当てられない。
-            // グループが位置を配り直した後で上書きするため、レイアウト確定のたびに掛け直す
+            // Vec2Input isn't an ITweeqInputBox, so InputGroup can't assign corner rounding to its ends.
+            // Reapplied on every layout resolution to override after the group redistributes positions
             this.RegisterCallback<GeometryChangedEvent>(OnGeometryChanged);
             ApplyBoxFusion();
         }
@@ -237,7 +238,7 @@ namespace Tweeq.UIToolkit
             ApplyBoxFusion();
         }
 
-        // [Translate][X][Y] を 1 つながりに見せる。各セッタは同値なら何もしないので毎回呼んでよい
+        // Makes [Translate][X][Y] look like a single connected group. Each setter is a no-op for the same value, so it's fine to call every time
         void ApplyBoxFusion()
         {
             _translate.InlinePosition = TweeqBoxPosition.Start;

@@ -4,36 +4,39 @@ using System.Collections.Generic;
 namespace Tweeq.Core
 {
     /// <summary>
-    /// DropdownInput の絞り込みに使う簡易ファジー検索。UnityEngine 非依存。
+    /// A simple fuzzy search used to filter DropdownInput. No UnityEngine dependency.
     ///
-    /// 原典（Vue 版 InputDropdown）は fast-fuzzy の search() を使っているが、あれは Sellers 法の
-    /// 編集距離を全候補に掛ける実装で、タイプミス耐性と引き換えに候補ごとの DP テーブルを確保する。
-    /// こちらは「打鍵のたびに全候補を再走査してもアロケーションを出さない」ことを優先し、
-    /// サブシーケンス一致だけを通す重み付けスコアラーに置き換えてある
-    /// （m6-wave2-spec.md §B の意図的逸脱）。そのため fast-fuzzy とは順位が一致しない。
-    /// 具体的には、タイプミス（余計な 1 文字・入れ替え）はここでは一切拾わない。
+    /// The Vue original (InputDropdown) uses fast-fuzzy's search(), which runs Sellers' algorithm's
+    /// edit distance against every candidate — an implementation that allocates a DP table per candidate
+    /// in exchange for typo tolerance. This version instead prioritizes "never allocating even when every
+    /// candidate is rescanned on every keystroke", replacing it with a weighted scorer that only passes
+    /// subsequence matches (an intentional deviation, m6-wave2-spec.md §B). Because of this, rankings don't
+    /// match fast-fuzzy's. Specifically, typos (an extra character, a swap) are never rescued here.
     ///
-    /// 内部バッファは static に使い回すので、UI スレッドからのみ呼ぶこと。
+    /// The internal buffer is reused as a static, so this must only be called from the UI thread.
     /// </summary>
     public static class FuzzySearch
     {
         #region Constants
 
-        // 1 文字一致するたびの素点。同じクエリ同士の比較しかしないので順位には効かず、
-        // ボーナス／ペナルティの基準スケールを決めるだけ
+        // The raw points awarded per matching character. This only ever gets compared against scores from
+        // the same query, so it doesn't affect ranking by itself — it just sets the baseline scale for the
+        // bonuses/penalties below
         const int MATCH_SCORE = 16;
 
-        // 直前の一致の隣（連続一致）
+        // Adjacent to the previous match (a consecutive match)
         const int CONSECUTIVE_SCORE = 16;
 
-        // 語頭一致（先頭・区切り文字の直後・camelCase 境界）
+        // A word-start match (the very start, right after a separator, or a camelCase boundary)
         const int WORD_START_SCORE = 24;
 
-        // クエリ全体が先頭から連続で一致した＝前方一致。
-        // 「前方一致は語頭一致に必ず勝つ」を式を睨まずに保証したいので、他より一段大きく取る
+        // The entire query matched consecutively from the start = a prefix match.
+        // Sized a full step above the others so that "a prefix match always beats a word-start match" holds
+        // without having to stare at the formula
         const int PREFIX_SCORE = 64;
 
-        // 先頭の取りこぼしと一致同士の隙間。青天井にすると長いラベルが不当に沈むので頭打ちにする
+        // The gap for a skipped leading section and for gaps between matches. Left uncapped it would unfairly
+        // sink long labels, so it's given a ceiling
         const int LEADING_PENALTY = 1;
         const int MAX_LEADING_SKIP = 8;
         const int GAP_PENALTY = 2;
@@ -43,11 +46,11 @@ namespace Tweeq.Core
 
         #region Fields
 
-        // スコアは「options のインデックス → 点数」で持つ。並べ替えの比較子から引くだけなので、
-        // results と対になる配列を毎回組み直す必要がない
+        // Scores are kept as "options index -> score". Since the sort comparer only ever looks this up,
+        // there's no need to rebuild an array paired with results every time
         static int[] ScoreByIndex = Array.Empty<int>();
 
-        // Comparison をラムダで渡すと呼び出しごとにデリゲートを確保するため、1 個だけ作り置きする
+        // Passing a Comparison as a lambda allocates a delegate on every call, so just one is built up front
         static readonly Comparison<int> RankComparison = CompareRank;
 
         #endregion
@@ -55,17 +58,17 @@ namespace Tweeq.Core
         #region Public API
 
         /// <summary>
-        /// query に一致する labels のインデックスをスコア降順で results へ詰める。
-        /// 文字列は一切作らない。results は呼び出し側の使い回しリストでよい（先頭で Clear する）。
+        /// Fills results with the indices of labels matching query, in descending score order.
+        /// Never allocates any strings. results can be a list the caller reuses (it's Cleared up front).
         ///
-        /// 一致条件はサブシーケンス（大文字小文字無視）のみ。同点は labels の元順を保つ。
-        /// 空クエリは全件をそのままの順で返す。
+        /// The only match condition is subsequence (case-insensitive). Ties preserve labels' original order.
+        /// An empty query returns every entry, in its original order.
         /// </summary>
         public static void Filter(string query, IReadOnlyList<string> labels, List<int> results)
         {
             if (results == null)
             {
-                // 出力先が無いので何もできない。公演中に例外で落とすより黙って諦める
+                // There's no destination to write to, so there's nothing to do. Silently giving up beats crashing mid-show with an exception
                 return;
             }
 
@@ -107,14 +110,14 @@ namespace Tweeq.Core
 
             if (results.Count > 1)
             {
-                // 比較子が同点をインデックス昇順で割るので、不安定ソートでも結果は一意（＝安定と同じ）
+                // Since the comparer breaks ties by ascending index, the result is unique even with an unstable sort (equivalent to a stable one)
                 results.Sort(RankComparison);
             }
         }
 
         /// <summary>
-        /// label が query のサブシーケンスを含むか。含むならスコアを返す（大きいほど良い）。
-        /// 空クエリは常に一致（スコア 0）、null ラベルは常に不一致。
+        /// Whether label contains query as a subsequence. Returns a score if it does (higher is better).
+        /// An empty query always matches (score 0); a null label never matches.
         /// </summary>
         public static bool TryScore(string query, string label, out int score)
         {
@@ -141,8 +144,9 @@ namespace Tweeq.Core
                 char target = char.ToLowerInvariant(query[q]);
                 int found = -1;
 
-                // 最左一致の貪欲法。最適な割り当てを探すと候補数×クエリ長の DP が要るが、
-                // ドロップダウンの候補数では体感差が出ないので単純さを取る
+                // A greedy leftmost-match approach. Finding the optimal assignment would need a DP of
+                // candidate count x query length, but at the candidate counts a dropdown actually has, the
+                // difference isn't noticeable, so simplicity wins out
                 while (cursor < label.Length)
                 {
                     bool hit = char.ToLowerInvariant(label[cursor]) == target;
@@ -212,7 +216,7 @@ namespace Tweeq.Core
         {
             int diff = ScoreByIndex[right] - ScoreByIndex[left];
 
-            // 同点は元順。ここで必ず割ることで「安定ソート」を List.Sort に依存せず保証する
+            // Ties keep the original order. Always breaking ties here guarantees "stable sort" behavior without depending on List.Sort for it
             return diff != 0 ? diff : left - right;
         }
 
@@ -229,7 +233,7 @@ namespace Tweeq.Core
                 return true;
             }
 
-            // camelCase 境界。"easeIn" の 'I' を語頭として拾う
+            // camelCase boundary. Picks up the 'I' in "easeIn" as a word start
             return char.IsLower(previous) && char.IsUpper(label[index]);
         }
 

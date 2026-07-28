@@ -4,20 +4,22 @@ using UnityEngine;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// Vec2Input / Vec3Input / Vec4Input の契約。Vec3Input を代表として
-    /// <see cref="VecInputTests"/> と同等の項目（コピー意味論・通知回数・レンジ解決）を見て、
-    /// Vec2 / Vec4 は次元差分（軸数・既定ラベル・値の往復）だけ確かめる。
+    /// Contract for Vec2Input / Vec3Input / Vec4Input. Uses Vec3Input as the representative to
+    /// cover the same items as <see cref="VecInputTests"/> (copy semantics, notification counts,
+    /// range resolution), while Vec2 / Vec4 only check the dimensional differences (axis count,
+    /// default labels, value round-trips).
     /// </summary>
     /// <remarks>
-    /// 軸の <c>ChangeEvent&lt;float&gt;</c> は panel が無いと配送されないので、軸由来の通知は
-    /// 基底の唯一の入口である <c>OnAxesChanged</c> / <c>OnConfirmed</c> をテスト用の派生から
-    /// 直接叩いて代用する（NumberInput → 基底の配線そのものは Play Mode 側の担当）。
+    /// An axis's <c>ChangeEvent&lt;float&gt;</c> isn't delivered without a panel, so axis-driven
+    /// notifications are substituted by directly driving <c>OnAxesChanged</c> / <c>OnConfirmed</c>,
+    /// the base class's sole entry points, from a test-only subclass (the NumberInput → base
+    /// wiring itself is covered on the Play Mode side).
     /// </remarks>
     public class TypedVecInputTests
     {
         #region Probe
 
-        // 軸 NumberInput からの通知を panel 無しで再現する足場
+        // Scaffolding that reproduces notifications from an axis's NumberInput without a panel
         class ProbeVec3Input : Vec3Input
         {
             public void SimulateAxisEdit(int index, float newValue)
@@ -27,7 +29,7 @@ namespace Tweeq.UIToolkit.Tests
 
                 float previous = axis.value;
 
-                // 実際の経路でも値を持っているのは NumberInput 側なので、先に書いてから通知する
+                // Even on the real path, the value is held on the NumberInput side, so write it first and notify afterward
                 axis.SetValueWithoutNotify(newValue);
                 this.OnAxesChanged(index, previous);
             }
@@ -40,7 +42,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region Vec3: 値
+        #region Vec3: Value
 
         [Test]
         public void Vec3_Dimensions_IsThree()
@@ -79,7 +81,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region Vec3: 通知
+        #region Vec3: Notifications
 
         [Test]
         public void Vec3_SetValueWithoutNotify_DoesNotRaiseAnything()
@@ -175,7 +177,7 @@ namespace Tweeq.UIToolkit.Tests
                 received = v;
             };
 
-            // 1 ジェスチャ = 1 軸を何フレームか動かして離す
+            // 1 gesture = moving 1 axis over a few frames and then releasing
             vec.SimulateAxisEdit(2, 4f);
             vec.SimulateAxisEdit(2, 5f);
             vec.SimulateGestureConfirm();
@@ -186,7 +188,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region Vec3: 継承したプロパティ
+        #region Vec3: Inherited properties
 
         [Test]
         public void Vec3_AxisLabels_DefaultToXyz()
@@ -237,7 +239,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region Vec2 / Vec4: 次元差分
+        #region Vec2 / Vec4: Dimensional differences
 
         [Test]
         public void Vec2_HasTwoAxesLabelledXy()
@@ -339,7 +341,7 @@ namespace Tweeq.UIToolkit.Tests
         [Test]
         public void Vec3_DisabledDoesNotBlockTheProgrammaticValue()
         {
-            // 外部からの代入は「操作」ではないので通す（軸の NumberInput と同じ扱い）
+            // An assignment from outside isn't "manipulation," so it passes through (same treatment as an axis's NumberInput)
             Vec3Input vec = new Vec3Input { Disabled = true };
 
             vec.value = new Vector3(1f, 2f, 3f);

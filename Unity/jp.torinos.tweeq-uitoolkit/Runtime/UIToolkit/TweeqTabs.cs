@@ -3,27 +3,28 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 
-// 表示名のラベルは Label 要素で作る。他の Input と表記を揃えるため別名にする
+// The display-name label is built with a Label element. Aliased so its usage matches the other Inputs.
 using UILabel = UnityEngine.UIElements.Label;
 
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// タブ切替（M8 仕様 §D「TweeqTabs」）。ヘッダー（タブリスト）と本体（パネル）を持ち、
-    /// 子に置いた <see cref="TweeqTab"/> が自分で登録してくる。
+    /// Tab switching (M8 spec §D, "TweeqTabs"). Has a header (tab list) and a body (panels); a
+    /// <see cref="TweeqTab"/> placed as a child registers itself.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Vue 原典（`ref/tweeq/src/Tabs`）が正だが、確認済みのバグは React 移植側の修正版を採用する:
-    /// (1) <see cref="SelectTab"/> の disabled ガードを無条件に、(2) アクティブ解決の全段で
-    /// disabled を除外、(3) 同 id の二重登録ガードと更新時の index &lt; 0 ガード、
-    /// (4) キーボードナビ（矢印ラップ・Home/End・roving tabIndex）、
-    /// (5) <see cref="StorageKey"/>（Vue は型にあるのに未使用）。
+    /// The Vue original (`ref/tweeq/src/Tabs`) is authoritative, but for confirmed bugs the fixed-up
+    /// version from another reference implementation's port is adopted instead:
+    /// (1) making <see cref="SelectTab"/>'s disabled guard unconditional, (2) excluding disabled at every
+    /// stage of active-tab resolution, (3) a guard against double-registering the same id plus an
+    /// index &lt; 0 guard on update, (4) keyboard navigation (arrow wrap, Home/End, roving tabIndex),
+    /// (5) <see cref="StorageKey"/> (present in Vue's type but left unused there).
     /// </para>
     /// <para>
-    /// <c>contentContainer</c> はパネル層へルーティングしてあるので、UXML でも C# でも
-    /// <see cref="TweeqTab"/> をそのまま子に足せる。ヘッダーはその外側の内部要素なので
-    /// 利用者の子要素とは混ざらない。
+    /// <c>contentContainer</c> is routed to the panel layer, so <see cref="TweeqTab"/> can be added as a
+    /// child directly whether from UXML or C#. The header is an internal element outside of that, so it
+    /// never mixes with the caller's children.
     /// </para>
     /// </remarks>
     [UxmlElement]
@@ -31,55 +32,55 @@ namespace Tweeq.UIToolkit
     {
         #region Constants
 
-        /// <summary>この要素に付く USS クラス。</summary>
+        /// <summary>The USS class attached to this element.</summary>
         public const string USS_CLASS_NAME = "tweeq-tabs";
 
-        /// <summary>永続化キーの接頭辞（Vue の appConfig ストアの appId に対応）。</summary>
+        /// <summary>The persistence key prefix (corresponds to Vue's appConfig store's appId).</summary>
         public const string PREFS_PREFIX = "tweeq.";
 
-        /// <summary><see cref="StorageKey"/> 省略時に <see cref="TabsName"/> へ付ける接尾辞。</summary>
+        /// <summary>The suffix appended to <see cref="TabsName"/> when <see cref="StorageKey"/> is omitted.</summary>
         public const string PREFS_SUFFIX = ".active";
 
-        // 以下は rem=12px 換算した Vue の style ブロックの実寸（m8-modal-tabs-spec.md §D「見た目」）
+        // The following are the actual dimensions of Vue's style block, converted at rem=12px (m8-modal-tabs-spec.md §D "Appearance").
 
-        // 横: タブリストとパネルの間（0.5rem）
+        // Horizontal: gap between the tab list and the panels (0.5rem).
         const float ROOT_GAP_HORIZONTAL = 6f;
 
-        // 縦: タブリストとパネルの間（1rem）
+        // Vertical: gap between the tab list and the panels (1rem).
         const float ROOT_GAP_VERTICAL = 12f;
 
-        // 横のタブリストの項目間（0.2rem）
+        // Gap between horizontal tab-list items (0.2rem).
         const float TABLIST_GAP_HORIZONTAL = 2.4f;
 
-        // 縦のタブリストの項目間
+        // Gap between vertical tab-list items.
         const float TABLIST_GAP_VERTICAL = 2f;
 
-        // 項目の line-height（2rem）。UI Toolkit に line-height が無いので固定高で代替する
+        // An item's line-height (2rem). UI Toolkit has no line-height, so a fixed height substitutes for it.
         const float HEADER_LINE_HEIGHT = 24f;
 
         const float HEADER_PADDING_TOP = 2f;
 
-        // 横の項目の左右 padding（0.4rem）
+        // Left/right padding on a horizontal item (0.4rem).
         const float HEADER_PADDING_INLINE = 4.8f;
 
-        // 縦のラベル padding（0.2rem / 0.6rem）
+        // Vertical label padding (0.2rem / 0.6rem).
         const float VERTICAL_LABEL_PADDING_BLOCK = 2.4f;
 
         const float VERTICAL_LABEL_PADDING_INLINE = 7.2f;
 
-        /// <summary>アクティブを示す線の太さ（横は下線・縦は左線）。</summary>
+        /// <summary>The thickness of the line indicating the active tab (an underline horizontally, a left line vertically).</summary>
         public const float INDICATOR_WIDTH = 3f;
 
-        // 非アクティブのラベル。Vue の .tablist-link の opacity
+        // The inactive label. Vue's .tablist-link opacity.
         const float INACTIVE_OPACITY = 0.4f;
 
-        // 縦のパネル側の区切り線と余白（1rem）
+        // The vertical layout's panel-side divider line and margin (1rem).
         const float PANELS_PADDING_LEFT = 12f;
 
         const float PANELS_BORDER_WIDTH = 1f;
 
-        // ScrollView の viewport は枠外描画（SwitchInput のフォーカスリング=inset −3px 等）を
-        // 容赦なく切る。クリップ境界の内側に取る安全マージン（リング 3px + AA 1px）
+        // ScrollView's viewport mercilessly clips anything drawn outside its bounds (like SwitchInput's
+        // focus ring at inset -3px). This is the safety margin kept inside the clip boundary (ring 3px + AA 1px).
         const float CLIP_SAFE_PADDING = 4f;
 
         #endregion
@@ -89,8 +90,8 @@ namespace Tweeq.UIToolkit
         static ITweeqTabStorage _storage = TweeqTabPlayerPrefsStorage.Instance;
 
         /// <summary>
-        /// アクティブタブ id の保存先（全 <see cref="TweeqTabs"/> 共有）。
-        /// null を代入すると既定の <see cref="TweeqTabPlayerPrefsStorage.Instance"/> へ戻る。
+        /// Where the active tab id is persisted (shared across all <see cref="TweeqTabs"/>).
+        /// Assigning null reverts to the default <see cref="TweeqTabPlayerPrefsStorage.Instance"/>.
         /// </summary>
         public static ITweeqTabStorage Storage
         {
@@ -99,8 +100,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 永続化キーを組み立てる。<paramref name="storageKey"/> が優先で、無ければ
-        /// <paramref name="tabsName"/> + ".active"。どちらも空なら空文字（＝永続化しない）。
+        /// Builds the persistence key. <paramref name="storageKey"/> takes priority; failing that,
+        /// <paramref name="tabsName"/> + ".active" is used. If both are empty, an empty string is returned (i.e. no persistence).
         /// </summary>
         public static string PrefsKey(string tabsName, string storageKey)
         {
@@ -126,8 +127,8 @@ namespace Tweeq.UIToolkit
         readonly VisualElement _tabList;
         readonly VisualElement _panels;
 
-        // 縦のときだけパネルを包む。横では作らない（ScrollView は viewport を clip するので、
-        // スクロールさせない layout に噛ませると中身が切れる）
+        // Only wraps the panels when vertical. Never created for horizontal (ScrollView clips its
+        // viewport, so wrapping content in a layout that isn't meant to scroll would cut it off).
         ScrollView _scroll;
 
         readonly List<TweeqTab> _tabs = new List<TweeqTab>();
@@ -140,9 +141,9 @@ namespace Tweeq.UIToolkit
         string _activeId = string.Empty;
         bool _vertical;
 
-        // 今の _activeId が「利用者が選んだ結果」か「解決の落としどころ」か。
-        // タブは 1 枚ずつ登録されてくるので、最初の 1 枚で暫定的に選ばれた結果を
-        // 確定扱いすると、後から現れる保存済みタブへ切り替われなくなる
+        // Whether the current _activeId is "what the user chose" or merely "where resolution landed."
+        // Tabs get registered one at a time, so if the tentative pick made while only the first one has
+        // registered were treated as final, it would become impossible to switch to a saved tab that shows up later.
         bool _activeIdIsExplicit;
 
         TweeqTab _hoveredTab;
@@ -151,16 +152,16 @@ namespace Tweeq.UIToolkit
 
         #region Public API
 
-        /// <summary>別のタブへ切り替わったときに発火する。</summary>
+        /// <summary>Fires when switching to a different tab.</summary>
         public event Action<TweeqTab> Changed;
 
         /// <summary>
-        /// 既にアクティブなタブをもう一度クリックしたときに発火する。
-        /// <see cref="Changed"/> とは排他（同じ操作で両方は飛ばない）。
+        /// Fires when an already-active tab is clicked again.
+        /// Mutually exclusive with <see cref="Changed"/> (never both for the same operation).
         /// </summary>
         public event Action<TweeqTab> Clicked;
 
-        /// <summary>永続化キーの元になる名前。<see cref="StorageKey"/> が無ければこちらを使う。</summary>
+        /// <summary>The name the persistence key is derived from. Used when <see cref="StorageKey"/> is absent.</summary>
         [UxmlAttribute("tabs-name")]
         public string TabsName
         {
@@ -179,8 +180,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 明示の永続化キー。Vue は型にあるのに未使用というバグなので、React 修正版
-        /// （`StorageKey ?? $"{TabsName}.active"`）を採用する。
+        /// An explicit persistence key. Since Vue has this in its type but leaves it unused (a bug),
+        /// the fixed-up version from another reference implementation (`StorageKey ?? $"{TabsName}.active"`) is adopted here.
         /// </summary>
         [UxmlAttribute("storage-key")]
         public string StorageKey
@@ -199,7 +200,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>初期タブ id。保存値が無い（または無効）ときの第 2 候補。</summary>
+        /// <summary>The initial tab id. The second choice when there's no saved value (or it's invalid).</summary>
         [UxmlAttribute("default-tab-id")]
         public string DefaultTabId
         {
@@ -217,7 +218,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>AE / Resolve 風に、タブリストを左・パネルを右へ置く。</summary>
+        /// <summary>AE / Resolve-style: places the tab list on the left and the panels on the right.</summary>
         [UxmlAttribute("vertical")]
         public bool Vertical
         {
@@ -236,31 +237,32 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>現在のタブ id。変更は <see cref="SelectTab"/> 経由で行う。</summary>
+        /// <summary>The current tab id. Change it via <see cref="SelectTab"/>.</summary>
         public string ActiveId => _activeId;
 
-        /// <summary>現在のタブ。1 枚も選べるタブが無ければ null。</summary>
+        /// <summary>The current tab. null if there isn't a single selectable tab.</summary>
         public TweeqTab ActiveTab => FindTab(_activeId);
 
-        /// <summary>登録済みのタブ（ヘッダーの並び順）。</summary>
+        /// <summary>The registered tabs (in header order).</summary>
         public IReadOnlyList<TweeqTab> Tabs => _tabs;
 
-        /// <summary>この <see cref="TweeqTabs"/> が使う永続化キー。空なら永続化しない。</summary>
+        /// <summary>The persistence key this <see cref="TweeqTabs"/> uses. Never persists when empty.</summary>
         public string ResolvedStorageKey => PrefsKey(_tabsName, _storageKey);
 
         /// <summary>
-        /// UXML の子や素の Add() がパネル層に入るようにする（内部構築は hierarchy.Add 経由なので安全）。
-        /// コンストラクタ中は _panels 生成前に呼ばれ得るため null ガードする
+        /// Routes UXML children and plain Add() calls into the panel layer (internal construction is safe
+        /// since it goes through hierarchy.Add). Null-guarded because this can be called during the
+        /// constructor before _panels is created.
         /// </summary>
         public override VisualElement contentContainer => _panels ?? this;
 
-        /// <summary>配色テーマ。ヘッダーへ適用し、パネル内の <see cref="ITweeqThemed"/> 子孫へ転送する。</summary>
+        /// <summary>The color theme. Applied to the header and forwarded to <see cref="ITweeqThemed"/> descendants within the panels.</summary>
         public TweeqTheme Theme
         {
             get => _theme;
             set
             {
-                // 同一インスタンスでも打ち切らない。テーマ設定後に足されたタブへ届ける
+                // Not short-circuited even for the same instance, so it still reaches tabs added after the theme was set.
                 _theme = value ?? TweeqTheme.Dark();
                 ApplyLayout();
                 ApplyHeaderStaticStyles();
@@ -270,8 +272,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// タブを登録する。同じインスタンス・同じ id の二重登録は弾く（React 修正 3）。
-        /// 通常は <see cref="TweeqTab"/> 側から呼ばれる。
+        /// Registers a tab. Rejects a duplicate registration of the same id on the same instance (another reference implementation's fix 3).
+        /// Normally called from the <see cref="TweeqTab"/> side.
         /// </summary>
         public void RegisterTab(TweeqTab tab)
         {
@@ -280,11 +282,11 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 名無しタブ（id 空）は互いに衝突しないものとして扱う（FindTab が空 id を拾わない）
+            // Nameless tabs (empty id) are treated as never colliding with each other (FindTab never picks up an empty id).
             if (FindTab(tab.Id) != null)
             {
-                // 弾いたパネルを出したままにすると 2 枚が重なって表示される。
-                // 原因が分かるよう警告を出したうえで畳む（例外は投げない）
+                // Leaving the rejected panel displayed would show two panels overlapping.
+                // A warning is logged so the cause is discoverable, and it's folded away without throwing an exception.
                 Debug.LogWarning(
                     $"{nameof(TweeqTabs)}: id '{tab.Id}' のタブが重複している。後から来た方を無視する");
                 tab.SetActive(false);
@@ -299,7 +301,7 @@ namespace Tweeq.UIToolkit
             ApplyActive();
         }
 
-        /// <summary>タブの登録を解除する。アクティブだった場合は選択を張り直す。</summary>
+        /// <summary>Unregisters a tab. If it was active, the selection is re-resolved.</summary>
         public void UnregisterTab(TweeqTab tab)
         {
             if (tab == null || !_tabs.Remove(tab))
@@ -320,8 +322,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 登録済みタブのプロパティ変更を取り込む（Vue の watch → updateTab 相当）。
-        /// 未登録のタブを渡されても何もしない（Vue は `tabs[-1]` で TypeError になるバグ）。
+        /// Pulls in a property change on an already-registered tab (equivalent to Vue's watch -> updateTab).
+        /// Does nothing if given an unregistered tab (in Vue this is a bug that throws a TypeError via `tabs[-1]`).
         /// </summary>
         public void UpdateTab(TweeqTab tab)
         {
@@ -336,16 +338,16 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// パネル層を走査して、まだ登録されていない <see cref="TweeqTab"/> を拾い上げる。
-        /// 各タブは自分の <see cref="AttachToPanelEvent"/> で登録してくるので通常は不要だが、
-        /// パネルに載せずに木を組む経路（テスト・エディタ拡張）の取りこぼしを塞ぐ。
+        /// Scans the panel layer and picks up any <see cref="TweeqTab"/> not yet registered.
+        /// Normally unnecessary since each tab registers itself via its own <see cref="AttachToPanelEvent"/>,
+        /// but this plugs the gap for a tree built without ever being attached to a panel (tests, editor extensions).
         /// </summary>
         public void SyncTabsFromHierarchy()
         {
             CollectAndRegister(_panels);
         }
 
-        /// <summary>プログラムからタブを選ぶ。disabled なタブは無条件に弾く（React 修正 1）。</summary>
+        /// <summary>Selects a tab programmatically. Unconditionally rejects a disabled tab (another reference implementation's fix 1).</summary>
         public void SelectTab(string id)
         {
             TweeqTab selected = FindTab(id);
@@ -354,8 +356,8 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // Vue は event 引数があるときだけ弾いていたため、キーボードやプログラム選択で
-            // disabled タブが選べてしまっていた
+            // Vue only rejected it when an event argument was present, so a disabled tab could still be
+            // selected via keyboard or programmatic selection.
             if (selected.IsDisabled)
             {
                 return;
@@ -363,7 +365,7 @@ namespace Tweeq.UIToolkit
 
             if (_activeId == selected.Id)
             {
-                // 再選択も「利用者がこのタブを選んだ」記録。暫定選択のままにしない
+                // A re-selection is also recorded as "the user chose this tab." It isn't left as a tentative selection.
                 _activeIdIsExplicit = true;
                 Persist(_activeId);
                 Clicked?.Invoke(selected);
@@ -374,8 +376,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 矢印キー相当の移動。disabled を飛ばしてラップし、選択がフォーカスに追従する。
-        /// <paramref name="direction"/> は負で前・正で次。
+        /// Moves the selection the way arrow keys do. Skips over disabled entries and wraps, and the selection tracks focus.
+        /// <paramref name="direction"/> is negative for previous, positive for next.
         /// </summary>
         public void MoveSelection(int direction)
         {
@@ -392,7 +394,7 @@ namespace Tweeq.UIToolkit
 
             int current = EnabledIndexOf(_activeId);
 
-            // 現在値が enabled 列に居ない（未選択・disabled）ときは先頭を起点にする（React と同じ）
+            // When the current value isn't among the enabled entries (unselected/disabled), the start point is the first one (same as another reference implementation).
             int start = current < 0 ? 0 : current;
             int delta = direction < 0 ? -1 : 1;
             int next = ((start + delta) % count + count) % count;
@@ -400,21 +402,21 @@ namespace Tweeq.UIToolkit
             SelectAndFocus(EnabledAt(next));
         }
 
-        /// <summary>Home キー相当。最初の enabled タブへ。</summary>
+        /// <summary>Equivalent to the Home key. Selects the first enabled tab.</summary>
         public void SelectFirstEnabled()
         {
             SelectAndFocus(EnabledAt(0));
         }
 
-        /// <summary>End キー相当。最後の enabled タブへ。</summary>
+        /// <summary>Equivalent to the End key. Selects the last enabled tab.</summary>
         public void SelectLastEnabled()
         {
             SelectAndFocus(EnabledAt(CountEnabled() - 1));
         }
 
         /// <summary>
-        /// 保存済みのアクティブタブを消して既定（未設定）へ戻す。
-        /// Vue の appConfig が「既定値に戻ったらキーを削除する」挙動に対応する。
+        /// Deletes the saved active tab and reverts to the default (unset).
+        /// Corresponds to Vue's appConfig behavior of "delete the key once it reverts to the default value."
         /// </summary>
         public void ClearPersistedActiveTab()
         {
@@ -428,8 +430,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// <paramref name="index"/> 番目のヘッダー要素。範囲外なら null。
-        /// tabIndex / フォーカスの確認や、外から装飾を足したい場合に使う。
+        /// The header element at <paramref name="index"/>. null if out of range.
+        /// Used to check tabIndex / focus, or to add decoration from outside.
         /// </summary>
         public VisualElement GetHeader(int index)
         {
@@ -441,7 +443,7 @@ namespace Tweeq.UIToolkit
             return _headers[index];
         }
 
-        /// <summary>id からタブを引く。null / 空 id は常に null（名無しタブを拾わないため）。</summary>
+        /// <summary>Looks up a tab by id. null / empty id always returns null (so nameless tabs are never picked up).</summary>
         public TweeqTab FindTab(string id)
         {
             if (string.IsNullOrEmpty(id))
@@ -502,7 +504,7 @@ namespace Tweeq.UIToolkit
                 _vertical ? TABLIST_GAP_VERTICAL : TABLIST_GAP_HORIZONTAL,
                 _tabList.style.flexDirection.value);
 
-            // 付け替え前に前回のモードの余白・罫線を落としておく（切替で残ると二重に見える）
+            // Before re-parenting, the previous mode's margin/border is cleared (leftovers after switching would look doubled up).
             _panels.style.marginTop = 0f;
             _panels.style.marginLeft = 0f;
             _panels.style.borderLeftWidth = 0f;
@@ -561,8 +563,8 @@ namespace Tweeq.UIToolkit
             _scroll.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
             _scroll.verticalScrollerVisibility = ScrollerVisibility.Auto;
 
-            // クリップ境界の「内側」に置かないと意味が無い（ScrollView 自体の padding は
-            // viewport の外に付くので、中身は相変わらず viewport 端に密着して切れる）
+            // This only means anything if placed "inside" the clip boundary (ScrollView's own padding
+            // attaches outside the viewport, so the content would still hug the viewport edge and get clipped).
             VisualElement content = _scroll.contentContainer;
             if (content != null)
             {
@@ -577,7 +579,7 @@ namespace Tweeq.UIToolkit
 
         #region Headers
 
-        // ヘッダーは登録の増減・プロパティ変更でしか作り直さない（毎フレーム経路には無い）
+        // The headers are only ever rebuilt on a registration change or property change (never on a per-frame path).
         void RebuildHeaders()
         {
             for (int i = 0; i < _headers.Count; i++)
@@ -599,20 +601,20 @@ namespace Tweeq.UIToolkit
 
                 VisualElement header = new VisualElement { name = "tweeq-tabs-header" };
 
-                // ヘッダー自身がフォーカスを取る（roving tabIndex）。実際の 0 / -1 は
-                // RefreshHeaderStyles がアクティブ状態に合わせて配る
+                // The header itself takes focus (roving tabIndex). The actual 0 / -1 assignment is
+                // handled by RefreshHeaderStyles based on active state.
                 header.focusable = true;
 
                 UILabel label = new UILabel(tab.TabName)
                 {
                     name = "tweeq-tabs-header-label",
 
-                    // 当たり判定はヘッダー側で取る（縦のときは行全体がクリック対象）
+                    // Hit testing happens on the header side (when vertical, the entire row is the click target).
                     pickingMode = PickingMode.Ignore,
                 };
                 header.Add(label);
 
-                // 登録が変わるたびに作り直すので、インデックスではなく実体を掴んでおく
+                // Rebuilt every time registration changes, so the entity is captured directly rather than by index.
                 TweeqTab captured = tab;
                 header.RegisterCallback<ClickEvent>(_ => SelectTab(captured.Id));
                 header.RegisterCallback<PointerEnterEvent>(_ => SetHovered(captured));
@@ -652,14 +654,14 @@ namespace Tweeq.UIToolkit
                 label.style.marginRight = 0f;
                 label.style.whiteSpace = WhiteSpace.NoWrap;
 
-                // Vue の font-weight: bold。フォント自体はパネル既定のまま（FontHeading は使わない）
+                // Vue's font-weight: bold. The font itself is left as the panel's default (FontHeading isn't used).
                 label.style.unityFontStyleAndWeight = FontStyle.Bold;
                 label.style.height = HEADER_LINE_HEIGHT;
 
                 if (_vertical)
                 {
-                    // 項目間の隙間は TweeqGap が主軸側（縦なら marginTop）に配る。
-                    // 直交軸に前のモードの残りが居ると列がずれるので必ず落とす
+                    // The gap between items is assigned by TweeqGap on the main-axis side (marginTop when vertical).
+                    // A leftover from the previous mode on the cross axis would misalign the column, so it's always cleared.
                     header.style.marginLeft = 0f;
 
                     header.style.borderBottomWidth = 0f;
@@ -669,7 +671,7 @@ namespace Tweeq.UIToolkit
                     header.style.paddingLeft = 0f;
                     header.style.paddingRight = 0f;
 
-                    // padding は項目ではなくラベル側に置く＝列幅いっぱいが hover / クリック対象になる
+                    // Padding is placed on the label rather than the item, i.e. the full column width becomes the hover/click target.
                     label.style.paddingTop = VERTICAL_LABEL_PADDING_BLOCK;
                     label.style.paddingBottom = VERTICAL_LABEL_PADDING_BLOCK;
                     label.style.paddingLeft = VERTICAL_LABEL_PADDING_INLINE;
@@ -694,13 +696,14 @@ namespace Tweeq.UIToolkit
                     label.style.unityTextAlign = TextAnchor.MiddleCenter;
                 }
 
-                // 線の太さは動かさず色だけ遷移させる（レイアウトを揺らさないため）。
-                // 横／縦どちらの線にも掛けておけば Vertical 切替で貼り直さなくて済む
+                // Only the color transitions, not the line thickness (to avoid shaking the layout).
+                // Applying it to both the horizontal and vertical line means it doesn't need to be reapplied on a Vertical switch.
                 ApplyTransition(
                     header, duration, EasingMode.Ease, "border-bottom-color", "border-left-color");
 
-                // 色も一緒に遷移させないと、hover を外した瞬間に opacity が高いまま色だけ
-                // Text へ戻り、暗くなる前に白く光る（Vue の style ブロックのコメントと同じ理由）
+                // Without also transitioning the color, the instant hover is released the opacity would
+                // still be high while only the color snaps back to Text, flashing white before it has a
+                // chance to darken (the same reasoning as the comment in Vue's style block).
                 ApplyTransition(label, duration, EasingMode.Ease, "opacity", "color");
             }
         }
@@ -723,7 +726,7 @@ namespace Tweeq.UIToolkit
 
                 label.text = tab.TabName;
 
-                // アクティブの線は Text、そこへ hover すると Accent（Vue の .active:hover）
+                // The active indicator line is Text; hovering it becomes Accent (Vue's .active:hover).
                 Color indicator = active
                     ? (hovered ? _theme.Accent : _theme.Text)
                     : Color.clear;
@@ -740,7 +743,7 @@ namespace Tweeq.UIToolkit
                 label.style.opacity = active || hovered ? 1f : INACTIVE_OPACITY;
                 label.style.color = hovered ? _theme.Accent : _theme.Text;
 
-                // disabled は hover に反応させない（pickingMode を落とせば Enter/Leave も来ない）
+                // A disabled tab doesn't react to hover (dropping pickingMode also stops Enter/Leave from arriving).
                 header.pickingMode = disabled ? PickingMode.Ignore : PickingMode.Position;
                 header.focusable = !disabled;
                 header.tabIndex = active ? 0 : -1;
@@ -762,8 +765,8 @@ namespace Tweeq.UIToolkit
 
         #region Selection
 
-        // 選択の再評価（Vue の watch(tabs) → ensureActiveTab 相当）。
-        // 永続値 → DefaultTabId → 先頭 の全段で disabled を除外する（React 修正 2）
+        // Re-evaluates the selection (equivalent to Vue's watch(tabs) -> ensureActiveTab).
+        // Excludes disabled at every stage: persisted value -> DefaultTabId -> first (another reference implementation's fix 2).
         void EnsureActiveTab()
         {
             if (_tabs.Count == 0)
@@ -792,16 +795,17 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 選べるタブが 1 枚も無くなった。選択だけ落とす（保存値は利用者の設定なので消さない）
+            // There isn't a single selectable tab left. Only the selection is dropped (the saved value is
+            // the user's own setting, so it's never erased).
             _activeId = string.Empty;
             _activeIdIsExplicit = false;
             ApplyActive();
         }
 
-        // 実際に選択を切り替える唯一の場所。
-        // explicitChoice=false（解決による暫定選択）では永続化しない。タブは 1 枚ずつ
-        // 登録されてくるので、ここで書いてしまうと「保存済みタブがまだ登録されていない」
-        // 一瞬のあいだに先頭タブで保存値を上書きし、復元が毎回壊れる
+        // The one and only place that actually switches the selection.
+        // With explicitChoice=false (a tentative selection from resolution), nothing is persisted. Tabs
+        // register one at a time, so writing here would, during the brief moment when "the saved tab
+        // hasn't registered yet," overwrite the saved value with the first tab, breaking restoration every time.
         void ApplySelection(TweeqTab selected, bool explicitChoice)
         {
             _activeId = selected.Id;
@@ -818,7 +822,7 @@ namespace Tweeq.UIToolkit
 
         string ResolveActiveId()
         {
-            // 利用者が選んだ結果は最優先で維持する
+            // What the user chose is preserved with top priority.
             if (_activeIdIsExplicit)
             {
                 string chosen = Selectable(_activeId);
@@ -840,15 +844,15 @@ namespace Tweeq.UIToolkit
                 return preferred;
             }
 
-            // 保存値も既定も（まだ）居ない。今の暫定選択が有効ならそのまま据え置く
+            // Neither a saved value nor a default exists (yet). If the current tentative selection is still valid, it's left as-is.
             string current = Selectable(_activeId);
             if (current != null)
             {
                 return current;
             }
 
-            // 最終フォールバックも「最初の enabled タブ」。Vue は tabs[0] なので
-            // 先頭が disabled だと何も選べないままだった
+            // The final fallback is also "the first enabled tab." Vue uses tabs[0], so if the first tab
+            // was disabled, nothing at all could ever get selected.
             for (int i = 0; i < _tabs.Count; i++)
             {
                 TweeqTab tab = _tabs[i];
@@ -861,7 +865,7 @@ namespace Tweeq.UIToolkit
             return string.Empty;
         }
 
-        // 選べる id ならそのまま、選べないなら null（呼び出し側の ?? 連鎖のため）
+        // Returns the id as-is if selectable, or null if not (so the caller can chain ?? operators).
         string Selectable(string id)
         {
             TweeqTab tab = FindTab(id);
@@ -891,8 +895,8 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // キーボード移動で「同じタブ」に着いたときは Clicked を出さない（React と同じ）。
-            // 選択の変化とクリックの再選択は別の意味なので混ぜない
+            // Clicked doesn't fire when keyboard movement lands on "the same tab" (same as another reference implementation).
+            // A change in selection and a click re-selection carry different meanings, so they're never mixed.
             if (tab.Id != _activeId)
             {
                 SelectTab(tab.Id);
@@ -932,7 +936,7 @@ namespace Tweeq.UIToolkit
             return count;
         }
 
-        // enabled だけを詰めた仮想の列に対する添字。List を作らずに数えるのでアロケーション無し
+        // An index into the virtual column packed with only the enabled entries. Counts without building a List, so no allocation.
         int EnabledIndexOf(string id)
         {
             if (string.IsNullOrEmpty(id))
@@ -1012,8 +1016,8 @@ namespace Tweeq.UIToolkit
 
             if (string.IsNullOrEmpty(id))
             {
-                // 既定（未設定）へ戻すのは削除。空文字を書き残すと次回の復元で
-                // 「保存済みだが無効な id」として一段余計に落ちる
+                // Reverting to the default (unset) means deleting the key. Leaving an empty string written
+                // would cause an extra step of falling through as "a saved but invalid id" on the next restore.
                 Storage.Delete(key);
                 return;
             }
@@ -1085,8 +1089,8 @@ namespace Tweeq.UIToolkit
             evt.StopPropagation();
         }
 
-        // 矢印キーは KeyDown と別に NavigationMoveEvent も飛び、そちらが勝手にフォーカスを
-        // 動かしてしまう（RadioInput と同じ対処）。移動先は自分で決めるので握り潰す
+        // Arrow keys also fire a NavigationMoveEvent separately from KeyDown, and that one moves focus on
+        // its own (same handling as RadioInput). Since the destination is decided here, that event is swallowed.
         void OnHeaderNavigationMove(NavigationMoveEvent evt)
         {
             if (evt == null)
@@ -1116,7 +1120,7 @@ namespace Tweeq.UIToolkit
 
         void OnAttachToPanel(AttachToPanelEvent evt)
         {
-            // 各 TweeqTab も自分の Attach で登録してくるが、順序に依らず揃うよう保険を掛ける
+            // Each TweeqTab also registers itself on its own Attach, but this adds a safety net so it stays consistent regardless of order.
             SyncTabsFromHierarchy();
         }
 
@@ -1136,7 +1140,7 @@ namespace Tweeq.UIToolkit
                     continue;
                 }
 
-                // 入れ子のタブ群は相手の担当。中まで潜らない
+                // Nested tab groups are that group's own responsibility. This never dives inside them.
                 if (child is TweeqTabs)
                 {
                     continue;

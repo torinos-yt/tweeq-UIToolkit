@@ -8,18 +8,19 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// TweeqTabs / TweeqTab の契約（m8-modal-tabs-spec.md §D と「テスト契約」）。
+    /// Contract for TweeqTabs / TweeqTab (m8-modal-tabs-spec.md §D and the "test contract").
     ///
-    /// VisualElement は panel が無くても生成・スタイル設定できるので EditMode で完結する。
-    /// ただし TweeqTab の登録は本番では AttachToPanelEvent 起点で、panel は EditMode から
-    /// 合成できないため、ここでは同じ経路の入口である ConnectToTabs / DisconnectFromTabs を
-    /// 直接叩く。実キーイベントとフォーカス移動、および見た目は uloop 側の担当。
+    /// A VisualElement can be created and styled without a panel, so this stays entirely in
+    /// EditMode. However, TweeqTab registration is driven by AttachToPanelEvent in production,
+    /// and a panel cannot be composed from EditMode, so here we directly drive ConnectToTabs /
+    /// DisconnectFromTabs, the entry points to that same path. Actual key events, focus
+    /// movement, and appearance are covered on the uloop side.
     /// </summary>
     public class TweeqTabsTests
     {
         #region Helpers
 
-        /// <summary>テスト用のインメモリストレージ。実 PlayerPrefs には一切触れない。</summary>
+        /// <summary>In-memory storage for tests. Never touches real PlayerPrefs.</summary>
         sealed class MemoryStorage : ITweeqTabStorage
         {
             public readonly Dictionary<string, string> Values = new Dictionary<string, string>();
@@ -45,7 +46,7 @@ namespace Tweeq.UIToolkit.Tests
             }
         }
 
-        /// <summary>テーマが届いたかを数えるだけの ITweeqThemed 実装（TweeqRootTests と同じ道具）。</summary>
+        /// <summary>An ITweeqThemed implementation that just counts whether the theme arrived (same tool as TweeqRootTests).</summary>
         sealed class ThemedProbe : VisualElement, ITweeqThemed
         {
             TweeqTheme _theme;
@@ -71,7 +72,7 @@ namespace Tweeq.UIToolkit.Tests
         [TearDown]
         public void RestoreStorage()
         {
-            // 差し替えは static なので、戻さないと他のテストや実プロジェクトへ漏れる
+            // The swap is static, so failing to restore it would leak into other tests or the real project
             TweeqTabs.Storage = null;
         }
 
@@ -106,7 +107,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region 登録
+        #region Registration
 
         [Test]
         public void Register_AddsTabsAndActivatesTheFirst()
@@ -141,7 +142,7 @@ namespace Tweeq.UIToolkit.Tests
             TweeqTab kept = MakeTab("First", "same");
             TweeqTab dropped = MakeTab("Second", "same");
 
-            // 表示名が違っても id が同じなら二重登録しない（Vue は素通しで push していた）
+            // Even if the display name differs, a matching id prevents double registration (the Vue original pushed it through unchecked)
             Attach(tabs, kept, dropped);
 
             Assert.AreEqual(1, tabs.Tabs.Count);
@@ -207,7 +208,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region id
+        #region Id
 
         [Test]
         public void Id_FallsBackToSlugOfTheName()
@@ -224,7 +225,7 @@ namespace Tweeq.UIToolkit.Tests
 
             Assert.AreEqual("custom", tab.Id);
 
-            // 空を入れたらスラグへ戻る
+            // Setting it to empty falls back to the slug
             tab.Id = null;
             Assert.AreEqual("my-long-tab", tab.Id);
         }
@@ -252,7 +253,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region アクティブ解決
+        #region Active resolution
 
         [Test]
         public void Resolve_SkipsALeadingDisabledTab()
@@ -260,7 +261,7 @@ namespace Tweeq.UIToolkit.Tests
             TweeqTabs tabs = new TweeqTabs(TABS_NAME);
             Attach(tabs, MakeTab("Disabled", disabled: true), MakeTab("First"), MakeTab("Last"));
 
-            // Vue は tabs[0] を掴むので先頭が disabled だと何も選べなかった
+            // The Vue original grabs tabs[0], so nothing got selected when the first tab was disabled
             Assert.AreEqual("first", tabs.ActiveId);
         }
 
@@ -327,7 +328,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region SelectTab / イベント
+        #region SelectTab / Events
 
         [Test]
         public void SelectTab_BlocksDisabledTabsUnconditionally()
@@ -340,7 +341,7 @@ namespace Tweeq.UIToolkit.Tests
             tabs.Changed += _ => changed++;
             tabs.Clicked += _ => clicked++;
 
-            // Vue は event 引数があるときだけ弾いていたため、プログラム選択で通ってしまっていた
+            // The Vue original only blocked this when an event argument was present, so a programmatic select would slip through
             tabs.SelectTab("second");
 
             Assert.AreEqual("first", tabs.ActiveId);
@@ -390,7 +391,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region キーボード
+        #region Keyboard
 
         [Test]
         public void Keyboard_ArrowWrapsAndSkipsDisabled()
@@ -440,7 +441,7 @@ namespace Tweeq.UIToolkit.Tests
 
             tabs.MoveSelection(1);
 
-            // 選択追従のキー移動は「クリックによる再選択」とは別の意味なので Clicked を出さない
+            // Key-driven selection movement has a different meaning from "reselecting via click", so it does not raise Clicked
             Assert.AreEqual(0, clicked);
             Assert.AreEqual(0, changed);
             Assert.AreEqual("only", tabs.ActiveId);
@@ -460,7 +461,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region ヘッダー
+        #region Header
 
         [Test]
         public void Header_UsesRovingTabIndex()
@@ -523,7 +524,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region 永続化
+        #region Persistence
 
         [Test]
         public void Persist_WritesTheSelectedTab()
@@ -549,8 +550,9 @@ namespace Tweeq.UIToolkit.Tests
         [Test]
         public void Persist_AutoResolutionDoesNotOverwriteTheStoredTab()
         {
-            // タブは 1 枚ずつ登録されてくる。保存済みタブがまだ居ない間の暫定選択を
-            // 書き込んでしまうと、復元が毎回先頭タブに潰される
+            // Tabs are registered one at a time. If we wrote out the provisional selection
+            // made while the persisted tab hasn't arrived yet, restoration would collapse to
+            // the first tab every time
             string key = TweeqTabs.PrefsKey(TABS_NAME, null);
             _storage.Values[key] = "third";
 
@@ -564,7 +566,7 @@ namespace Tweeq.UIToolkit.Tests
         [Test]
         public void Persist_StorageKeyBeatsTabsName()
         {
-            // Vue は storageKey が型にあるのに未使用というバグ。React 修正版を採用する
+            // The Vue original has a bug where storageKey exists on the type but is never used. We adopt the fix from another reference implementation
             TweeqTabs tabs = new TweeqTabs(TABS_NAME) { StorageKey = "explicit.key" };
             Attach(tabs, MakeTab("First"), MakeTab("Second"));
 
@@ -629,12 +631,12 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region 単独の TweeqTab
+        #region Standalone TweeqTab
 
         [Test]
         public void Standalone_ConnectWithoutTabsDoesNotThrow()
         {
-            // Vue は inject 失敗で throw するが、公演現場ではランタイム例外＝事故
+            // The Vue original throws on inject failure, but on-site during a live show a runtime exception is a disaster
             VisualElement plain = new VisualElement();
             TweeqTab tab = MakeTab("Alone");
             plain.Add(tab);
@@ -664,7 +666,7 @@ namespace Tweeq.UIToolkit.Tests
         {
             TweeqTabs tabs = CreateThree();
 
-            // Vue は tabs[-1].isActive で TypeError になっていた
+            // The Vue original threw a TypeError from tabs[-1].isActive
             Assert.DoesNotThrow(() => tabs.UpdateTab(MakeTab("Ghost")));
             Assert.DoesNotThrow(() => tabs.UpdateTab(null));
             Assert.AreEqual(3, tabs.Tabs.Count);
@@ -672,7 +674,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region レイアウト / テーマ
+        #region Layout / Theme
 
         [Test]
         public void Layout_ContentContainerRoutesChildrenToThePanels()
@@ -681,8 +683,8 @@ namespace Tweeq.UIToolkit.Tests
             TweeqTab tab = MakeTab("First");
             tabs.Add(tab);
 
-            // parent は論理親（contentContainer の持ち主＝TweeqTabs 本体）を返すので、
-            // 実際の格納先は hierarchy.parent で見る
+            // parent returns the logical parent (the owner of contentContainer, i.e. TweeqTabs
+            // itself), so we check the actual storage location via hierarchy.parent
             Assert.AreEqual("tweeq-tabs-panels", tab.hierarchy.parent.name,
                 "UXML の子はパネル層へ入る（ヘッダーとは混ざらない）");
         }
@@ -711,7 +713,7 @@ namespace Tweeq.UIToolkit.Tests
             Assert.AreEqual(0f, tabs.GetHeader(0).style.borderBottomWidth.value);
             Assert.AreEqual(tabs.Theme.Text, tabs.GetHeader(0).style.borderLeftColor.value);
 
-            // 縦のパネルは ScrollView に包まれる（横では包まない）
+            // Vertical panels are wrapped in a ScrollView (horizontal ones are not)
             Assert.AreEqual(2, tabs.hierarchy.childCount);
             Assert.IsInstanceOf<ScrollView>(tabs.hierarchy.ElementAt(1));
             Assert.AreEqual("tweeq-tabs-panels", tabs.Tabs[0].hierarchy.parent.name,

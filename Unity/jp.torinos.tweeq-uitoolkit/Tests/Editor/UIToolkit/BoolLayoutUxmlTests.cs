@@ -7,20 +7,20 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// Bool 系（Checkbox / Switch / Button / ButtonToggle / Radio）と
-    /// レイアウト系（InputGroup / Parameter 系 / Popover / Balloon）の UXML 対応を検証する。
+    /// Verifies UXML support for the Bool family (Checkbox / Switch / Button / ButtonToggle /
+    /// Radio) and the layout family (InputGroup / Parameter family / Popover / Balloon).
     ///
-    /// UxmlSerializedData を直接叩くと生成コードの内部命名に依存するため、
-    /// 実際に .uxml をインポートして Instantiate する経路で確かめる。
-    /// VisualTreeAsset を文字列から作る公開 API が無いので、Assets 配下に一時ファイルを
-    /// 書いて AssetDatabase 経由でインポートし、TearDown で消す。
+    /// Hitting UxmlSerializedData directly would depend on the internal naming of generated code,
+    /// so this verifies via the path of actually importing and instantiating a .uxml file.
+    /// There's no public API to build a VisualTreeAsset from a string, so this writes a temp file
+    /// under Assets, imports it via AssetDatabase, and deletes it in TearDown.
     /// </summary>
     public class BoolLayoutUxmlTests
     {
         const string TEMP_FOLDER = "Assets/TweeqUxmlTests";
         const string TEMP_ASSET = TEMP_FOLDER + "/tweeq-uxml-test.uxml";
 
-        // ParameterGroup の group-name を書くテストがあるので、PlayerPrefs を汚さないよう専用キーを使う
+        // There's a test that writes ParameterGroup's group-name, so use a dedicated key to avoid polluting PlayerPrefs
         const string TEST_GROUP_NAME = "tweeq.tests.boolLayoutUxmlTests.group";
 
         [TearDown]
@@ -35,7 +35,7 @@ namespace Tweeq.UIToolkit.Tests
             PlayerPrefs.Save();
         }
 
-        /// <summary>UXML の中身（要素だけ）を渡すと、実体化したツリーのルートを返す。</summary>
+        /// <summary>Given the contents of a UXML document (elements only), returns the root of the instantiated tree.</summary>
         static VisualElement Instantiate(string body)
         {
             if (!AssetDatabase.IsValidFolder(TEMP_FOLDER))
@@ -95,7 +95,7 @@ namespace Tweeq.UIToolkit.Tests
             ButtonInput button = root.Q<ButtonInput>();
             Assert.That(button, Is.Not.Null, "ButtonInput が UXML から解決できていない");
 
-            // C# 側は Label、UXML 側は Vue の prop 名に合わせた text
+            // The C# side uses Label, while the UXML side uses text to match the Vue original's prop name
             Assert.That(button.Label, Is.EqualTo("Render"));
             Assert.That(button.Subtle, Is.True);
             Assert.That(button.Narrow, Is.True);
@@ -125,10 +125,10 @@ namespace Tweeq.UIToolkit.Tests
             RadioInput radio = root.Q<RadioInput>();
             Assert.That(radio, Is.Not.Null, "RadioInput が UXML から解決できていない");
 
-            // options が string[] としてカンマ区切りで読めること（読めなければ CSV 専用プロパティが必要）
+            // options must be readable as a comma-separated string[] (a dedicated CSV property would be needed if it can't be read)
             Assert.That(radio.Options, Is.EqualTo(new[] { "Low", "Mid", "High" }));
 
-            // value は options の後に適用されないと範囲外として捨てられる
+            // value must be applied after options, or it gets discarded as out of range
             Assert.That(radio.value, Is.EqualTo(2));
         }
 
@@ -202,7 +202,7 @@ namespace Tweeq.UIToolkit.Tests
         [Test]
         public void BalloonAttributesAreAppliedFromUxml()
         {
-            // TweeqPopover は内部に TweeqBalloon を持つので、混ぜて実体化すると Q が取り違える
+            // TweeqPopover holds a TweeqBalloon internally, so instantiating them mixed together would make Q pick the wrong one
             VisualElement root = Instantiate(
                 "<tq:TweeqBalloon arrow-side=\"Bottom\" arrow-offset=\"12\" />");
 

@@ -5,19 +5,19 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// TweeqFonts のロード経路を検証する。
+    /// Verifies the TweeqFonts loading path.
     ///
-    /// エディタ実行なので Resources から実アセットを読める。ここで確かめたいのは
-    /// 「同梱 TTF が Font としてインポートされ Resources.Load で引けること」と
-    /// 「欠落しても例外にならず空の FontDefinition へ落ちること」の 2 点。
-    /// 実際の字形・カーニングは目視（発注元の uloop スクショ）担当。
+    /// Since this runs in the Editor, actual assets can be read from Resources. The two things to
+    /// confirm here are: "the bundled TTF is imported as a Font and can be retrieved via Resources.Load"
+    /// and "a missing font falls back to an empty FontDefinition instead of throwing".
+    /// Actual glyph shapes and kerning are the responsibility of visual inspection (the requester's uloop screenshots).
     /// </summary>
     public class TweeqFontsTests
     {
         [SetUp]
         public void SetUp()
         {
-            // 他テストが ResetCache 前提で走ると解決済みフラグが持ち越されるため毎回初期化
+            // Reset every time, because the resolved flag would otherwise carry over if other tests rely on ResetCache having run
             TweeqFonts.ResetCache();
         }
 
@@ -99,7 +99,7 @@ namespace Tweeq.UIToolkit.Tests
         [Test]
         public void UiFont_IsEmptyBecauseUpstreamUsesSystemUi()
         {
-            // 本家 fontUi=system-ui。UI Toolkit では「指定しない」が既定フォント採用に当たる
+            // In the Vue original, fontUi=system-ui. In UI Toolkit, "not specifying" corresponds to adopting the default font
             Assert.IsTrue(TweeqFonts.IsEmpty(TweeqFonts.UiFont));
         }
 

@@ -3,15 +3,16 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// パネル最前面に敷く共有オーバーレイ層。ポップオーバー／ツールチップ／ドラッグ中の
-    /// ガイド描画など、レイアウトを乱さずに全面へ描きたいものの置き場所。
-    /// 子要素の座標はこの層のローカル空間（＝パネル座標）で扱う。
+    /// Shared overlay layer laid over the frontmost part of the panel. A place to put things that
+    /// need to draw across the whole area without disturbing layout, such as popovers, tooltips,
+    /// or drag-time guide drawing.
+    /// Child element coordinates are handled in this layer's local space (i.e. panel coordinates).
     /// </summary>
     public sealed class TweeqOverlayLayer : VisualElement
     {
         #region Constants
 
-        /// <summary>階層内でこの層を特定するための名前。</summary>
+        /// <summary>Name used to identify this layer within the hierarchy.</summary>
         public const string LAYER_NAME = "tweeq-overlay-layer";
 
         #endregion
@@ -22,7 +23,7 @@ namespace Tweeq.UIToolkit
         {
             this.name = LAYER_NAME;
 
-            // 全面を覆うがヒットは一切奪わない
+            // Covers the whole area but never steals hit-testing
             this.pickingMode = PickingMode.Ignore;
             this.style.position = Position.Absolute;
             this.style.left = 0f;
@@ -37,8 +38,10 @@ namespace Tweeq.UIToolkit
         #region Public API
 
         /// <summary>
-        /// context が属するパネルの最上位要素にぶら下がる層を取得する。無ければ作る。
-        /// パネル未接続（panel == null）なら null を返すので、呼び出し側で必ず判定すること。
+        /// Gets the layer hanging off the topmost element of the panel that context belongs to.
+        /// Creates one if it doesn't exist.
+        /// Returns null if not attached to a panel (panel == null), so the caller must always
+        /// check for that.
         /// </summary>
         public static TweeqOverlayLayer GetOrCreate(VisualElement context)
         {
@@ -61,7 +64,7 @@ namespace Tweeq.UIToolkit
                     continue;
                 }
 
-                // UI Toolkit は階層順に描くので、最後の子でないと後から追加された UI に隠れる
+                // UI Toolkit draws in hierarchy order, so unless this is the last child, it gets hidden behind UI added afterward
                 if (index != childCount - 1)
                 {
                     root.hierarchy.Remove(existing);

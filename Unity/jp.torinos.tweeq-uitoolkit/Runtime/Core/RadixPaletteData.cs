@@ -1,34 +1,35 @@
-// Radix Colors のカラーパレット（Display P3 系スケール）を OKLCH へ事前変換した静的データ。
+// Static data: the Radix Colors palette (Display P3 scales) pre-converted to OKLCH.
 //
-// 出典: https://github.com/radix-ui/colors  （src/light.ts / src/dark.ts の *P3 / *DarkP3 エクスポート）
-// ライセンス: MIT License, Copyright (c) 2022 WorkOS
+// Source: https://github.com/radix-ui/colors  (the *P3 / *DarkP3 exports from src/light.ts / src/dark.ts)
+// License: MIT License, Copyright (c) 2022 WorkOS
 //
-// 移植元 ref/tweeq/src/theme/radix.ts は @radix-ui/colors の `<name>P3` / `<name>DarkP3` を
-// colorjs.io で OKLCH に変換してから使う。実行時に P3→OKLCH を回す意味はないので、
-// ここでは変換結果を直接埋め込んでいる（生成手順は同じ変換行列＝TweeqOklch.P3ToOklch）。
-// 色相が NaN の項は純無彩色（gray スケール）で、原典の colorjs.io も NaN を返す。
+// The porting source ref/tweeq/src/theme/radix.ts takes the `<name>P3` / `<name>DarkP3` exports from
+// @radix-ui/colors and converts them to OKLCH with colorjs.io before use. There's no point running
+// P3->OKLCH conversion at runtime, so the converted results are embedded directly here (generated with
+// the same conversion matrix, i.e. TweeqOklch.P3ToOklch).
+// Entries with a NaN hue are pure achromatic colors (the gray scale), and the original's colorjs.io also returns NaN for them.
 
 namespace Tweeq.Core
 {
-    /// <summary>Radix Colors の 12 段スケールを OKLCH で保持する静的テーブル。</summary>
+    /// <summary>Static table holding the 12-step scales of Radix Colors in OKLCH.</summary>
     public static class RadixPaletteData
     {
         #region Constants
 
-        /// <summary>1 スケールの段数。</summary>
+        /// <summary>Number of steps per scale.</summary>
         public const int STEP_COUNT = 12;
 
-        /// <summary>スケール総数（グレー 6 + 有彩色 23）。</summary>
+        /// <summary>Total number of scales (6 gray + 23 chromatic).</summary>
         public const int SCALE_COUNT = 29;
 
         /// <summary>
-        /// 先頭から数えたグレー系スケールの数。<see cref="ScaleNames"/> はグレーが先に並ぶ順序に
-        /// 固定してある（原典の grayScaleNames + 有彩色の順。近傍探索のタイブレークがこの順序に
-        /// 依存するため入れ替えてはいけない）。
+        /// Number of gray-family scales, counted from the front. <see cref="ScaleNames"/> is fixed to an
+        /// order with the grays listed first (the original's grayScaleNames followed by the chromatic
+        /// colors' order; nearest-neighbor search tiebreaking depends on this order, so it must not be reordered).
         /// </summary>
         public const int GRAY_SCALE_COUNT = 6;
 
-        /// <summary>スケール名。インデックスがテーブルの並びと対応する。</summary>
+        /// <summary>Scale names. The index corresponds to the table's ordering.</summary>
         public static readonly string[] ScaleNames =
         {
             "gray",
@@ -66,7 +67,7 @@ namespace Tweeq.Core
 
         #region Tables
 
-        // ライトモード（*P3）
+        // Light mode (*P3)
         static readonly Oklch[] LIGHT =
         {
             // gray
@@ -448,7 +449,7 @@ namespace Tweeq.Core
             new Oklch(0.35190091378535004, 0.048521541907010406, 53.73707013130581),
         };
 
-        // ダークモード（*DarkP3）
+        // Dark mode (*DarkP3)
         static readonly Oklch[] DARK =
         {
             // gray
@@ -834,7 +835,7 @@ namespace Tweeq.Core
 
         #region Access
 
-        /// <summary>指定モード・スケール・段の色を返す。</summary>
+        /// <summary>Returns the color for the given mode, scale, and step.</summary>
         public static Oklch Get(bool dark, int scaleIndex, int step)
         {
             if (scaleIndex < 0 || scaleIndex >= SCALE_COUNT)
@@ -850,7 +851,7 @@ namespace Tweeq.Core
             return (dark ? DARK : LIGHT)[scaleIndex * STEP_COUNT + step];
         }
 
-        /// <summary>指定スケールが <see cref="GRAY_SCALE_COUNT"/> のグレー系かどうか。</summary>
+        /// <summary>Whether the given scale is one of the <see cref="GRAY_SCALE_COUNT"/> gray-family scales.</summary>
         public static bool IsGrayScale(int scaleIndex)
         {
             return scaleIndex >= 0 && scaleIndex < GRAY_SCALE_COUNT;

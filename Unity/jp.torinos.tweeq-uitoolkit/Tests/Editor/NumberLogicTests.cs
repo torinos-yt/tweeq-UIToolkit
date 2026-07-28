@@ -14,7 +14,7 @@ namespace Tweeq.Core.Tests
         {
             Assert.That(NumberLogic.PrecisionOfDisplay("1.2345"), Is.EqualTo(4));
             Assert.That(NumberLogic.PrecisionOfDisplay("100"), Is.EqualTo(0));
-            // 末尾ゼロも桁として数える（表示のままの桁数が欲しいので）
+            // Trailing zeroes are also counted as digits (because we want the digit count exactly as displayed)
             Assert.That(NumberLogic.PrecisionOfDisplay("1.200"), Is.EqualTo(3));
             Assert.That(NumberLogic.PrecisionOfDisplay("-0.5"), Is.EqualTo(1));
         }
@@ -53,7 +53,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void IdlePrecisionIsCappedByPrecisionLimit()
         {
-            // display=4 桁, slider=precisionOf(1/100)=2 → max=4 だが limit=2 で頭打ち
+            // display=4 digits, slider=precisionOf(1/100)=2 → max=4, but capped at limit=2
             Assert.That(
                 NumberLogic.GetDisplayPrecision(0.0, "1.2345", 0.0, 1.0, 100.0, true, false, 1.0, 2),
                 Is.EqualTo(2));
@@ -70,7 +70,7 @@ namespace Tweeq.Core.Tests
                 0.0, "1.2", 0.0, 1.0, 100.0, true, true, 0.001, 4);
 
             Assert.That(precision, Is.EqualTo(3));
-            // ドラッグ中は limit を超えてもよい（感度のフィードバックを優先）
+            // While dragging, exceeding limit is fine (sensitivity feedback takes priority)
             Assert.That(
                 NumberLogic.GetDisplayPrecision(0.0, "1.2", 0.0, 1.0, 100.0, true, true, 1e-6, 2),
                 Is.EqualTo(6));
@@ -117,7 +117,7 @@ namespace Tweeq.Core.Tests
         {
             Assert.That(NumberLogic.Format(-0.0, 4, false), Is.EqualTo("0"));
             Assert.That(NumberLogic.Format(-0.0, 0, false), Is.EqualTo("0"));
-            // 丸めで消える微小負値も "-0" にしない
+            // A tiny negative value that rounds away should also not become "-0"
             Assert.That(NumberLogic.Format(-0.0000001, 4, false), Is.EqualTo("0"));
             Assert.That(NumberLogic.Format(-0.0000001, 4, false), Does.Not.StartWith("-"));
         }
@@ -159,7 +159,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void BaseSpeedFallsBackWhenRangeIsUnusable()
         {
-            // width=0 や無限レンジではバーの式が発散するので step 側にフォールバックする
+            // With width=0 or an infinite range the bar formula diverges, so it falls back to the step side
             Assert.That(NumberLogic.BaseSpeed(true, 0.0, 100.0, 0.0, 0.2),
                 Is.EqualTo(0.01).Within(TOLERANCE));
             Assert.That(
@@ -192,10 +192,10 @@ namespace Tweeq.Core.Tests
         [Test]
         public void MinSpeedIsAlwaysFinite()
         {
-            // min==max なら stepCount=0 で pxPerStep が発散する。NaN を返してはいけない
+            // If min==max then stepCount=0 and pxPerStep diverges. Must not return NaN
             double degenerate = NumberLogic.MinSpeed(true, 5.0, 5.0, 200.0, 1.0, 4);
             Assert.That(degenerate, Is.EqualTo(1e-4).Within(TOLERANCE));
-            // 負の precisionLimit で 10^3 のような巨大な下限にならないこと
+            // A negative precisionLimit must not produce a huge lower bound like 10^3
             Assert.That(NumberLogic.MinSpeed(false, 0.0, 100.0, 200.0, 0.0, -3), Is.EqualTo(1.0));
         }
 
@@ -235,7 +235,7 @@ namespace Tweeq.Core.Tests
 
             Assert.That(fine, Is.EqualTo(0.25).Within(TOLERANCE));
             Assert.That(fast, Is.EqualTo(2.5).Within(TOLERANCE));
-            // Alt+Shift は倍率 0.1*10=1 → max(1, 1) なので素の step に戻る
+            // Alt+Shift gives a multiplier of 0.1*10=1 → max(1, 1), so it reverts to the plain step
             Assert.That(both, Is.EqualTo(0.25).Within(TOLERANCE));
         }
 
@@ -266,7 +266,7 @@ namespace Tweeq.Core.Tests
             Assert.That(
                 NumberLogic.ArrowIncrement(0.5, 1, 0.0, 10.0, false, true, 0.0, 1.0),
                 Is.EqualTo(0.51).Within(TOLERANCE));
-            // レンジが 1 より広ければ通常の 1 刻み
+            // If the range is wider than 1, the normal step of 1 applies
             Assert.That(
                 NumberLogic.ArrowIncrement(0.5, 1, 0.0, 10.0, false, false, 0.0, 2.0),
                 Is.EqualTo(1.5).Within(TOLERANCE));
@@ -317,7 +317,7 @@ namespace Tweeq.Core.Tests
             var gesture = new TweakGesture();
             double baseSpeed = NumberLogic.BaseSpeed(false, -100.0, 100.0, 100.0, 0.0);
 
-            // ゼロ長デルタで方向ベクトルを正規化すると 0/0 になりうる。ガードが効いているか
+            // Normalizing the direction vector with a zero-length delta can produce 0/0. Check that the guard holds
             for (int i = 0; i < 100; i++)
             {
                 GestureUpdate update = gesture.Update(

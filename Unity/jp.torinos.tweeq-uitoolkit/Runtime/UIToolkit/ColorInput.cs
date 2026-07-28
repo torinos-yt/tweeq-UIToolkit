@@ -3,37 +3,38 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 
-// Tweeq.Core を丸ごと using すると TweeqRect / TweeqVec2 が UnityEngine 側と紛らわしくなるので
-// （TweeqPopover と同じ理由）、このファイルで実際に使う 2 つだけ別名で引き込む
+// Using the whole Tweeq.Core namespace would make TweeqRect / TweeqVec2 ambiguous with the
+// UnityEngine equivalents (same reason as TweeqPopover), so this file only pulls in the
+// two types it actually uses, under aliases.
 using HSVA = Tweeq.Core.Hsva;
 using CoreRgba = Tweeq.Core.Rgba;
 using TweeqColorLogic = Tweeq.Core.TweeqColorLogic;
 
 namespace Tweeq.UIToolkit
 {
-    /// <summary>ピッカー内でドラッグ中の軸。</summary>
+    /// <summary>The axis currently being dragged inside the picker.</summary>
     public enum ColorPickerAxis
     {
-        /// <summary>ドラッグしていない。</summary>
+        /// <summary>Not dragging.</summary>
         None,
 
-        /// <summary>SV パッド（彩度と明度を同時に）。</summary>
+        /// <summary>SV pad (saturation and value together).</summary>
         SaturationValue,
 
-        /// <summary>Hue バー。</summary>
+        /// <summary>Hue bar.</summary>
         Hue,
 
-        /// <summary>Alpha バー。</summary>
+        /// <summary>Alpha bar.</summary>
         Alpha,
     }
 
     /// <summary>
-    /// スウォッチを直接ドラッグしたとき（チャンネルスクラブ）に動かす対象。
-    /// 修飾キーで切り替わる（m6-wave2-spec.md §A の tweakMode）。
+    /// What moves when the swatch itself is dragged directly (channel scrub).
+    /// Switched via modifier keys (tweakMode in m6-wave2-spec.md §A).
     /// </summary>
     public enum ColorTweakMode
     {
-        /// <summary>キー無し。横=彩度・縦=明度。</summary>
+        /// <summary>No key held. Horizontal = saturation, vertical = value.</summary>
         Pad,
 
         /// <summary>Shift / H / F。</summary>
@@ -42,7 +43,7 @@ namespace Tweeq.UIToolkit
         /// <summary>S。</summary>
         Saturation,
 
-        /// <summary>V。縦ドラッグのみ。</summary>
+        /// <summary>V. Vertical drag only.</summary>
         Value,
 
         /// <summary>R。</summary>
@@ -59,17 +60,18 @@ namespace Tweeq.UIToolkit
     }
 
     /// <summary>
-    /// カラー入力（string-color-spec.md「ColorInput」）。
-    /// フィールドは 24×24 のスウォッチ 1 個で、クリックすると <see cref="TweeqPopover"/> の上に
-    /// SV パッド／Hue バー／Alpha バー／数値行／プリセットを載せたピッカーが開く。
+    /// Color input (string-color-spec.md "ColorInput").
+    /// The field is a single 24x24 swatch; clicking it opens a picker on top of a
+    /// <see cref="TweeqPopover"/>, holding an SV pad / hue bar / alpha bar / numeric row / presets.
     ///
-    /// 値は <see cref="UnityEngine.Color"/>（意図的逸脱: Vue の契約は CSS 文字列）。
-    /// HSVA は「黒・彩度 0 で hue が失われる」のを避けるためピッカー操作の間だけ内部状態として持ち、
-    /// 出力は常に Color へ畳む。
+    /// The value type is <see cref="UnityEngine.Color"/> (an intentional deviation: the Vue contract
+    /// is a CSS string). HSVA is kept as internal state only while the picker is being operated, to
+    /// avoid losing hue at black / zero saturation; the output is always folded back down to Color.
     ///
-    /// 開閉・ドラッグセッション・プリセット・HEX 同期は panel 非依存の論理層として実装してあり
-    /// （<see cref="OpenPicker"/> / <see cref="BeginPickerDrag"/> / <see cref="PerformPresetClick"/> …）、
-    /// 表示だけがその上に乗る。EditMode テストはこの層を叩く（DropdownInput と同じ設計）。
+    /// Open/close, drag sessions, presets, and HEX sync are implemented as a panel-independent
+    /// logic layer (<see cref="OpenPicker"/> / <see cref="BeginPickerDrag"/> /
+    /// <see cref="PerformPresetClick"/> ...), with presentation sitting on top of it. EditMode tests
+    /// exercise this layer directly (same design as DropdownInput).
     /// </summary>
     [UxmlElement]
     public partial class ColorInput
@@ -77,32 +79,33 @@ namespace Tweeq.UIToolkit
     {
         #region Constants
 
-        /// <summary>colorSpace ドロップダウンの選択肢。Vue InputColorChannelValues と同じ順・同じ綴り。</summary>
+        /// <summary>colorSpace dropdown options. Same order and spelling as Vue's InputColorChannelValues.</summary>
         public const string COLOR_SPACE_RGB = "rgb";
 
-        /// <summary>colorSpace: HSV。</summary>
+        /// <summary>colorSpace: HSV.</summary>
         public const string COLOR_SPACE_HSV = "hsv";
 
-        /// <summary>colorSpace: HEX。</summary>
+        /// <summary>colorSpace: HEX.</summary>
         public const string COLOR_SPACE_HEX = "hex";
 
-        // チェッカーボードの 1 マス（Vue common.styl の background-checkerboard() は size = 6px）
+        // One checkerboard cell (Vue common.styl's background-checkerboard() uses size = 6px).
         const float CHECKER_CELL = 6f;
 
-        // SV グラデーションのテクスチャ解像度。バイリニア拡大前提なので 64 で十分
-        // （240px 幅へ引き伸ばしても HSV は線形に近く、バンドは見えない）
+        // SV gradient texture resolution. Assumes bilinear upscaling, so 64 is plenty
+        // (even stretched to a 240px width, HSV is close enough to linear that no banding shows).
         const int SV_TEXTURE_SIZE = 64;
 
-        // 虹テクスチャは横 1 列。全インスタンスで 1 枚を共有する
+        // The rainbow texture is a single row. One texture is shared across all instances.
         const int HUE_TEXTURE_WIDTH = 256;
 
-        // Hue / Alpha バーの高さ。Vue の 0.7 * inputHeight = 16.8 を整数化した値（仕様 §ColorInput）
+        // Height of the hue / alpha bars. Vue's 0.7 * inputHeight = 16.8, rounded to an integer
+        // (spec §ColorInput).
         const float SLIDER_HEIGHT = 17f;
 
-        // 数値行の colorSpace ドロップダウン幅。Vue は 5rem だが、
-        // 幅 240 のパネルでは 4 チャンネルが潰れるので「RGB」が収まる最小に詰める
-        // DropdownInput はシェブロン幅（16.8px）を左右対称に逃がすため、
-        // 3 文字ラベル（RGB/HSV/HEX）には 56px では足りず省略記号になる
+        // Width of the colorSpace dropdown in the numeric row. Vue uses 5rem, but on a 240-wide
+        // panel that would crush the 4 channels, so this is trimmed to the minimum that still
+        // fits "RGB". DropdownInput reserves chevron width (16.8px) symmetrically on both sides,
+        // so 56px isn't enough for a 3-character label (RGB/HSV/HEX) and it gets ellipsized.
         const float COLOR_SPACE_WIDTH = 72f;
 
         const float CURSOR_RADIUS = 6f;
@@ -111,32 +114,35 @@ namespace Tweeq.UIToolkit
 
         const float FIELD_OUTLINE_WIDTH = 1f;
 
-        // 1 行に並ぶプリセット数。24 + gap6 = 30px × 7 = 210 で 222px の中身幅に収まる
+        // Number of presets per row. 24 + gap6 = 30px * 7 = 210, which fits inside the 222px
+        // content width.
         const int PRESETS_PER_ROW = 7;
 
-        // 数値行のチャンネル数（RGB/HSV + A）
+        // Number of channels in the numeric row (RGB/HSV + A).
         const int CHANNEL_COUNT = 4;
 
-        // 素の値がこの範囲を出たら畳む。HSVA の s/v/a は [0,1]、h は [0,360)
+        // Raw values outside this range get wrapped. HSVA's s/v/a are [0,1], h is [0,360).
         const double HUE_RANGE = 360.0;
 
-        // スウォッチのクリックとチャンネルスクラブを分ける閾値（RotaryInput と同値）
+        // Threshold that separates a swatch click from a channel scrub (same value as RotaryInput).
         const float MOUSE_DRAG_THRESHOLD = 3f;
         const float TOUCH_DRAG_THRESHOLD = 5f;
 
-        // スクラブの感度基準。Theme.PopupWidth が壊れている時のフォールバック（仕様 §A の 240）
+        // Sensitivity baseline for scrubbing. Fallback for when Theme.PopupWidth is broken
+        // (the 240 from spec §A).
         const float TWEAK_WIDTH_FALLBACK = 240f;
 
         #endregion
 
         #region Fields
 
-        /// <summary>colorSpace の選択肢（RGB / HSV / HEX）。</summary>
+        /// <summary>colorSpace options (RGB / HSV / HEX).</summary>
         static readonly string[] ColorSpaceOptions = { COLOR_SPACE_RGB, COLOR_SPACE_HSV, COLOR_SPACE_HEX };
 
         /// <summary>
-        /// 既定のプリセットパレット。Vue 版はアプリ側からの inject 前提で空だが、
-        /// 単体で置いても使えるよう「無彩色 5 + 色相 9」を用意した（<see cref="Presets"/> で差し替え可）。
+        /// Default preset palette. The Vue version ships empty on the assumption that the app
+        /// injects its own, but so this also works standalone, a "5 neutrals + 9 hues" set is
+        /// provided here (swappable via <see cref="Presets"/>).
         /// </summary>
         static readonly Color[] DefaultPresetPalette =
         {
@@ -156,22 +162,23 @@ namespace Tweeq.UIToolkit
             new Color32(0xFF, 0x00, 0xFF, 0xFF),
         };
 
-        // チェッカーボードの 2 色。Vue は white / #ddd 固定（テーマに追従しない）
+        // The two checkerboard colors. Vue hardcodes white / #ddd (does not follow the theme).
         static readonly Color CheckerLight = new Color32(0xFF, 0xFF, 0xFF, 0xFF);
         static readonly Color CheckerDark = new Color32(0xDD, 0xDD, 0xDD, 0xFF);
 
-        // カーソルの輪郭。Vue の box-shadow 0 0 0 1.5px #fff / inset 0 0 0 1px rgba(0,0,0,.2)
+        // Cursor outline. Vue's box-shadow 0 0 0 1.5px #fff / inset 0 0 0 1px rgba(0,0,0,.2).
         static readonly Color CursorRing = new Color(1f, 1f, 1f, 1f);
         static readonly Color CursorShade = new Color(0f, 0f, 0f, 0.2f);
 
-        // 虹テクスチャは色相以外に依存しないので 1 枚を使い回す
+        // The rainbow texture depends on nothing but hue, so one instance is reused everywhere.
         static Texture2D SharedHueTexture;
 
         TweeqTheme _theme = TweeqTheme.Dark();
 
         Color _value = Color.white;
 
-        // ピッカー操作の間の権威。black / 彩度 0 でも hue を失わないために Color とは別に持つ
+        // The source of truth while operating the picker. Kept separate from Color so hue isn't
+        // lost at black / zero saturation.
         HSVA _hsva;
 
         Color[] _presets = DefaultPresetPalette;
@@ -185,18 +192,20 @@ namespace Tweeq.UIToolkit
         TweeqBoxPosition _inlinePosition = TweeqBoxPosition.None;
         TweeqBoxPosition _blockPosition = TweeqBoxPosition.None;
 
-        // HEX 文字列は「実際に値が変わっていて、かつ HEX 行が見えている」ときだけ作る。
-        // SV ドラッグ中に RGB/HSV 行が出ていれば 1 文字も確保しない
+        // The HEX string is only built when the value has actually changed AND the HEX row is
+        // visible. If the RGB/HSV row is showing during an SV drag, not a single character is
+        // allocated.
         string _hexText = string.Empty;
         bool _hexDirty = true;
 
-        // HEX 欄への打鍵から値を更新している最中は、正規形の書き戻しを止める（キャレットが飛ぶため）
+        // While a value update is coming from keystrokes typed into the HEX field, writing the
+        // normalized form back is suppressed (it would make the caret jump).
         bool _syncingHex;
 
-        // フィールド
+        // The field
         VisualElement _swatch;
 
-        // ピッカー（panel 付きで初めて組む。開くたびには作らない）
+        // The picker (only built once a panel is attached; not rebuilt on every open).
         TweeqPopover _popover;
         VisualElement _picker;
         VisualElement _svPad;
@@ -214,7 +223,7 @@ namespace Tweeq.UIToolkit
         VisualElement _presetsRow;
         readonly List<VisualElement> _presetButtons = new List<VisualElement>();
 
-        // SV グラデーション。hue が変わった時だけ焼き直し、バッファは使い回す
+        // SV gradient. Only re-baked when hue changes; the buffer is reused.
         Texture2D _svTexture;
         Color32[] _svPixels;
         double _svTextureHue = double.NaN;
@@ -222,26 +231,30 @@ namespace Tweeq.UIToolkit
         ColorPickerAxis _dragAxis = ColorPickerAxis.None;
         int _dragPointerId = PointerId.invalidPointerId;
 
-        // ドラッグ開始時の値。Escape でのキャンセル先
+        // Value at the start of the drag. Where Escape rolls back to.
         Color _valueOnDragStart;
 
-        // light dismiss はスウォッチ押下でも走る（popover は panel root の TrickleDown で拾うので
-        // こちらの PointerDown より先に閉じてしまう）。同一フレームの再オープンだけ抑止してトグルにする
+        // Light dismiss also fires on a swatch press (the popover picks it up via TrickleDown on
+        // the panel root, so it closes before our own PointerDown runs). Only same-frame reopens
+        // are suppressed, turning the interaction into a toggle.
         bool _suppressReopen;
         IVisualElementScheduledItem _reopenGuardItem;
 
-        // スウォッチの押下。閾値を超えるまではクリック（＝ピッカーのトグル）候補のまま保留する
+        // Swatch press. Until the threshold is exceeded, this stays a pending click candidate
+        // (i.e. a picker toggle).
         bool _swatchPressed;
         int _swatchPointerId = PointerId.invalidPointerId;
         Vector2 _pressPanelPosition;
         float _scrubThreshold = MOUSE_DRAG_THRESHOLD;
 
-        // 押した瞬間の開閉。light dismiss は PointerDown より先に走るので、
-        // トグルの判定材料は PointerUp まで持ち越さず押下時に確定させる
+        // Open/close state at the moment of the press. Light dismiss runs before PointerDown, so
+        // the material for deciding the toggle is locked in at press time rather than carried
+        // over to PointerUp.
         bool _openOnPress;
 
-        // チャンネルスクラブ。値は「基準 HSVA ＋ 基準位置からの移動量」で決める。
-        // 累積 delta を積まないので、モード切替で基準を取り直すだけで値が飛ばない（仕様 §A）
+        // Channel scrub. The value is decided by "base HSVA + displacement from the base
+        // position." No delta is accumulated, so re-anchoring the base on a mode switch is
+        // enough to avoid the value jumping (spec §A).
         bool _scrubbing;
         ColorTweakMode _scrubMode = ColorTweakMode.Pad;
         Vector2 _scrubOrigin;
@@ -252,7 +265,8 @@ namespace Tweeq.UIToolkit
         bool _cursorHidden;
         ColorTweakOverlay _scrubOverlay;
 
-        // tweakMode の材料。修飾キーはイベントの modifiers、英字キーは押下状態を自前で追う
+        // Inputs used to derive tweakMode. Modifier keys come from the event's modifiers; letter
+        // keys have their held state tracked manually.
         bool _shiftHeld;
         bool _altHeld;
         bool _hueKeyHeld;
@@ -264,7 +278,8 @@ namespace Tweeq.UIToolkit
         bool _blueKeyHeld;
         bool _alphaKeyHeld;
 
-        // メソッドグループ変換のたびにデリゲートを確保しないよう、登録／解除で使い回す実体を持つ
+        // Kept as reusable instances for registration/deregistration, so a method-group
+        // conversion doesn't allocate a new delegate every time.
         readonly EventCallback<PointerDownEvent> _onSvPointerDown;
         readonly EventCallback<PointerMoveEvent> _onSvPointerMove;
         readonly EventCallback<PointerUpEvent> _onSvPointerUp;
@@ -273,15 +288,16 @@ namespace Tweeq.UIToolkit
 
         #region Public API
 
-        /// <summary>値が変わるたびに発火する。ドラッグ中は pointermove ごとに飛ぶ。</summary>
+        /// <summary>Fires every time the value changes. During a drag, fires on every pointermove.</summary>
         public event Action<Color> ValueChanged;
 
         /// <summary>
-        /// ドラッグ終了・プリセットクリック・ピッカー内フィールドの確定で 1 操作につき 1 回発火する。
+        /// Fires once per operation: on drag end, preset click, or confirmation of a field inside
+        /// the picker.
         /// </summary>
         public event Action<Color> Confirmed;
 
-        /// <summary>現在の色。α も値の一部なので、UXML では #RRGGBBAA で与える。</summary>
+        /// <summary>The current color. Alpha is part of the value too, so supply it as #RRGGBBAA in UXML.</summary>
         [UxmlAttribute]
         public Color value
         {
@@ -300,7 +316,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>ChangeEvent / ValueChanged を発火せずに値を設定する。HSVA も引き直す。</summary>
+        /// <summary>Sets the value without firing ChangeEvent / ValueChanged. Also re-derives HSVA.</summary>
         public void SetValueWithoutNotify(Color newValue)
         {
             _value = newValue;
@@ -309,7 +325,7 @@ namespace Tweeq.UIToolkit
             Refresh();
         }
 
-        /// <summary>配色テーマ。null を渡した場合は Dark() にフォールバックする。</summary>
+        /// <summary>Color theme. Falls back to Dark() if null is passed.</summary>
         public TweeqTheme Theme
         {
             get => _theme;
@@ -321,7 +337,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>操作不能状態。開いていればピッカーも閉じる。</summary>
+        /// <summary>Whether the control is disabled. Closes the picker too if it's open.</summary>
         [UxmlAttribute]
         public bool Disabled
         {
@@ -337,7 +353,7 @@ namespace Tweeq.UIToolkit
 
                 if (_disabled)
                 {
-                    // 無効化の瞬間に開いたままだと閉じる手段が無くなる
+                    // If the picker were left open at the moment of disabling, there'd be no way to close it.
                     CancelPickerDrag();
                     CancelChannelScrub();
                     ClosePicker();
@@ -354,7 +370,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>横方向グループでの位置。</summary>
+        /// <summary>Position within a horizontal group.</summary>
         public TweeqBoxPosition InlinePosition
         {
             get => _inlinePosition;
@@ -370,7 +386,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>縦方向グループでの位置。</summary>
+        /// <summary>Position within a vertical group.</summary>
         public TweeqBoxPosition BlockPosition
         {
             get => _blockPosition;
@@ -386,7 +402,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>既定のプリセットパレットのコピー。<see cref="Presets"/> の初期値。</summary>
+        /// <summary>A copy of the default preset palette. The initial value of <see cref="Presets"/>.</summary>
         public static Color[] DefaultPresets
         {
             get
@@ -398,8 +414,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// プリセットパレット。設定・取得ともにコピーを通す（呼び出し側の配列と内部状態を切り離す）。
-        /// null / 空を渡すとプリセット行は消える。
+        /// The preset palette. Both get and set go through a copy (to decouple the caller's array
+        /// from internal state). Passing null / empty removes the presets row.
         /// </summary>
         public Color[] Presets
         {
@@ -427,7 +443,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>数値行の表示形式（<see cref="COLOR_SPACE_RGB"/> / HSV / HEX）。</summary>
+        /// <summary>Display format of the numeric row (<see cref="COLOR_SPACE_RGB"/> / HSV / HEX).</summary>
         [UxmlAttribute]
         public string ColorSpace
         {
@@ -452,18 +468,19 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>ピッカーが開いているか（論理状態。panel が無くても進む）。</summary>
+        /// <summary>Whether the picker is open (logical state; works even without a panel).</summary>
         public bool IsPickerOpen => _open;
 
-        /// <summary>ドラッグ中の軸。</summary>
+        /// <summary>The axis currently being dragged.</summary>
         public ColorPickerAxis ActiveAxis => _dragAxis;
 
-        /// <summary>現在の HSVA（h は度、s/v/a は [0,1]）。</summary>
+        /// <summary>The current HSVA (h in degrees, s/v/a in [0,1]).</summary>
         public HSVA Hsva => _hsva;
 
         /// <summary>
-        /// HEX 表記。α=1 なら 6 桁、α&lt;1 なら 8 桁（<see cref="TweeqColorLogic.FormatHex"/> の契約）。
-        /// 実際に読まれた時にだけ組み立てるので、ドラッグ中に HEX 行が出ていなければ文字列は作られない。
+        /// The HEX notation. 6 digits when alpha=1, 8 digits when alpha&lt;1 (the contract of
+        /// <see cref="TweeqColorLogic.FormatHex"/>). Only built when actually read, so no string
+        /// is created if the HEX row isn't showing during a drag.
         /// </summary>
         public string HexText
         {
@@ -474,7 +491,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>ピッカーを開く。無効化中は何もしない。</summary>
+        /// <summary>Opens the picker. Does nothing while disabled.</summary>
         public void OpenPicker()
         {
             if (_open || _disabled)
@@ -487,7 +504,7 @@ namespace Tweeq.UIToolkit
             Refresh();
         }
 
-        /// <summary>ピッカーを閉じる。色は巻き戻さない（開いている間の変更は逐次通知済み）。</summary>
+        /// <summary>Closes the picker. The color is not rolled back (changes while open have already been notified incrementally).</summary>
         public void ClosePicker()
         {
             if (!_open)
@@ -500,7 +517,7 @@ namespace Tweeq.UIToolkit
             Refresh();
         }
 
-        /// <summary>開いていれば閉じ、閉じていれば開く。</summary>
+        /// <summary>Closes it if open, opens it if closed.</summary>
         public void TogglePicker()
         {
             if (_open)
@@ -514,8 +531,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// HSVA を直接設定する。<see cref="ValueChanged"/> は飛ぶが <see cref="Confirmed"/> は飛ばない。
-        /// h は度（範囲外は 0-360 へ畳む）、s/v/a は [0,1] にクランプされる。
+        /// Sets HSVA directly. <see cref="ValueChanged"/> fires, but <see cref="Confirmed"/> does not.
+        /// h is in degrees (out-of-range values wrap into 0-360); s/v/a are clamped to [0,1].
         /// </summary>
         public void SetHsva(double h, double s, double v, double a)
         {
@@ -523,7 +540,7 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// ドラッグセッションを開始する。すでに別軸を掴んでいたら、そちらは確定させずに切り替える。
+        /// Begins a drag session. If a different axis was already being held, it switches without confirming that one.
         /// </summary>
         public void BeginPickerDrag(ColorPickerAxis axis)
         {
@@ -538,8 +555,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// ドラッグ中の位置を反映する。x / y は対象要素内の正規化座標（0-1、y は上が 0）。
-        /// pointermove ごとに呼ぶ想定で、毎回 <see cref="ValueChanged"/> が飛ぶ（間引きなし・Vue 準拠）。
+        /// Reflects the position while dragging. x / y are normalized coordinates within the target element (0-1, y is 0 at the top).
+        /// Meant to be called on every pointermove, so <see cref="ValueChanged"/> fires every time (no throttling, matching Vue).
         /// </summary>
         public void UpdatePickerDrag(float normalizedX, float normalizedY)
         {
@@ -554,7 +571,7 @@ namespace Tweeq.UIToolkit
             switch (_dragAxis)
             {
                 case ColorPickerAxis.SaturationValue:
-                    // 縦は上が v=1。Vue の pad と同じ向き
+                    // Vertically, the top is v=1. Same orientation as Vue's pad.
                     ApplyHsva(new HSVA(_hsva.H, x, 1.0 - y, _hsva.A));
                     break;
 
@@ -568,7 +585,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>ドラッグを終了して <see cref="Confirmed"/> を 1 回だけ発火する。</summary>
+        /// <summary>Ends the drag and fires <see cref="Confirmed"/> exactly once.</summary>
         public void EndPickerDrag()
         {
             if (_dragAxis == ColorPickerAxis.None)
@@ -581,7 +598,7 @@ namespace Tweeq.UIToolkit
             Confirmed?.Invoke(_value);
         }
 
-        /// <summary>ドラッグ開始時の値へ戻して終了する。<see cref="Confirmed"/> は発火しない。</summary>
+        /// <summary>Ends the drag by reverting to the value at drag start. <see cref="Confirmed"/> does not fire.</summary>
         public void CancelPickerDrag()
         {
             if (_dragAxis == ColorPickerAxis.None)
@@ -591,24 +608,24 @@ namespace Tweeq.UIToolkit
 
             _dragAxis = ColorPickerAxis.None;
 
-            // ドラッグ中に通知した値を巻き戻すので、戻す方向も通知する
+            // The value notified during the drag is being rolled back, so notify the reverted direction too.
             this.value = _valueOnDragStart;
             Refresh();
         }
 
-        /// <summary>チャンネルスクラブ中か。</summary>
+        /// <summary>Whether a channel scrub is in progress.</summary>
         public bool IsScrubbing => _scrubbing;
 
-        /// <summary>現在の tweakMode。スクラブ外でも次に掴んだときの初期モードとして残る。</summary>
+        /// <summary>The current tweakMode. Persists as the initial mode for the next grab even outside of scrubbing.</summary>
         public ColorTweakMode ScrubMode => _scrubMode;
 
-        /// <summary>クリックとスクラブを分ける移動量（px・マウス）。</summary>
+        /// <summary>The movement (px, mouse) that separates a click from a scrub.</summary>
         public static float ScrubThreshold => MOUSE_DRAG_THRESHOLD;
 
         /// <summary>
-        /// チャンネルスクラブを開始する。<paramref name="panelPosition"/> はオーバーレイの
-        /// 原点であると同時に移動量の基準点になる（パネル座標）。
-        /// ピッカーが開いていれば閉じる（Vue: tweaking になったら open=false）。
+        /// Begins a channel scrub. <paramref name="panelPosition"/> is both the overlay's origin
+        /// and the reference point for movement (in panel coordinates).
+        /// Closes the picker if it's open (Vue: open=false once tweaking begins).
         /// </summary>
         public void BeginChannelScrub(Vector2 panelPosition)
         {
@@ -631,8 +648,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// スクラブ中のポインタ位置（パネル座標）を反映する。基準点からの移動量を
-        /// そのまま値へ写すので、毎ムーブ <see cref="ValueChanged"/> が飛ぶ（間引きなし）。
+        /// Reflects the pointer position (panel coordinates) during a scrub. The movement from the reference
+        /// point maps directly to the value, so <see cref="ValueChanged"/> fires on every move (no throttling).
         /// </summary>
         public void UpdateChannelScrub(Vector2 panelPosition)
         {
@@ -646,8 +663,9 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// tweakMode を切り替える。スクラブ中なら現在値と現在位置を新しい基準として
-        /// 取り直すので、切替の瞬間に値が飛ばない（egui は累積 delta のまま切り替えてジャンプする）。
+        /// Switches tweakMode. While scrubbing, the current value and position are recaptured as the new
+        /// reference, so the value doesn't jump at the moment of switching (another reference implementation
+        /// keeps the accumulated delta across the switch, which causes a jump).
         /// </summary>
         public void SetScrubMode(ColorTweakMode mode)
         {
@@ -668,7 +686,7 @@ namespace Tweeq.UIToolkit
             Refresh();
         }
 
-        /// <summary>スクラブを終了して <see cref="Confirmed"/> を 1 回だけ発火する。</summary>
+        /// <summary>Ends the scrub and fires <see cref="Confirmed"/> exactly once.</summary>
         public void EndChannelScrub()
         {
             if (!_scrubbing)
@@ -682,7 +700,7 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// スクラブ開始時の色へ戻して終了する（Escape）。<see cref="Confirmed"/> は発火しない。
+        /// Ends the scrub by reverting to the color at scrub start (Escape). <see cref="Confirmed"/> does not fire.
         /// </summary>
         public void CancelChannelScrub()
         {
@@ -694,14 +712,15 @@ namespace Tweeq.UIToolkit
             Color restored = _valueOnScrubStart;
             StopScrub();
 
-            // スクラブ中に通知した値を巻き戻すので、戻す方向も通知する
+            // The value notified during the scrub is being rolled back, so notify the reverted direction too.
             this.value = restored;
             Refresh();
         }
 
         /// <summary>
-        /// プリセットのクリック。<see cref="ValueChanged"/> と <see cref="Confirmed"/> を対で出す
-        /// （原典は confirm が飛ばないバグ。React 修正版 + test-contracts inputColor.ts の契約を採用）。
+        /// A preset click. Fires <see cref="ValueChanged"/> and <see cref="Confirmed"/> as a pair
+        /// (the original has a bug where confirm never fires; this instead follows the contract used by
+        /// a fixed-up reference implementation together with test-contracts inputColor.ts).
         /// </summary>
         public void PerformPresetClick(int index)
         {
@@ -715,8 +734,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// HEX 欄への入力（バリデータ通過ごと）。パースできた時だけ値へ反映する。
-        /// <see cref="Confirmed"/> は飛ばない（確定は <see cref="PerformHexConfirm"/>）。
+        /// HEX field input (fired on every validator pass). Only reflects into the value when it can be parsed.
+        /// <see cref="Confirmed"/> does not fire (confirmation happens in <see cref="PerformHexConfirm"/>).
         /// </summary>
         public void PerformHexInput(string text)
         {
@@ -725,8 +744,8 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 打った文字そのものを正規形へ書き戻すと編集中にキャレットが飛ぶので、
-            // 値の反映が誘発する再同期を止めておく。表示を揃えるのは確定時（PerformHexConfirm）
+            // Writing back the canonical form over what was actually typed would make the caret jump mid-edit,
+            // so re-sync triggered by reflecting the value is suppressed here. Display is aligned at confirm time (PerformHexConfirm).
             _syncingHex = true;
 
             try
@@ -742,7 +761,7 @@ namespace Tweeq.UIToolkit
             _hexDirty = false;
         }
 
-        /// <summary>HEX 欄の確定（blur / Enter）。表示を正規形へ揃えて <see cref="Confirmed"/> を出す。</summary>
+        /// <summary>Confirms the HEX field (blur / Enter). Aligns the display to canonical form and fires <see cref="Confirmed"/>.</summary>
         public void PerformHexConfirm()
         {
             if (_disabled)
@@ -755,7 +774,7 @@ namespace Tweeq.UIToolkit
             Confirmed?.Invoke(_value);
         }
 
-        /// <summary>HEX 文字列として妥当か（StringInput の Validator にそのまま渡せる）。</summary>
+        /// <summary>Whether this is valid as a HEX string (can be passed directly as StringInput's Validator).</summary>
         public static bool IsValidHex(string text)
         {
             return TryParseHex(text, out _);
@@ -769,7 +788,7 @@ namespace Tweeq.UIToolkit
         {
             this.AddToClassList("tweeq-color-input");
 
-            // Enter / Space / Escape を受け取るためルート自身がフォーカスを持つ
+            // The root itself holds focus in order to receive Enter / Space / Escape.
             this.focusable = true;
             this.style.flexDirection = FlexDirection.Row;
             this.style.alignItems = Align.Center;
@@ -828,7 +847,7 @@ namespace Tweeq.UIToolkit
             ApplyPickerStyles();
         }
 
-        // 仕様 §1 の角丸表。角丸が乗るのはスウォッチ側（ルートは行に伸びるだけの箱）
+        // Corner-radius table from spec §1. The corner radius applies to the swatch side (the root is just a box that stretches along the row).
         void ApplyCornerRadius()
         {
             if (_swatch == null)
@@ -890,8 +909,8 @@ namespace Tweeq.UIToolkit
 
         #region Picker construction
 
-        // ピッカーの実体は panel が付いてから 1 回だけ組む。論理状態（開閉・ドラッグ・プリセット）は
-        // この下に無くても進むので、EditMode テストはここを通らない
+        // The picker's actual elements are built exactly once after the panel is attached. Logical state
+        // (open/close, drag, presets) can proceed without this, so EditMode tests don't go through here.
         void EnsurePickerElements()
         {
             if (_picker != null || _theme == null)
@@ -938,9 +957,9 @@ namespace Tweeq.UIToolkit
             _alphaBar.RegisterCallback<PointerCaptureOutEvent>(OnPickerPointerCaptureOut);
             _picker.Add(_alphaBar);
 
-            // チェッカー・グラデーション・カーソルを別要素に分けるのは、重なり順を
-            // ヒエラルキーで保証するため（同一要素内の Painter2D と Allocate の順は保証されない）。
-            // 併せて「色が変わってもチェッカーは描き直さない」も同時に成立する
+            // The checker, gradient, and cursor are split into separate elements so the hierarchy guarantees
+            // draw order (the order between Painter2D and Allocate within a single element isn't guaranteed).
+            // This also makes "the checker isn't redrawn when the color changes" hold at the same time.
             _alphaChecker = CreateOverlay("tweeq-color-alpha-checker");
             _alphaChecker.generateVisualContent += OnGenerateAlphaChecker;
             _alphaBar.Add(_alphaChecker);
@@ -953,8 +972,8 @@ namespace Tweeq.UIToolkit
             _alphaCursor.generateVisualContent += OnGenerateAlphaCursor;
             _alphaBar.Add(_alphaCursor);
 
-            // InputGroup 既定の flexGrow 1 は「行の中で横に伸びる」ための指定。
-            // 縦積みのピッカーでは高さまで伸びてしまうので落とす
+            // InputGroup's default flexGrow 1 is meant for "stretching horizontally within a row."
+            // In a vertically-stacked picker this would also stretch the height, so it's dropped here.
             _valuesRow = new InputGroup { Theme = _theme };
             _valuesRow.style.flexGrow = 0f;
             _valuesRow.style.flexShrink = 0f;
@@ -968,7 +987,7 @@ namespace Tweeq.UIToolkit
             _spaceDropdown.SetValueWithoutNotify(_colorSpace);
             _spaceDropdown.ValueChanged += OnColorSpaceChanged;
 
-            // InputGroup.ApplyStretch は「未指定なら flexGrow 1」なので、先に明示して固定幅にする
+            // InputGroup.ApplyStretch defaults to "flexGrow 1 if unspecified," so set it explicitly here first to keep a fixed width.
             _spaceDropdown.style.flexGrow = 0f;
             _spaceDropdown.style.flexShrink = 0f;
             _spaceDropdown.style.flexBasis = COLOR_SPACE_WIDTH;
@@ -1013,8 +1032,8 @@ namespace Tweeq.UIToolkit
             ApplyPickerStyles();
         }
 
-        // background-size の既定は auto（＝ネイティブ解像度）なので、
-        // 64×64 / 256×1 の小さなテクスチャは明示的に引き伸ばさないと中央に点で出る
+        // background-size defaults to auto (i.e. native resolution), so small 64x64 / 256x1
+        // textures show up as a dot in the center unless explicitly stretched.
         static void StretchBackground(VisualElement element)
         {
             element.style.backgroundSize =
@@ -1046,8 +1065,8 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // PopupWidth は外形。Chrome=true の popover は PopupPadding を自分で描くので、
-            // 中身にはその内側の幅を渡す
+            // PopupWidth is the outer size. A popover with Chrome=true draws its own PopupPadding,
+            // so the content is given the width inside that padding.
             float contentWidth = Mathf.Max(0f, _theme.PopupWidth - _theme.PopupPadding * 2f);
             _picker.style.width = contentWidth;
 
@@ -1085,16 +1104,16 @@ namespace Tweeq.UIToolkit
             {
                 _hexField.Theme = _theme;
 
-                // HEX は桁が揺れると読みにくいので等幅（FontCode）。unityFontDefinition は
-                // 継承プロパティなので、StringInput のルートへ掛けるだけで中の TextField まで届く
+                // HEX uses a monospace font (FontCode) since jittering digit widths hurt readability.
+                // unityFontDefinition is an inherited property, so applying it to StringInput's root reaches the inner TextField too.
                 TweeqFonts.Apply(_hexField, _theme.FontCode);
             }
 
             ApplyPresetStyles();
         }
 
-        // colorSpace ごとに数値行の中身を入れ替える。切替は人の操作なので、
-        // ここでの要素追加はドラッグ経路には乗らない
+        // Swaps the contents of the value row per colorSpace. Switching is a human action, so element
+        // additions here are never on the drag path.
         void RebuildValuesRow()
         {
             if (_valuesRow == null)
@@ -1102,9 +1121,9 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 先頭の colorSpace ドロップダウンは据え置き、後ろのフィールドだけ入れ替える。
-            // Clear するとドロップダウン自身が detach され、選択中のポップアップが閉じてしまう
-            // （切替はドロップダウンの ValueChanged 経由＝まだ開いている最中に呼ばれる）
+            // The leading colorSpace dropdown stays put; only the trailing fields are swapped.
+            // Calling Clear would detach the dropdown itself and close its currently-open popup
+            // (the switch is triggered via the dropdown's ValueChanged, i.e. while it's still open).
             for (int i = _valuesRow.childCount - 1; i >= 1; i--)
             {
                 _valuesRow.Remove(_valuesRow.ElementAt(i));
@@ -1191,7 +1210,7 @@ namespace Tweeq.UIToolkit
                 button.style.overflow = Overflow.Hidden;
                 button.generateVisualContent += OnGeneratePreset;
 
-                // 行ごとにコールバックを持たず、押された要素の index を親側で引く（RadioInput と同じ手）
+                // Rather than a per-row callback, the pressed element's index is looked up on the parent side (same approach as RadioInput).
                 button.RegisterCallback<PointerDownEvent>(OnPresetPointerDown);
                 _presetsRow.Add(button);
                 _presetButtons.Add(button);
@@ -1219,8 +1238,8 @@ namespace Tweeq.UIToolkit
                 button.style.height = size;
                 button.style.flexShrink = 0f;
 
-                // gap が無いのでマージンで代替する。行末・最終行のマージンは落として、
-                // ポップアップの padding に余分な余白を足さない
+                // There's no gap property, so margins substitute for it. Margins on the row-end/last row are dropped
+                // to avoid adding extra whitespace on top of the popup's padding.
                 button.style.marginRight = (i + 1) % PRESETS_PER_ROW == 0 ? 0f : gap;
                 button.style.marginBottom = i / PRESETS_PER_ROW == lastRow ? 0f : gap;
                 SetCornerRadius(button, _theme.InputRadius, true, true, true, true);
@@ -1241,7 +1260,7 @@ namespace Tweeq.UIToolkit
         {
             if (this.panel == null || _theme == null)
             {
-                // panel 未接続では置き場所が無い。論理状態だけ進めて例外は出さない
+                // With no panel attached there's nowhere to place it. Logical state still advances; no exception is thrown.
                 return;
             }
 
@@ -1249,8 +1268,8 @@ namespace Tweeq.UIToolkit
 
             if (_popover == null)
             {
-                // 外装（Surface・border・padding・影）は popover 側に任せる。
-                // Escape・外側クリックで閉じるのも popover の LightDismiss に任せる（仕様 §ColorInput）
+                // The chrome (surface, border, padding, shadow) is left to the popover side.
+                // Closing on Escape / outside click is also left to the popover's LightDismiss (spec §ColorInput).
                 _popover = new TweeqPopover
                 {
                     Context = this,
@@ -1276,7 +1295,7 @@ namespace Tweeq.UIToolkit
 
             _open = false;
 
-            // light dismiss はスウォッチ押下でも走る。同一フレームの再オープンだけ抑止する
+            // Light dismiss also runs on a swatch press. Only re-opening within the same frame is suppressed.
             _suppressReopen = true;
 
             if (this.panel != null)
@@ -1305,7 +1324,7 @@ namespace Tweeq.UIToolkit
 
         #region Value
 
-        // ピッカー由来の更新。HSVA を権威にしたまま Color を作り直す（hue を失わない）
+        // Update originating from the picker. Rebuilds Color while keeping HSVA authoritative (so hue isn't lost).
         void ApplyHsva(HSVA hsva)
         {
             _hsva = hsva;
@@ -1325,8 +1344,8 @@ namespace Tweeq.UIToolkit
             NotifyValueChanged(previous, _value);
         }
 
-        // 黒（v=0）と無彩色（s=0）では hue / 彩度が定義できない。
-        // Vue の setHSVAChannel が NaN を旧値で埋めるのと同じく、直前の値を引き継ぐ
+        // Hue / saturation can't be defined for black (v=0) or achromatic colors (s=0).
+        // Just as Vue's setHSVAChannel fills NaN with the old value, this carries over the previous value.
         static HSVA DeriveHsva(Color color, HSVA previous)
         {
             HSVA next = ToHsva(color);
@@ -1373,8 +1392,8 @@ namespace Tweeq.UIToolkit
 
         #region Field interaction
 
-        // ピッカーのトグルは PointerUp まで持ち越す。3px 動いたらチャンネルスクラブへ分岐し、
-        // 動かなければ従来どおりのトグルになる（仕様 §A）
+        // Toggling the picker is deferred until PointerUp. Moving 3px branches into a channel scrub;
+        // otherwise it becomes the usual toggle (spec §A).
         void OnSwatchPointerDown(PointerDownEvent evt)
         {
             if (evt == null || evt.button != 0 || _disabled || _swatchPressed)
@@ -1398,7 +1417,7 @@ namespace Tweeq.UIToolkit
             _shiftHeld = (evt.modifiers & EventModifiers.Shift) != 0;
             _altHeld = (evt.modifiers & EventModifiers.Alt) != 0;
 
-            // 押す前から S や Shift を握っていた場合はそのモードで掴む（Vue の tweakMode は computed）
+            // If S or Shift was already held before the press, grab with that mode (Vue's tweakMode is a computed).
             _scrubMode = ResolveScrubMode();
 
             if (this.panel != null && _swatch != null)
@@ -1416,7 +1435,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // ドラッグ中の修飾キーはキーイベントより pointermove の方が取りこぼしが無い
+            // For modifier keys during a drag, pointermove misses fewer changes than key events do.
             _shiftHeld = (evt.modifiers & EventModifiers.Shift) != 0;
             _altHeld = (evt.modifiers & EventModifiers.Alt) != 0;
 
@@ -1451,7 +1470,7 @@ namespace Tweeq.UIToolkit
             _swatchPressed = false;
             _swatchPointerId = PointerId.invalidPointerId;
 
-            // 解放で PointerCaptureOut が走る。そこで確定済みなら _scrubbing は落ちている
+            // Releasing runs PointerCaptureOut. If confirmation already happened there, _scrubbing is already cleared.
             ReleaseSwatchPointer(pointerId);
 
             if (_scrubbing)
@@ -1460,7 +1479,7 @@ namespace Tweeq.UIToolkit
             }
             else if (!wasScrubbing)
             {
-                // 閾値未満はクリック。開閉は押した時点の状態で決める
+                // Below the threshold counts as a click. Open/close is decided by the state at the time of the press.
                 if (wasOpen)
                 {
                     ClosePicker();
@@ -1474,8 +1493,8 @@ namespace Tweeq.UIToolkit
             evt.StopPropagation();
         }
 
-        // 掴みが外れた＝そこで操作が終わったとみなす（巻き戻しは Escape だけの責務）。
-        // カーソルとオーバーレイを取り残さないよう、確定経路もここに集約する
+        // Losing the grab means the operation is treated as finished there (rolling back is Escape's job alone).
+        // The confirm path is also funneled through here so the cursor and overlay aren't left stranded.
         void OnSwatchPointerCaptureOut(PointerCaptureOutEvent evt)
         {
             _swatchPressed = false;
@@ -1500,7 +1519,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        // オーバーレイはパネル座標で描くので、変換しない生の位置を使う
+        // The overlay is drawn in panel coordinates, so the raw, untransformed position is used.
         static Vector2 PanelPosition(IPointerEvent evt)
         {
             Vector3 position = evt.position;
@@ -1544,7 +1563,7 @@ namespace Tweeq.UIToolkit
                     return;
 
                 case KeyCode.Escape:
-                    // 操作中は開始値へ戻す。そうでなければ閉じるだけ（色は巻き戻さない）
+                    // Revert to the start value while an operation is in progress. Otherwise just close (the color isn't rolled back).
                     if (_scrubbing)
                     {
                         CancelChannelScrub();
@@ -1564,7 +1583,7 @@ namespace Tweeq.UIToolkit
                     return;
             }
 
-            // Shift / Alt 単体でもモードは変わるので、キーイベントごとに毎回引き直す（仕様 §A）
+            // Shift / Alt alone also changes the mode, so it's recomputed on every key event (spec §A).
             SetScrubMode(ResolveScrubMode());
 
             if (_scrubbing && modeKey)
@@ -1592,7 +1611,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        // 押下状態を更新し、tweakMode に関わるキーだったかを返す
+        // Updates the pressed state and returns whether the key was one relevant to tweakMode.
         bool SetModeKey(KeyCode keyCode, bool held)
         {
             switch (keyCode)
@@ -1647,7 +1666,7 @@ namespace Tweeq.UIToolkit
             _alphaKeyHeld = false;
         }
 
-        // 優先順は Vue の tweakMode（computed）そのまま。同時押しは上から順に勝つ
+        // The priority order matches Vue's tweakMode (computed) exactly. On simultaneous presses, the one listed first wins.
         ColorTweakMode ResolveScrubMode()
         {
             if (_shiftHeld || _hueKeyHeld || _fillKeyHeld)
@@ -1696,11 +1715,11 @@ namespace Tweeq.UIToolkit
 
         void OnFocusOut(FocusOutEvent evt)
         {
-            // ピッカー内のフィールドへフォーカスが移るだけでも来る。閉じるのは
-            // 外側クリック・Escape・detach の 3 経路に任せる（DropdownInput と同じ判断）
+            // This also fires just from focus moving to a field inside the picker. Closing is left to the
+            // 3 paths of outside click / Escape / detach (same judgment as DropdownInput).
             _focused = false;
 
-            // フォーカスが外れると KeyUp が届かなくなる。押しっぱなし扱いを残さない
+            // Once focus is lost, KeyUp no longer arrives. Don't leave a key stuck in the "held" state.
             ClearModeKeys();
             SetScrubMode(ResolveScrubMode());
 
@@ -1709,7 +1728,7 @@ namespace Tweeq.UIToolkit
 
         void OnAttachToPanel(AttachToPanelEvent evt)
         {
-            // detach で捨てた SV テクスチャを焼き直させる（次の Refresh で作られる）
+            // Has the SV texture discarded on detach get rebaked (it's created again on the next Refresh).
             Refresh();
         }
 
@@ -1717,8 +1736,8 @@ namespace Tweeq.UIToolkit
         {
             CancelPickerDrag();
 
-            // 付け替えは操作の中断であって取り消しでも確定でもない。
-            // ただしカーソルとオーバーレイだけは必ず戻す（RotaryInput と同じ判断）
+            // Re-parenting is an interruption of the operation, not a cancel or a confirm.
+            // That said, the cursor and overlay must always be restored (same judgment as RotaryInput).
             StopScrub();
             ClosePicker();
 
@@ -1730,8 +1749,8 @@ namespace Tweeq.UIToolkit
             _focused = false;
             _suppressReopen = false;
 
-            // SV グラデーションは要素ごとの持ち物。付け替えの間ぶら下げ続けない
-            // （再接続時は hue のキャッシュが外れているので次に開いた時に焼き直される）
+            // The SV gradient belongs to the element instance. It isn't kept alive across re-parenting
+            // (on reconnection, the hue cache is stale, so it gets rebaked the next time it's opened).
             DestroyTexture(_svTexture);
             _svTexture = null;
             _svTextureHue = double.NaN;
@@ -1748,8 +1767,8 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // aspect-ratio が無いので、幅が決まったら同じ値を高さへ写す。
-            // 書き戻しでこのイベントが再入するため、収束したら何もしない
+            // There's no aspect-ratio property, so once the width is settled, the same value is copied to height.
+            // Writing it back re-enters this event, so once it has converged, do nothing.
             float width = _svPad.layout.width;
             if (float.IsNaN(width) || width <= 0f || Mathf.Approximately(_svPad.layout.height, width))
             {
@@ -1825,13 +1844,13 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 掴みが外れた＝そこで操作が終わったとみなす。巻き戻しは Escape だけの責務
+            // Losing the grab means the operation is treated as finished there. Rolling back is Escape's job alone.
             _dragPointerId = PointerId.invalidPointerId;
             EndPickerDrag();
         }
 
-        // currentTarget はカーソル用オーバーレイになり得ないが（pickingMode=Ignore）、
-        // target 側は将来 pickable な子が増えても壊れないよう親を辿って解決する
+        // currentTarget can never be the cursor overlay (pickingMode=Ignore), but target is resolved by
+        // walking up the parent chain so it won't break if pickable children are added in the future.
         VisualElement ResolveDragElement(IEventHandler handler)
         {
             VisualElement element = handler as VisualElement;
@@ -1936,8 +1955,8 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 自分で書き戻した値は SetValueWithoutNotify なのでここへは来ない。
-            // 念のため target を確認して、入れ子のフィールドからの又聞きは弾く
+            // Values written back by this code use SetValueWithoutNotify, so they never reach here.
+            // Just in case, target is checked here too, to reject secondhand events relayed from a nested field.
             if (!ReferenceEquals(evt.target, _channels[index]))
             {
                 return;
@@ -1971,8 +1990,8 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // RGB は Color 側を書き換えてから HSVA を引き直す。
-            // 無彩色になった時に hue を失わないよう、旧 HSVA を引き継ぐ経路を通す
+            // For RGB, the Color side is rewritten first, then HSVA is re-derived from it.
+            // To avoid losing hue when it becomes achromatic, this goes through the path that carries over the old HSVA.
             Color next = _value;
             float channel = (float)Clamp01(raw / 255.0);
 
@@ -1994,8 +2013,8 @@ namespace Tweeq.UIToolkit
             ApplyHsva(DeriveHsva(next, _hsva));
         }
 
-        // ピッカー内フィールドの確定はそのまま ColorInput の確定として外へ出す
-        // （引数のチャンネル値ではなく、合成後の色を渡す）
+        // A confirm from a field inside the picker is surfaced directly as ColorInput's own confirm
+        // (the composed color is passed, not the argument's channel value).
         void OnChildConfirmed(float channelValue)
         {
             Confirmed?.Invoke(_value);
@@ -2015,13 +2034,13 @@ namespace Tweeq.UIToolkit
 
         #region Channel scrub
 
-        // 基準 HSVA ＋ 基準位置からの移動量で値を決める。累積 delta を積まないので、
-        // モード切替で基準を取り直すだけで値が飛ばない（仕様 §A の再キャプチャ）
+        // The value is determined by the base HSVA plus the movement from the base position. Since no
+        // accumulated delta is kept, simply recapturing the base on a mode switch keeps the value from jumping (spec §A's recapture).
         void ApplyScrub()
         {
             float width = TweakWidth();
 
-            // 正規化: 右が正・上が正（仕様 §A のマッピング）
+            // Normalized: right is positive, up is positive (spec §A's mapping).
             double dx = (_scrubPointer.x - _scrubAnchor.x) / width;
             double dy = -(_scrubPointer.y - _scrubAnchor.y) / width;
 
@@ -2084,7 +2103,7 @@ namespace Tweeq.UIToolkit
 
             Color next = new Color((float)rgba.R, (float)rgba.G, (float)rgba.B, (float)rgba.A);
 
-            // 無彩色・黒へ落ちても hue を失わないよう、現在の HSVA を引き継ぐ経路を通す
+            // To avoid losing hue even when falling into achromatic/black, this goes through the path that carries over the current HSVA.
             ApplyHsva(DeriveHsva(next, _hsva));
         }
 
@@ -2100,7 +2119,7 @@ namespace Tweeq.UIToolkit
             ReleaseScrubOverlay();
         }
 
-        // 感度基準は tweakWidth = PopupWidth = 240（仕様 §A）
+        // The sensitivity baseline is tweakWidth = PopupWidth = 240 (spec §A).
         float TweakWidth()
         {
             float width = _theme != null ? _theme.PopupWidth : TWEAK_WIDTH_FALLBACK;
@@ -2109,7 +2128,7 @@ namespace Tweeq.UIToolkit
 
         void HideCursor()
         {
-            // panel が無い＝EditMode テストなどの論理層だけの実行。OS カーソルには触らない
+            // No panel means execution of only the logical layer, e.g. an EditMode test. The OS cursor is left untouched.
             if (_cursorHidden || this.panel == null)
             {
                 return;
@@ -2140,7 +2159,7 @@ namespace Tweeq.UIToolkit
             TweeqOverlayLayer layer = TweeqOverlayLayer.GetOrCreate(this);
             if (layer == null)
             {
-                // パネル未接続ならガイドは諦める（操作自体は成立させる）
+                // Give up on the guide if no panel is attached (the operation itself still proceeds).
                 return;
             }
 
@@ -2172,7 +2191,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // SV 面が要るのは pad モードだけ。ピッカーを一度も開いていなくても焼けるようにしてある
+            // The SV surface is only needed in pad mode. It's set up so it can bake even if the picker has never been opened.
             Texture2D svTexture = null;
             if (_scrubMode == ColorTweakMode.Pad)
             {
@@ -2216,10 +2235,10 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 閉じている間の書き戻しは目に見えないのに、数値フィールドの文字列生成だけは走る。
-            // チャンネルスクラブは「一度開いたことがあるピッカー」を閉じたまま回すので、
-            // ここで止めないと 1 ムーブごとに 4 本ぶんの文字列を確保してしまう。
-            // 開くときは OpenPicker が Refresh を呼ぶので、表示の追従は失われない
+            // While closed, writing back is invisible, yet string generation for the number fields would still run.
+            // Channel scrubbing runs with "a picker that has been opened at least once" left closed, so
+            // without stopping here, 4 strings' worth would get allocated on every single move.
+            // OpenPicker calls Refresh when opening, so display tracking isn't lost.
             if (!_open)
             {
                 return;
@@ -2236,8 +2255,8 @@ namespace Tweeq.UIToolkit
             RefreshHexField(false);
         }
 
-        // 表示中の space のフィールドだけ書き戻す。
-        // ドラッグ中に隠れている行を触らないことが、そのまま文字列生成の削減になる
+        // Only writes back the fields for the currently displayed space.
+        // Not touching rows hidden during a drag directly reduces string generation.
         void RefreshChannelFields()
         {
             if (_colorSpace == COLOR_SPACE_HEX || _channels[0] == null)
@@ -2261,7 +2280,7 @@ namespace Tweeq.UIToolkit
             _channels[3].SetValueWithoutNotify((float)(_hsva.A * 100.0));
         }
 
-        // force=false のときは「HEX 行が見えていて、かつ値が実際に変わった」ときだけ組み立てる
+        // When force=false, this only builds when "the HEX row is visible and the value has actually changed."
         void RefreshHexField(bool force)
         {
             if (_hexField == null)
@@ -2288,8 +2307,8 @@ namespace Tweeq.UIToolkit
 
         void RebuildSvTextureIfNeeded()
         {
-            // 焼く相手はピッカーの SV パッドか、スクラブ中のオーバーレイ。
-            // どちらも無いときにテクスチャを確保しない（panel 非依存の論理層を汚さないため）
+            // The bake target is either the picker's SV pad or the scrub overlay.
+            // No texture is allocated when neither exists (to keep the panel-independent logical layer clean).
             if (_svPad == null && _scrubOverlay == null)
             {
                 return;
@@ -2308,7 +2327,7 @@ namespace Tweeq.UIToolkit
 
             for (int y = 0; y < size; y++)
             {
-                // Texture2D の行 0 は下端。v=0（黒）を下に置く
+                // Texture2D row 0 is the bottom edge; v=0 (black) is placed at the bottom.
                 double v = y / denominator;
                 int rowOffset = y * size;
 
@@ -2429,8 +2448,8 @@ namespace Tweeq.UIToolkit
             painter.fillColor = _value;
             FillRect(painter, 0f, 0f, rect.width, rect.height);
 
-            // 背景に沈む色でも輪郭が読めるように、常に 1px の枠を置く。
-            // hover / focus / 開いている間はアクセントへ切り替える（仕様 §ColorInput）
+            // A 1px frame is always drawn so the outline stays readable even for colors that blend into the background.
+            // It switches to the accent color during hover / focus / while open (spec §ColorInput).
             painter.strokeColor = _hovered || _focused || _open ? _theme.Accent : _theme.Border;
             painter.lineWidth = FIELD_OUTLINE_WIDTH;
 
@@ -2488,9 +2507,9 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // カーソル中心は値の実位置に置く（入力マッピングと同一の全幅リニア）。
-            // 内側へ畳むと端に近づくほど OS カーソルとズレるため、端では輪が
-            // overflow:Hidden で半分欠ける方を取る（Web 系ピッカーと同じ見え方）
+            // The cursor's center is placed at the value's actual position (full-width linear, same as the input mapping).
+            // Folding it inward would make it diverge further from the OS cursor the closer it gets to the edge,
+            // so at the edges the ring is allowed to be half-clipped by overflow:Hidden instead (matching how web-style pickers look).
             float x = (float)_hsva.S * rect.width;
             float y = (float)(1.0 - _hsva.V) * rect.height;
 
@@ -2511,7 +2530,7 @@ namespace Tweeq.UIToolkit
             }
 
             float radius = Mathf.Min(CURSOR_RADIUS, rect.height * 0.5f);
-            // 中心は値の実位置（SV カーソルと同じ判断。端では輪が欠ける）
+            // The center is the value's actual position (same judgment as the SV cursor; the ring gets clipped at the edges).
             float x = (float)(_hsva.H / HUE_RANGE) * rect.width;
 
             CoreRgba rgba = TweeqColorLogic.HsvaToRgba(new HSVA(_hsva.H, 1.0, 1.0, 1.0));
@@ -2537,7 +2556,7 @@ namespace Tweeq.UIToolkit
             }
 
             float radius = Mathf.Min(CURSOR_RADIUS, rect.height * 0.5f);
-            // 中心は値の実位置（SV カーソルと同じ判断。端では輪が欠ける）
+            // The center is the value's actual position (same judgment as the SV cursor; the ring gets clipped at the edges).
             float x = (float)_hsva.A * rect.width;
 
             PaintCursor(context.painter2D, new Vector2(x, rect.height * 0.5f), OpaqueValue(), radius);
@@ -2565,8 +2584,8 @@ namespace Tweeq.UIToolkit
             PaintCheckerboard(painter, rect.width, rect.height);
         }
 
-        // 透明→不透明のグラデーション。インラインスタイルにグラデーションが無いので、
-        // 頂点カラーを 4 隅に置いて GPU 側で補間させる（帯を並べるより滑らかで確保も無い）
+        // A transparent-to-opaque gradient. Since inline styles have no gradient support,
+        // vertex colors are placed at the 4 corners and interpolated on the GPU (smoother than tiling bands, and no allocation either).
         void OnGenerateAlphaGradient(MeshGenerationContext context)
         {
             if (context == null || _alphaGradient == null)
@@ -2620,7 +2639,7 @@ namespace Tweeq.UIToolkit
             PaintCursor(painter, center, fill, CURSOR_RADIUS);
         }
 
-        // Vue common.styl の circle(): 白い外周 + 内側の薄い暗色。塗りは「今の色」
+        // Vue common.styl's circle(): a white outer ring plus a faint dark inner shade. The fill is "the current color."
         void PaintCursor(Painter2D painter, Vector2 center, Color fill, float radius)
         {
             if (painter == null || radius <= 0f)
@@ -2700,8 +2719,8 @@ namespace Tweeq.UIToolkit
 
         #region Color logic bridge
 
-        // TweeqColorLogic は Core（noEngineReferences）側にあり UnityEngine.Color を知らない。
-        // 変換の呼び出しはこの 4 つに閉じ込めてあるので、Core 側の署名が変わってもここだけ直せばよい
+        // TweeqColorLogic lives on the Core (noEngineReferences) side and doesn't know about UnityEngine.Color.
+        // Conversion calls are confined to these 4 methods, so if Core's signature changes, only these need fixing.
         static Color ToColor(HSVA hsva)
         {
             CoreRgba rgba = TweeqColorLogic.HsvaToRgba(hsva);
@@ -2734,8 +2753,8 @@ namespace Tweeq.UIToolkit
 
         #region Helpers
 
-        // カーソルとグラデーションの「色」は α を抜いた現在色。α まで載せると
-        // 透明なときにカーソルが消えて位置が読めなくなる
+        // The "color" of the cursor and gradient is the current color with alpha stripped out. If alpha were
+        // included too, the cursor would disappear when transparent and its position would become unreadable.
         Color OpaqueValue()
         {
             Color opaque = _value;
@@ -2758,7 +2777,7 @@ namespace Tweeq.UIToolkit
             return COLOR_SPACE_HSV;
         }
 
-        // Color の == は近似比較なので、1/255 未満の変化を取りこぼす。成分ごとに厳密に比べる
+        // Color's == is an approximate comparison and misses changes smaller than 1/255. Compare each component exactly instead.
         static bool SameColor(Color a, Color b)
         {
             return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
@@ -2782,7 +2801,7 @@ namespace Tweeq.UIToolkit
             return value < 0.0 ? 0.0 : value > 1.0 ? 1.0 : value;
         }
 
-        // C# の % は負値で負を返すので符号を揃える
+        // C#'s % returns a negative result for negative values, so the sign is normalized here.
         static double WrapHue(double hue)
         {
             if (double.IsNaN(hue) || double.IsInfinity(hue))

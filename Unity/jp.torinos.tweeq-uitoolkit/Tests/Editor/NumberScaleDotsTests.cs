@@ -5,14 +5,14 @@ using Tweeq.Core;
 namespace Tweeq.Core.Tests
 {
     /// <summary>
-    /// NumberInput のスケールドット（本家忠実表示）の幾何。描画そのものではなく、
-    /// 点の中心座標を決める純関数だけを見る。
+    /// Geometry of NumberInput's scale dots (a faithful reproduction of the original's display). Rather than the
+    /// rendering itself, this only exercises the pure functions that determine the dots' center coordinates.
     /// </summary>
     public class NumberScaleDotsTests
     {
         const double TOLERANCE = 1e-9;
 
-        // NumberInput 側と同じ「薄すぎる帯は捨てる」閾値
+        // Same "discard bands that are too faint" threshold as on the NumberInput side
         const double MIN_OPACITY = 0.01;
 
         #region ScaleDotPrecision
@@ -28,10 +28,10 @@ namespace Tweeq.Core.Tests
         [Test]
         public void PrecisionShiftsByOneDigitPerDecadeOfSpeedAndWrapsAtThree()
         {
-            // 感度が 1/100 になると帯が 2 つぶん送られる
+            // When sensitivity becomes 1/100, the band advances by 2
             Assert.That(NumberLogic.ScaleDotPrecision(0.01, 0), Is.EqualTo(2.0).Within(TOLERANCE));
 
-            // 3 を超えた帯は 0 側へ巻き戻る（3 本が循環し続ける）
+            // A band past 3 wraps back around to 0 (the three keep cycling)
             Assert.That(NumberLogic.ScaleDotPrecision(0.01, 1), Is.EqualTo(0.0).Within(TOLERANCE));
             Assert.That(NumberLogic.ScaleDotPrecision(0.01, 2), Is.EqualTo(1.0).Within(TOLERANCE));
         }
@@ -56,7 +56,7 @@ namespace Tweeq.Core.Tests
             Assert.That(NumberLogic.ScaleDotOpacity(2.0), Is.EqualTo(1.0).Within(TOLERANCE));
             Assert.That(NumberLogic.ScaleDotOpacity(3.0), Is.EqualTo(1.0).Within(TOLERANCE));
 
-            // smoothstep(1,2,1.5) = 0.5 なので ^0.5
+            // smoothstep(1,2,1.5) = 0.5, so ^0.5
             Assert.That(
                 NumberLogic.ScaleDotOpacity(1.5), Is.EqualTo(Math.Sqrt(0.5)).Within(TOLERANCE));
         }
@@ -134,7 +134,7 @@ namespace Tweeq.Core.Tests
             Assert.That(layer.DotX(0), Is.EqualTo(50.0).Within(TOLERANCE));
             Assert.That(layer.DotX(1), Is.EqualTo(150.0).Within(TOLERANCE));
 
-            // 位相そのものにも必ず点が乗る（＝点列が値に整列している）
+            // A dot always lands exactly on the phase itself (i.e. the dot row is aligned to the value)
             Assert.That(layer.DotX(2), Is.EqualTo(250.0).Within(TOLERANCE));
             Assert.That(layer.DotX(3), Is.EqualTo(350.0).Within(TOLERANCE));
         }
@@ -155,7 +155,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void TooFaintLayersAreDropped()
         {
-            // speed=1 の帯 0/1 は precision 0/1 ＝ opacity 0。帯 2 だけが残る
+            // At speed=1, bands 0/1 have precision 0/1 = opacity 0. Only band 2 remains
             NumberLogic.ScaleDotLayer layer;
 
             Assert.IsFalse(
@@ -170,7 +170,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void TwoBandsCrossFadeWhileTheSensitivityMoves()
         {
-            // 感度が 1 と 0.1 の中間まで来ると、細かい帯が薄く現れて粗い帯と重なる
+            // Once sensitivity reaches the midpoint between 1 and 0.1, the finer band appears faintly and overlaps the coarser one
             double speed = Math.Pow(10.0, -0.5);
 
             NumberLogic.ScaleDotLayer fine;
@@ -202,7 +202,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void LayerCountNeverExceedsTheSafetyCap()
         {
-            // 閾値 0 なら間隔 1px の帯も通るので、上限で頭打ちになることを見る
+            // With a threshold of 0, even a 1px-spacing band passes, so this checks that it caps at the upper bound
             NumberLogic.ScaleDotLayer layer;
             bool built = NumberLogic.TryBuildScaleDotLayer(1.0, 0, 0.0, 100000.0, 0.0, out layer);
 

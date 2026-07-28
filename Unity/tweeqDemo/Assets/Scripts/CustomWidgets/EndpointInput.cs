@@ -11,22 +11,23 @@ namespace TweeqDemo.CustomWidgets
     #region Address
 
     /// <summary>
-    /// IPv4 アドレス（+ 任意のポート）のパース結果。
+    /// The parsed result of an IPv4 address (+ optional port).
     /// </summary>
     /// <remarks>
-    /// オクテット 4 つを配列ではなくフィールドで持つのは、打鍵ごとに走る正規化で
-    /// ヒープを触らないため。値域のクランプは <see cref="TryParse"/> の桁積み上げ中に
-    /// 行うので、10 進の桁が何桁来ても long が溢れない。
+    /// The 4 octets are held as fields rather than an array so that the normalization that
+    /// runs on every keystroke doesn't touch the heap. Range clamping happens while
+    /// <see cref="TryParse"/> accumulates digits, so a long never overflows no matter how
+    /// many decimal digits arrive.
     /// </remarks>
     public readonly struct EndpointAddress
     {
-        /// <summary>オクテットの個数。</summary>
+        /// <summary>Number of octets.</summary>
         public const int OCTET_COUNT = 4;
 
-        /// <summary>オクテットの上限。</summary>
+        /// <summary>Upper bound of an octet.</summary>
         public const int OCTET_MAX = 255;
 
-        /// <summary>ポートの上限（16bit）。</summary>
+        /// <summary>Upper bound of the port (16 bit).</summary>
         public const int PORT_MAX = 65535;
 
         readonly int _octet0;
@@ -34,10 +35,10 @@ namespace TweeqDemo.CustomWidgets
         readonly int _octet2;
         readonly int _octet3;
 
-        /// <summary>ポート番号。<see cref="HasPort"/> が false のときは 0。</summary>
+        /// <summary>Port number. 0 when <see cref="HasPort"/> is false.</summary>
         public readonly int Port;
 
-        /// <summary>元の文字列が ":port" を含んでいたか。</summary>
+        /// <summary>Whether the original string contained ":port".</summary>
         public readonly bool HasPort;
 
         public EndpointAddress(int octet0, int octet1, int octet2, int octet3, int port, bool hasPort)
@@ -50,7 +51,7 @@ namespace TweeqDemo.CustomWidgets
             HasPort = hasPort;
         }
 
-        /// <summary>0 起点のオクテット。範囲外は 0 を返す（境界で例外を出さない方針）。</summary>
+        /// <summary>The octet at a 0-based index. Returns 0 out of range (a policy of not throwing at boundaries).</summary>
         public int GetOctet(int index)
         {
             switch (index)
@@ -63,7 +64,7 @@ namespace TweeqDemo.CustomWidgets
             }
         }
 
-        /// <summary>正規化済みの文字列へ書き出す。</summary>
+        /// <summary>Writes out a normalized string.</summary>
         public string Format(bool includePort)
         {
             StringBuilder builder = new StringBuilder(21);
@@ -87,8 +88,9 @@ namespace TweeqDemo.CustomWidgets
         }
 
         /// <summary>
-        /// "1.2.3.4" / "1.2.3.4:8080" をパースする。桁の重複ゼロは許容し、
-        /// 値域を超えた数値は上限へ丸める。数字以外が混ざった時点で失敗。
+        /// Parses "1.2.3.4" / "1.2.3.4:8080". Redundant leading zeros are allowed, and values
+        /// exceeding the range are rounded down to the upper bound. Fails as soon as a
+        /// non-digit character appears.
         /// </summary>
         public static bool TryParse(string text, out EndpointAddress address)
         {
@@ -112,7 +114,7 @@ namespace TweeqDemo.CustomWidgets
             int colon = trimmed.IndexOf(':');
             if (colon >= 0)
             {
-                // ":" が 2 つ以上ある文字列は IPv6 かタイプミス。どちらも扱わない
+                // A string with two or more ":" is either IPv6 or a typo. We handle neither.
                 if (trimmed.IndexOf(':', colon + 1) >= 0)
                 {
                     return false;
@@ -149,7 +151,8 @@ namespace TweeqDemo.CustomWidgets
             return true;
         }
 
-        // 上限で頭打ちにしながら桁を積むので、"99999999999999999999" でも溢れない
+        // Digits are accumulated while capping at the upper bound, so even
+        // "99999999999999999999" never overflows.
         static bool TryParseClamped(string text, int max, out int result)
         {
             result = 0;
@@ -183,18 +186,19 @@ namespace TweeqDemo.CustomWidgets
     #endregion
 
     /// <summary>
-    /// tweeq の入力欄クロームと操作感を持つエンドポイント（IPv4[:port]）入力。
+    /// An endpoint (IPv4[:port]) input with tweeq's input-box chrome and feel.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// 外部 asmdef（<c>Tweeq.Demo.CustomWidgets</c>）から <c>Tweeq.Core</c> / <c>Tweeq.UIToolkit</c>
-    /// の public API だけでカスタムウィジェットが作れることの実証サンプル
-    /// （ext-custom-widgets-spec.md EXT-02）。パッケージの internal には一切依存しない。
+    /// A proof-of-concept sample showing that a custom widget can be built from an external
+    /// asmdef (<c>Tweeq.Demo.CustomWidgets</c>) using only the public API of <c>Tweeq.Core</c> /
+    /// <c>Tweeq.UIToolkit</c> (ext-custom-widgets-spec.md EXT-02). It depends on none of the
+    /// package's internals.
     /// </para>
     /// <para>
-    /// 状態機械（セッション・セグメント編集・スクラブ）は panel 非依存にしてあり、
-    /// 実 UI のフォーカス／ポインタ配線はその層を叩くだけ。EditMode テストは
-    /// パネル無しで契約を検証できる（StringInput と同じ設計）。
+    /// The state machine (session, segment editing, scrub) is kept panel-independent; the
+    /// real UI's focus/pointer wiring only calls into that layer. EditMode tests can therefore
+    /// verify the contract without a panel (same design as StringInput).
     /// </para>
     /// </remarks>
     [UxmlElement]
@@ -204,16 +208,16 @@ namespace TweeqDemo.CustomWidgets
     {
         #region Constants
 
-        /// <summary>オクテットの個数。</summary>
+        /// <summary>Number of octets.</summary>
         public const int OCTET_COUNT = EndpointAddress.OCTET_COUNT;
 
-        /// <summary>ポートを含めたセグメントの最大個数。</summary>
+        /// <summary>Maximum number of segments including the port.</summary>
         public const int MAX_SEGMENT_COUNT = OCTET_COUNT + 1;
 
-        /// <summary>スクラブ感度。仕様 EXT-02: 4px で 1 段（0-255 を約 1000px で横断）。</summary>
+        /// <summary>Scrub sensitivity. Spec EXT-02: 1 step per 4px (crosses 0-255 over roughly 1000px).</summary>
         public const float PIXELS_PER_STEP = 4f;
 
-        /// <summary>Shift（fast）の倍率。</summary>
+        /// <summary>Shift (fast) multiplier.</summary>
         public const double FAST_MULTIPLIER = 10.0;
 
         const float TEXT_FONT_SIZE = 12f;
@@ -245,22 +249,22 @@ namespace TweeqDemo.CustomWidgets
 
         int _focusedSegment;
 
-        // ComposeValue → value setter → ApplyAddress の往復で、打鍵途中の
-        // 表示（空欄や "00"）を書き戻さないためのガード
+        // A guard against writing back the mid-keystroke display (e.g. blank or "00") during
+        // the ComposeValue → value setter → ApplyAddress round trip.
         bool _composing;
 
         #endregion
 
         #region Public API
 
-        /// <summary>編集セッションの終了時に、値が変わっていた場合だけ 1 回発火する。</summary>
+        /// <summary>Fires once when the editing session ends, only if the value actually changed.</summary>
         public event Action<string> Confirmed;
 
         /// <summary>
-        /// 正規化済みのエンドポイント文字列。<see cref="PortEnabled"/> が true のときだけ ":port" が付く。
+        /// The normalized endpoint string. ":port" is appended only when <see cref="PortEnabled"/> is true.
         /// </summary>
         /// <remarks>
-        /// setter はパースできない文字列を黙って捨てる（プログラム誤用で公演中に例外を出さない）。
+        /// The setter silently discards unparsable strings (so programmatic misuse never throws during a live show).
         /// </remarks>
         [UxmlAttribute]
         public string value
@@ -281,7 +285,7 @@ namespace TweeqDemo.CustomWidgets
             }
         }
 
-        /// <summary>ポートセグメント（0-65535）を表示するか。</summary>
+        /// <summary>Whether to show the port segment (0-65535).</summary>
         [UxmlAttribute]
         public bool PortEnabled
         {
@@ -296,7 +300,7 @@ namespace TweeqDemo.CustomWidgets
                 string previous = ComposeValue();
                 _portEnabled = value;
 
-                // 隠れているセグメントにフォーカスが残ると Tab 順が飛ぶ
+                // If focus stays on a hidden segment, the Tab order skips around
                 if (!_portEnabled && _focusedSegment >= SegmentCount)
                 {
                     _focusedSegment = SegmentCount - 1;
@@ -312,7 +316,7 @@ namespace TweeqDemo.CustomWidgets
             }
         }
 
-        /// <summary>操作不能状態。opacity を落とし、ポインタ・フォーカスを遮断する。</summary>
+        /// <summary>Inoperable state. Lowers opacity and blocks pointer/focus.</summary>
         [UxmlAttribute]
         public bool Disabled
         {
@@ -326,7 +330,7 @@ namespace TweeqDemo.CustomWidgets
 
                 _disabled = value;
 
-                // 無効化の瞬間に確定を飛ばすのは「操作していないのに Confirmed」になるので避ける
+                // Firing a confirm at the moment of disabling would raise Confirmed without any actual operation, so avoid it
                 if (_disabled && _sessionActive)
                 {
                     EndSession(false);
@@ -337,7 +341,7 @@ namespace TweeqDemo.CustomWidgets
             }
         }
 
-        /// <summary>外部から与える不正値表示。NumberInput の慣例に合わせ文字色だけを Error にする。</summary>
+        /// <summary>Externally supplied invalid-value display. Following NumberInput's convention, only the text color turns Error.</summary>
         [UxmlAttribute]
         public bool Invalid
         {
@@ -354,7 +358,7 @@ namespace TweeqDemo.CustomWidgets
             }
         }
 
-        /// <summary>配色テーマ。null を渡した場合は Dark() にフォールバックする。</summary>
+        /// <summary>Color theme. Falls back to Dark() when null is passed.</summary>
         public TweeqTheme Theme
         {
             get { return _theme; }
@@ -366,7 +370,7 @@ namespace TweeqDemo.CustomWidgets
             }
         }
 
-        /// <summary>横方向グループでの位置。設定すると角丸が潰れる。</summary>
+        /// <summary>Position within a horizontal group. Setting this squares off the corner radius.</summary>
         public TweeqBoxPosition InlinePosition
         {
             get { return _inlinePosition; }
@@ -382,7 +386,7 @@ namespace TweeqDemo.CustomWidgets
             }
         }
 
-        /// <summary>縦方向グループでの位置。</summary>
+        /// <summary>Position within a vertical group.</summary>
         public TweeqBoxPosition BlockPosition
         {
             get { return _blockPosition; }
@@ -398,31 +402,31 @@ namespace TweeqDemo.CustomWidgets
             }
         }
 
-        /// <summary>現在表示しているセグメント数（ポート有効なら 5）。</summary>
+        /// <summary>Number of segments currently shown (5 when the port is enabled).</summary>
         public int SegmentCount
         {
             get { return _portEnabled ? MAX_SEGMENT_COUNT : OCTET_COUNT; }
         }
 
-        /// <summary>キー入力の対象になっているセグメントの添字。</summary>
+        /// <summary>Index of the segment that currently receives key input.</summary>
         public int FocusedSegment
         {
             get { return _focusedSegment; }
         }
 
-        /// <summary>編集セッション中か。</summary>
+        /// <summary>Whether an editing session is active.</summary>
         public bool IsSessionActive
         {
             get { return _sessionActive; }
         }
 
-        /// <summary>セッション開始時の値（Escape の復元先）。</summary>
+        /// <summary>The value at session start (what Escape restores to).</summary>
         public string ValueAtSessionStart
         {
             get { return _valueAtSessionStart; }
         }
 
-        /// <summary>ChangeEvent を発火せずに値を設定する。パース不能なら現値を維持する。</summary>
+        /// <summary>Sets the value without firing a ChangeEvent. Keeps the current value if unparsable.</summary>
         public void SetValueWithoutNotify(string newValue)
         {
             EndpointAddress address;
@@ -434,13 +438,13 @@ namespace TweeqDemo.CustomWidgets
             ApplyAddress(address);
         }
 
-        /// <summary>セグメントの現在値。範囲外の添字は 0。</summary>
+        /// <summary>The segment's current value. Out-of-range indices return 0.</summary>
         public int GetSegment(int index)
         {
             return IsValidSegment(index) ? _segments[index].Value : 0;
         }
 
-        /// <summary>セグメントへ値を書き込み、値が動けば ChangeEvent を出す。</summary>
+        /// <summary>Writes a value into the segment and fires a ChangeEvent if the value actually moved.</summary>
         public void SetSegment(int index, int segmentValue)
         {
             if (!IsValidSegment(index))
@@ -458,15 +462,16 @@ namespace TweeqDemo.CustomWidgets
             }
         }
 
-        /// <summary>セグメントに表示されている生テキスト（編集中は空欄もありうる）。</summary>
+        /// <summary>The raw text displayed in the segment (can be blank while editing).</summary>
         public string GetSegmentText(int index)
         {
             return IsValidSegment(index) ? _segments[index].Text : string.Empty;
         }
 
         /// <summary>
-        /// セグメントへの打鍵 1 回ぶん。数字以外は落とし、"." / ":" が含まれていたら
-        /// 次のセグメントへ移動して全選択する（Windows の IP 入力欄と同じ操作感）。
+        /// One keystroke applied to a segment. Drops non-digit characters, and if "." / ":"
+        /// is present, moves to the next segment and selects it all (the same feel as
+        /// Windows' IP input fields).
         /// </summary>
         public void SetSegmentText(int index, string text)
         {
@@ -478,7 +483,7 @@ namespace TweeqDemo.CustomWidgets
             _segments[index].ApplyUserText(text);
         }
 
-        /// <summary>セグメントへフォーカスを移す（panel があれば実フォーカスも動かす）。</summary>
+        /// <summary>Moves focus to a segment (also moves the real focus if a panel exists).</summary>
         public void FocusSegment(int index)
         {
             if (_disabled || !IsValidSegment(index))
@@ -491,7 +496,7 @@ namespace TweeqDemo.CustomWidgets
             _segments[index].FocusAndSelectAll();
         }
 
-        /// <summary>現在のセグメントから相対移動する。両端では動かない。</summary>
+        /// <summary>Moves relative to the current segment. Doesn't move past either end.</summary>
         public void MoveSegment(int delta)
         {
             int next = _focusedSegment + delta;
@@ -507,7 +512,7 @@ namespace TweeqDemo.CustomWidgets
 
         #region Editing session
 
-        /// <summary>編集セッションを開始する。既に開始済みなら何もしない。</summary>
+        /// <summary>Begins an editing session. Does nothing if one is already active.</summary>
         public void BeginSession()
         {
             if (_disabled || _sessionActive)
@@ -521,8 +526,8 @@ namespace TweeqDemo.CustomWidgets
         }
 
         /// <summary>
-        /// Enter 確定。表示を正規化（空欄→0）してから、値が変わっていれば
-        /// <see cref="Confirmed"/> を 1 回出す。セッションはそのまま続く。
+        /// Commits on Enter. Normalizes the display (blank → 0), then fires
+        /// <see cref="Confirmed"/> once if the value changed. The session keeps going.
         /// </summary>
         public void CommitEditing()
         {
@@ -535,7 +540,7 @@ namespace TweeqDemo.CustomWidgets
             FireConfirmedIfChanged();
         }
 
-        /// <summary>Escape。セッション開始値へ復元し、確定を出さずにセッションを畳む。</summary>
+        /// <summary>Escape. Restores the session-start value and closes the session without confirming.</summary>
         public void CancelEditing()
         {
             if (!_sessionActive)
@@ -543,7 +548,7 @@ namespace TweeqDemo.CustomWidgets
                 return;
             }
 
-            // blur 経路（OnFocusOut → EndSession）に確定させないよう、先にセッションを畳む
+            // Close the session first so the blur path (OnFocusOut → EndSession) doesn't confirm it
             _sessionActive = false;
 
             this.value = _valueAtSessionStart;
@@ -551,7 +556,7 @@ namespace TweeqDemo.CustomWidgets
             Refresh();
         }
 
-        /// <summary>フォーカスがコンポーネント外へ出た。確定してセッションを閉じる。</summary>
+        /// <summary>Focus left the component. Confirms and closes the session.</summary>
         public void EndSession()
         {
             EndSession(true);
@@ -583,7 +588,7 @@ namespace TweeqDemo.CustomWidgets
                 return;
             }
 
-            // 基準を進めておかないと、Enter のあとの blur でもう 1 回飛ぶ
+            // Without advancing the baseline, the blur after Enter would fire once more
             _valueAtSessionStart = current;
 
             Action<string> confirmed = Confirmed;
@@ -603,9 +608,9 @@ namespace TweeqDemo.CustomWidgets
 
         #endregion
 
-        #region Scrub (状態機械の入口。実 UI では TweeqScrubManipulator が叩く)
+        #region Scrub (entry point of the state machine; the real UI calls it via TweeqScrubManipulator)
 
-        /// <summary>セグメントのスクラブを開始する。</summary>
+        /// <summary>Begins scrubbing a segment.</summary>
         public void BeginSegmentScrub(int index)
         {
             if (_disabled || !IsValidSegment(index))
@@ -618,7 +623,7 @@ namespace TweeqDemo.CustomWidgets
             _segments[index].BeginScrub();
         }
 
-        /// <summary>スクラブ 1 サンプル。移動量は px。</summary>
+        /// <summary>One scrub sample. Movement amount is in px.</summary>
         public void UpdateSegmentScrub(int index, float deltaX, float deltaY, bool shift, bool alt)
         {
             if (_disabled || !IsValidSegment(index))
@@ -629,7 +634,7 @@ namespace TweeqDemo.CustomWidgets
             _segments[index].UpdateScrub(new ScrubUpdate(deltaX, deltaY, shift, alt));
         }
 
-        /// <summary>スクラブ終了（コミット）。確定はセッション終了時なのでここでは出さない。</summary>
+        /// <summary>Ends scrubbing (commit). Confirmation happens at session end, so it isn't fired here.</summary>
         public void EndSegmentScrub(int index)
         {
             if (!IsValidSegment(index))
@@ -640,7 +645,7 @@ namespace TweeqDemo.CustomWidgets
             _segments[index].EndScrub();
         }
 
-        /// <summary>スクラブ中断。開始時の値へ戻す。</summary>
+        /// <summary>Cancels scrubbing. Reverts to the value at the start.</summary>
         public void CancelSegmentScrub(int index)
         {
             if (!IsValidSegment(index))
@@ -659,7 +664,7 @@ namespace TweeqDemo.CustomWidgets
         {
             this.AddToClassList("tweeq-endpoint-input");
 
-            // ルート自身はフォーカスを取らない。タブストップは内包する各 TextField
+            // The root itself doesn't take focus. Tab stops belong to each embedded TextField
             this.focusable = false;
             this.style.flexDirection = FlexDirection.Row;
             this.style.alignItems = Align.Center;
@@ -674,7 +679,7 @@ namespace TweeqDemo.CustomWidgets
             ApplyPortVisibility();
             ApplyInteractivity();
 
-            // TextField より先に Enter / Escape を横取りするため TrickleDown で登録する
+            // Registered with TrickleDown to intercept Enter / Escape before the TextField sees them
             this.RegisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
             this.RegisterCallback<PointerEnterEvent>(OnPointerEnter);
             this.RegisterCallback<PointerLeaveEvent>(OnPointerLeave);
@@ -726,8 +731,8 @@ namespace TweeqDemo.CustomWidgets
                 this.hierarchy.Add(segment);
             }
 
-            // フォーカスリングは別レイヤの border で描く。ルート側に border を足すと
-            // 中身が 1px ずれるため（StringInput と同じ理由）
+            // The focus ring is drawn with a border on a separate layer. Adding a border to the
+            // root itself would shift the contents by 1px (same reason as StringInput)
             _focusRing = TweeqFocusRing.Attach(this);
             _focusRing.name = "tweeq-endpoint-focus-ring";
         }
@@ -763,7 +768,7 @@ namespace TweeqDemo.CustomWidgets
         {
             TweeqInputBoxStyles.ApplyCornerRadius(this, _theme, _inlinePosition, _blockPosition);
 
-            // フォーカスリングは別レイヤなので同じ角丸を掛け直す
+            // The focus ring is a separate layer, so reapply the same corner radius to it
             if (_focusRing != null)
             {
                 _focusRing.Apply(_theme, _inlinePosition, _blockPosition);
@@ -820,8 +825,8 @@ namespace TweeqDemo.CustomWidgets
 
         void ApplyAddress(EndpointAddress address)
         {
-            // 打鍵経路（_composing）からの往復では表示を書き戻さない。
-            // "" や "00" のまま打ち続けられるようにするため
+            // Don't write the display back on the round trip from the keystroke path (_composing),
+            // so the user can keep typing while it's "" or "00"
             bool syncDisplay = !_composing;
 
             for (int index = 0; index < OCTET_COUNT; index++)
@@ -829,8 +834,8 @@ namespace TweeqDemo.CustomWidgets
                 _segments[index].SetValue(address.GetOctet(index), syncDisplay);
             }
 
-            // ポート未指定の文字列は「ポート 0」を意味させる。値文字列が状態の全体になるので、
-            // 同じ文字列を入れ直せば必ず同じ状態へ戻る
+            // A string with no port specified means "port 0". Since the value string represents
+            // the entire state, feeding the same string back in always returns the same state
             _segments[OCTET_COUNT].SetValue(address.HasPort ? address.Port : 0, syncDisplay);
         }
 
@@ -869,7 +874,7 @@ namespace TweeqDemo.CustomWidgets
 
         void OnSegmentClicked(EndpointSegment segment)
         {
-            // 閾値未満の解放＝クリック。そのセグメントを打ち直せるよう全選択する
+            // Release below the threshold = a click. Select all so the segment can be retyped
             FocusSegment(segment.Index);
         }
 
@@ -877,7 +882,7 @@ namespace TweeqDemo.CustomWidgets
         {
             _focusedSegment = segment.Index;
 
-            // 離れる区画に空欄を残さない（"." で抜けた直後に "" のままになるのを防ぐ）
+            // Don't leave the segment being left blank (prevents it staying "" right after exiting via ".")
             segment.NormalizeText();
 
             MoveSegment(delta);
@@ -923,7 +928,7 @@ namespace TweeqDemo.CustomWidgets
                 return;
             }
 
-            // セグメント間の移動ではセッションを畳まない（1 セッション = 部品を出るまで）
+            // Don't close the session when moving between segments (1 session = until leaving the component)
             VisualElement related = evt.relatedTarget as VisualElement;
             if (related != null && this.Contains(related))
             {
@@ -1006,12 +1011,12 @@ namespace TweeqDemo.CustomWidgets
     #region Segment
 
     /// <summary>
-    /// エンドポイント 1 区画の view + 状態。スクラブとテキスト編集の両方を受ける。
+    /// The view + state for one endpoint segment. Receives both scrub and text editing.
     /// </summary>
     /// <remarks>
-    /// <see cref="TweeqScrubManipulator"/> は PointerDown を握り潰さないので、
-    /// 常時前面に居る TextField のフォーカス・キャレットと共存できる。
-    /// クリック（閾値未満）は Clicked で降りてくるので、そこで全選択に切り替える。
+    /// <see cref="TweeqScrubManipulator"/> doesn't swallow PointerDown, so it can coexist with the
+    /// focus and caret of the TextField that's always on top.
+    /// A click (below the threshold) comes down through Clicked, where it switches to select-all.
     /// </remarks>
     sealed class EndpointSegment : VisualElement
     {
@@ -1040,31 +1045,31 @@ namespace TweeqDemo.CustomWidgets
 
         #region Public API
 
-        /// <summary>0 起点の並び順。ポートは <see cref="EndpointInput.OCTET_COUNT"/>。</summary>
+        /// <summary>0-based order. The port is <see cref="EndpointInput.OCTET_COUNT"/>.</summary>
         public int Index { get; }
 
-        /// <summary>クランプ済みの現在値。</summary>
+        /// <summary>The clamped current value.</summary>
         public int Value
         {
             get { return _value; }
         }
 
-        /// <summary>表示中の生テキスト。打鍵の途中では空欄になりうる。</summary>
+        /// <summary>The raw text being displayed. Can be blank mid-keystroke.</summary>
         public string Text
         {
             get { return _field.value ?? string.Empty; }
         }
 
-        /// <summary>利用者操作で値が動いた。</summary>
+        /// <summary>The value moved due to user operation.</summary>
         public event Action<EndpointSegment> Changed;
 
-        /// <summary>閾値未満のポインタ解放（＝クリック）。</summary>
+        /// <summary>Pointer release below the threshold (= a click).</summary>
         public event Action<EndpointSegment> Clicked;
 
-        /// <summary>セグメント間移動の要求（+1 / -1）。</summary>
+        /// <summary>A request to move between segments (+1 / -1).</summary>
         public event Action<EndpointSegment, int> MoveRequested;
 
-        /// <summary>このセグメント配下がフォーカスを得た。</summary>
+        /// <summary>This segment's subtree gained focus.</summary>
         public event Action<EndpointSegment> FocusGained;
 
         public EndpointSegment(int index, int max, float width)
@@ -1074,7 +1079,7 @@ namespace TweeqDemo.CustomWidgets
 
             this.AddToClassList("tweeq-endpoint-segment");
 
-            // テストと UI Builder から個別に掴めるよう並び順を名前に残す
+            // The order is kept in the name so tests and the UI Builder can grab each one individually
             this.name = "tweeq-endpoint-segment-" + index.ToString(CultureInfo.InvariantCulture);
             this.style.width = width;
             this.style.height = Length.Percent(100f);
@@ -1084,7 +1089,7 @@ namespace TweeqDemo.CustomWidgets
             {
                 name = "tweeq-endpoint-segment-text",
 
-                // 1 打鍵ごとに値を組み直す必要があるので遅延させない
+                // Not delayed, since the value needs to be rebuilt on every keystroke
                 isDelayed = false,
                 multiline = false,
                 maxLength = max.ToString(CultureInfo.InvariantCulture).Length,
@@ -1113,7 +1118,7 @@ namespace TweeqDemo.CustomWidgets
             SyncText();
         }
 
-        /// <summary>値を書き込む。<paramref name="syncDisplay"/> が false なら表示は触らない。</summary>
+        /// <summary>Writes the value. Leaves the display untouched if <paramref name="syncDisplay"/> is false.</summary>
         public void SetValue(int newValue, bool syncDisplay)
         {
             int clamped = Mathf.Clamp(newValue, 0, _max);
@@ -1135,15 +1140,15 @@ namespace TweeqDemo.CustomWidgets
             }
         }
 
-        /// <summary>表示を値どおりに直す（空欄 → "0"）。</summary>
+        /// <summary>Corrects the display to match the value (blank → "0").</summary>
         public void NormalizeText()
         {
             SyncText();
         }
 
         /// <summary>
-        /// 打鍵 1 回ぶんを適用する。数字以外は捨て、"." / ":" が含まれていれば
-        /// 次のセグメントへの移動を要求する。
+        /// Applies one keystroke's worth of input. Discards non-digits, and requests a move
+        /// to the next segment if "." / ":" is present.
         /// </summary>
         public void ApplyUserText(string raw)
         {
@@ -1174,7 +1179,7 @@ namespace TweeqDemo.CustomWidgets
             int parsed = 0;
             if (filtered.Length > 0)
             {
-                // maxLength で桁数が抑えられているので int で溢れない
+                // Digit count is bounded by maxLength, so int never overflows
                 parsed = int.Parse(filtered, CultureInfo.InvariantCulture);
                 if (parsed > _max)
                 {
@@ -1204,7 +1209,7 @@ namespace TweeqDemo.CustomWidgets
             }
         }
 
-        /// <summary>フォーカスして全選択する。panel が無ければ何もしない。</summary>
+        /// <summary>Focuses and selects all. Does nothing without a panel.</summary>
         public void FocusAndSelectAll()
         {
             if (this.panel == null)
@@ -1214,7 +1219,7 @@ namespace TweeqDemo.CustomWidgets
 
             _field.Focus();
 
-            // フォーカスが確定した次のフレームでないと選択範囲が上書きされる
+            // The selection gets overwritten unless this waits for the frame after focus settles
             this.schedule.Execute(() =>
             {
                 if (_field != null)
@@ -1224,7 +1229,7 @@ namespace TweeqDemo.CustomWidgets
             }).StartingIn(0);
         }
 
-        /// <summary>操作可能／不可の切り替え。</summary>
+        /// <summary>Toggles interactive/non-interactive.</summary>
         public void SetInteractive(bool interactive)
         {
             _field.SetEnabled(interactive);
@@ -1233,7 +1238,7 @@ namespace TweeqDemo.CustomWidgets
             this.pickingMode = interactive ? PickingMode.Position : PickingMode.Ignore;
         }
 
-        /// <summary>テーマ由来の静的スタイルを流し込む。</summary>
+        /// <summary>Applies theme-derived static styles.</summary>
         public void ApplyTheme(TweeqTheme theme)
         {
             if (theme == null)
@@ -1241,10 +1246,11 @@ namespace TweeqDemo.CustomWidgets
                 return;
             }
 
-            // TextField を 24px の枠に収める正規化とキャレット色は公開ヘルパ任せ（EXT-03-A）
+            // The normalization that fits the TextField into a 24px box, and the caret color,
+            // are left to the public helper (EXT-03-A)
             TweeqInputBoxStyles.ApplyTextField(_field, theme);
 
-            // 区画の数字は中央寄せ。整列は widget 固有なのでヘルパの後に足す
+            // Segment digits are center-aligned. Alignment is widget-specific, so add it after the helper
             if (_textInput != null)
             {
                 _textInput.style.unityTextAlign = TextAnchor.MiddleCenter;
@@ -1257,13 +1263,13 @@ namespace TweeqDemo.CustomWidgets
 
             _field.style.unityTextAlign = TextAnchor.MiddleCenter;
 
-            // 数値欄なので Geist（fontNumeric）を当てる
+            // A numeric field, so apply Geist (fontNumeric)
             TweeqFonts.Apply(_field, TweeqFonts.NumericFont);
             TweeqFonts.Apply(_textInput, TweeqFonts.NumericFont);
             TweeqFonts.Apply(_textElement, TweeqFonts.NumericFont);
         }
 
-        /// <summary>文字色を差し替える（Invalid 表示）。</summary>
+        /// <summary>Swaps the text color (Invalid display).</summary>
         public void ApplyTextColor(Color color)
         {
             _field.style.color = color;
@@ -1283,7 +1289,7 @@ namespace TweeqDemo.CustomWidgets
 
         #region Scrub
 
-        /// <summary>スクラブ開始。感度は固定なので TweakGesture の speed 域も 1 に固定する。</summary>
+        /// <summary>Begins a scrub. Sensitivity is fixed, so TweakGesture's speed range is also pinned to 1.</summary>
         public void BeginScrub()
         {
             _scrubbing = true;
@@ -1292,25 +1298,26 @@ namespace TweeqDemo.CustomWidgets
             _gesture.Reset();
         }
 
-        /// <summary>スクラブ 1 サンプル。</summary>
+        /// <summary>One scrub sample.</summary>
         public void UpdateScrub(ScrubUpdate update)
         {
             if (!_scrubbing)
             {
-                // manipulator を介さない経路（テスト・キーボード）でも取りこぼさない
+                // Don't miss paths that bypass the manipulator (tests, keyboard) either
                 BeginScrub();
             }
 
             GestureModifiers modifiers = new GestureModifiers(update.Alt, update.Shift, false);
 
-            // 仕様 EXT-02: 感度は固定 4px = 1。縦ドラッグの感度変化は使わないので
-            // min/max speed をどちらも 1 に潰す
+            // Spec EXT-02: sensitivity fixed at 4px = 1. Vertical-drag sensitivity change isn't
+            // used, so collapse both min/max speed to 1
             GestureUpdate gesture = _gesture.Update(
                 update.DeltaX, update.DeltaY,
                 1.0 / EndpointInput.PIXELS_PER_STEP,
                 modifiers, EndpointInput.FAST_MULTIPLIER, 1.0, 1.0);
 
-            // 生値ごとクランプする。範囲外の数字が見えるのは事故のもと（NumberInput D-3 と同じ判断）
+            // Clamp on every raw value. Letting an out-of-range number show through invites bugs
+            // (same judgment as NumberInput D-3)
             _scrubLocal = TweeqMath.Clamp(_scrubLocal + gesture.Delta, 0.0, _max);
 
             NumberValidation validation = NumberValidator.Validate(
@@ -1332,13 +1339,13 @@ namespace TweeqDemo.CustomWidgets
             }
         }
 
-        /// <summary>スクラブ終了。</summary>
+        /// <summary>Ends the scrub.</summary>
         public void EndScrub()
         {
             _scrubbing = false;
         }
 
-        /// <summary>スクラブ中断。開始時の値へ戻す。</summary>
+        /// <summary>Cancels the scrub. Reverts to the value at the start.</summary>
         public void CancelScrub()
         {
             if (!_scrubbing)
@@ -1383,7 +1390,7 @@ namespace TweeqDemo.CustomWidgets
                 return;
             }
 
-            // 表示の書き戻しは SetValueWithoutNotify なので、ここへ来るのは利用者の打鍵だけ
+            // Writing the display back uses SetValueWithoutNotify, so only a user keystroke arrives here
             ApplyUserText(evt.newValue);
         }
 
@@ -1418,7 +1425,7 @@ namespace TweeqDemo.CustomWidgets
                     return;
             }
 
-            // キャレットが端に居るときだけセグメントを跨ぐ。文中では通常のキャレット移動
+            // Only crosses into another segment when the caret is at the edge. Normal caret movement mid-text
             int caret = _field.textSelection.cursorIndex;
             int length = Text.Length;
             bool atEdge = delta < 0 ? caret <= 0 : caret >= length;

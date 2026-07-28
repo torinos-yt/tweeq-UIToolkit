@@ -4,8 +4,8 @@ using Tweeq.Core;
 namespace Tweeq.Core.Tests
 {
     /// <summary>
-    /// SizeLogic の契約（m6-wave2-spec.md「テスト契約」の SizeLogic 項目）。
-    /// 片軸変更の比率追従・0 を含む比率・両軸同時変更での自動解除判定を見る。
+    /// SizeLogic's contract (the SizeLogic item under m6-wave2-spec.md's "test contract").
+    /// Covers the other axis following a single-axis change, ratios involving 0, and the automatic-release decision when both axes change at once.
     /// </summary>
     public class SizeLogicTests
     {
@@ -18,7 +18,7 @@ namespace Tweeq.Core.Tests
             Assert.AreEqual(keepRatio, actual.KeepRatio, "KeepRatio");
         }
 
-        #region 比率追従
+        #region Ratio following
 
         [Test]
         public void Apply_LockedXChangeScalesY()
@@ -47,7 +47,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void Apply_BaselineIsUsedInsteadOfPreviousValue()
         {
-            // ジェスチャ途中（previous は既に追従済み）でも、倍率は開始値から数える
+            // Even mid-gesture (where previous has already followed along), the multiplier is counted from the start value
             SizeApplyResult result = SizeLogic.Apply(200.0, 100.0, 300.0, 100.0, 100.0, 50.0, true);
 
             AssertResult(300.0, 150.0, true, result);
@@ -63,12 +63,12 @@ namespace Tweeq.Core.Tests
 
         #endregion
 
-        #region 0 を含む比率
+        #region Ratios involving 0
 
         [Test]
         public void Apply_ZeroBaselineOnTheDrivingAxisPassesThrough()
         {
-            // 0 からは倍率を作れない。他軸は据え置きで素通しする
+            // No multiplier can be formed from 0. The other axis is left unchanged and passed through
             SizeApplyResult result = SizeLogic.Apply(0.0, 50.0, 10.0, 50.0, true);
 
             AssertResult(10.0, 50.0, true, result);
@@ -92,12 +92,12 @@ namespace Tweeq.Core.Tests
 
         #endregion
 
-        #region 自動解除
+        #region Automatic release
 
         [Test]
         public void Apply_BothAxesChangedWithNewRatioReleasesTheLock()
         {
-            // 2:1 → 1:1。ユーザーが比率を崩しに来た入力なのでロックを外す
+            // 2:1 -> 1:1. Since this is input where the user came to break the ratio, the lock is released
             SizeApplyResult result = SizeLogic.Apply(100.0, 50.0, 200.0, 200.0, true);
 
             AssertResult(200.0, 200.0, false, result);
@@ -130,7 +130,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void Apply_RatioComparisonIsToleratedForRoundingNoise()
         {
-            // 200/100.0000001 は 2 とみなす。ここで解除するとドラッグ中に勝手に外れる
+            // 200/100.0000001 is treated as 2. Releasing here would cause the lock to come off by itself during a drag
             SizeApplyResult result = SizeLogic.Apply(100.0, 50.0, 200.0, 100.0000001, true);
 
             Assert.IsTrue(result.KeepRatio);
@@ -139,7 +139,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void Apply_DegenerateRatioOnBothSidesDoesNotReleaseTheLock()
         {
-            // 高さ 0 のまま両軸に値が入ると比率は ±∞ どうし。同値なら「変わっていない」扱いにする
+            // If both axes get values while height stays 0, the ratio is +/-Infinity on both sides. Equal values are treated as "unchanged"
             SizeApplyResult result = SizeLogic.Apply(100.0, 0.0, 200.0, 0.0, 100.0, 0.0, true);
 
             Assert.IsTrue(result.KeepRatio);
@@ -148,7 +148,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void Apply_LeavingADegenerateRatioReleasesTheLock()
         {
-            // 高さ 0（比率 ∞）から実寸へ抜けるのは比率変更そのもの
+            // Going from height 0 (ratio Infinity) to a real size is itself a ratio change
             SizeApplyResult result = SizeLogic.Apply(100.0, 0.0, 200.0, 5.0, true);
 
             AssertResult(200.0, 5.0, false, result);

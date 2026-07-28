@@ -3,8 +3,8 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// 入力ボックスを隣接させて並べるコンテナ（仕様 §1）。
-    /// 仕切り線もボーダー結合も持たず、gap 2px と各子の角丸だけで「つながり」を表現する。
+    /// A container that lines up input boxes adjacent to each other (spec §1).
+    /// It has no divider lines or merged borders — the "connection" is expressed only through a 2px gap and each child's corner rounding.
     /// </summary>
     [UxmlElement]
     public partial class InputGroup : VisualElement, ITweeqThemed
@@ -14,15 +14,15 @@ namespace Tweeq.UIToolkit
         FlexDirection _direction = FlexDirection.Row;
         TweeqTheme _theme = TweeqTheme.Dark();
 
-        // GeometryChangedEvent は毎レイアウトで飛んでくるので、
-        // 子構成が変わった時だけ再割り当てするためのガード
+        // GeometryChangedEvent fires on every layout pass, so this guards
+        // reassignment to only happen when the child composition changes
         int _positionedChildCount = -1;
 
         #endregion
 
         #region Public API
 
-        /// <summary>並びの方向。Row（既定）なら InlinePosition、Column なら BlockPosition を割り当てる。</summary>
+        /// <summary>The layout direction. Row (default) assigns InlinePosition; Column assigns BlockPosition.</summary>
         [UxmlAttribute("direction")]
         public FlexDirection Direction
         {
@@ -40,7 +40,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>gap の値を取る配色テーマ。null を渡した場合は Dark() にフォールバックする。</summary>
+        /// <summary>The color theme that supplies the gap value. Falls back to Dark() if null is passed.</summary>
         public TweeqTheme Theme
         {
             get => _theme;
@@ -51,7 +51,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>子を追加して位置を再割り当てする。</summary>
+        /// <summary>Adds a child and reassigns positions.</summary>
         public new void Add(VisualElement child)
         {
             if (child == null)
@@ -63,7 +63,7 @@ namespace Tweeq.UIToolkit
             RefreshPositions();
         }
 
-        /// <summary>子を取り外して位置を再割り当てする。</summary>
+        /// <summary>Removes a child and reassigns positions.</summary>
         public new void Remove(VisualElement child)
         {
             if (child == null || child.parent != this)
@@ -75,7 +75,7 @@ namespace Tweeq.UIToolkit
             RefreshPositions();
         }
 
-        /// <summary>子をすべて取り外す。</summary>
+        /// <summary>Removes all children.</summary>
         public new void Clear()
         {
             base.Clear();
@@ -83,8 +83,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 子の位置と gap を割り当て直す。位置の対象は <see cref="ITweeqInputBox"/> 実装子のみ。
-        /// 子構成を直接いじった場合は手動で呼ぶ。
+        /// Reassigns child positions and gaps. Only children implementing <see cref="ITweeqInputBox"/> are targeted for positioning.
+        /// Call manually if the child composition was modified directly.
         /// </summary>
         public void RefreshPositions()
         {
@@ -120,7 +120,7 @@ namespace Tweeq.UIToolkit
                     continue;
                 }
 
-                // 2 個未満なら「つながり」が存在しないので割り当てない（仕様 §1）
+                // With fewer than 2, no "connection" exists, so nothing is assigned (spec §1)
                 TweeqBoxPosition position = boxCount < 2
                     ? TweeqBoxPosition.None
                     : Resolve(boxIndex, boxCount);
@@ -151,8 +151,8 @@ namespace Tweeq.UIToolkit
             this.style.flexDirection = _direction;
             this.style.flexGrow = 1f;
 
-            // 子の追加は InputGroup.Add 経由が正規ルートだが、hierarchy 直操作や
-            // VisualElement 型経由の Add を取りこぼさないための保険を 2 段掛ける
+            // Adding children via InputGroup.Add is the canonical route, but these two fallbacks
+            // catch direct hierarchy manipulation or Add calls made through the VisualElement type
             this.RegisterCallback<AttachToPanelEvent>(OnAttachToPanel, TrickleDown.TrickleDown);
             this.RegisterCallback<GeometryChangedEvent>(OnGeometryChanged);
         }
@@ -171,9 +171,9 @@ namespace Tweeq.UIToolkit
             return index == count - 1 ? TweeqBoxPosition.End : TweeqBoxPosition.Middle;
         }
 
-        // UI Toolkit 6000.3 のインラインスタイルには flex gap が無いので、子のマージンで代替する。
-        // 末尾の 1 個だけ外すのは「間隔」であって「余白」ではないため。
-        // 判定は ITweeqInputBox 実装子ではなく全子で行う（末尾がラベル等でも間隔は要る）
+        // UI Toolkit 6000.3's inline styles have no flex gap, so child margins are used instead.
+        // Only the last one has its margin removed, because this is "spacing", not "padding".
+        // The check runs over all children, not just ITweeqInputBox implementers (spacing is still needed even if the last child is a label, etc.)
         static void ApplyGap(VisualElement child, float gap, bool row, bool last)
         {
             float value = last ? 0f : gap;
@@ -181,8 +181,8 @@ namespace Tweeq.UIToolkit
             child.style.marginBottom = row ? 0f : value;
         }
 
-        // 幅（高さ）を等分する。NumberInput は子がすべて絶対配置でコンテンツ幅を持たないため、
-        // これが無いと minWidth まで潰れる。呼び出し側が明示指定済みなら尊重する
+        // Splits width (height) evenly. NumberInput's children are all absolutely positioned and have no content width,
+        // so without this they'd collapse down to minWidth. If the caller has already specified it explicitly, that is respected
         static void ApplyStretch(VisualElement child)
         {
             if (child.style.flexGrow.keyword == StyleKeyword.Null)
@@ -203,7 +203,7 @@ namespace Tweeq.UIToolkit
 
         void OnGeometryChanged(GeometryChangedEvent evt)
         {
-            // スタイル更新でこのコールバックが再入しても、子数が同じなら何もしない
+            // Even if this callback re-enters due to a style update, do nothing if the child count is unchanged
             if (_positionedChildCount == this.childCount)
             {
                 return;

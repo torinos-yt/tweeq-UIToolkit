@@ -53,7 +53,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void FormatTimecodeKeepsFractionalFramesAsIs()
         {
-            // 原典の pad は padStart(2,'0') なので 3 文字以上はそのまま出る
+            // The original's pad is padStart(2,'0'), so anything 3 characters or longer comes out as-is
             Assert.That(TimecodeLogic.FormatTimecode(1.5, 24.0), Is.EqualTo("00:00:1.5"));
             Assert.That(TimecodeLogic.FormatTimecode(24.5, 24.0), Is.EqualTo("00:01:0.5"));
         }
@@ -70,7 +70,7 @@ namespace Tweeq.Core.Tests
 
         #endregion
 
-        #region TryParseTimecode（原典 utils.test.ts の移植）
+        #region TryParseTimecode (ported from the original utils.test.ts)
 
         [Test]
         public void ParsesTimecodeSplitByColon()
@@ -152,7 +152,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void TruncatesFractionalFrameLiterals()
         {
-            // 原典が parseInt なので、フレーム指定の小数は 0 方向へ切り捨てられる
+            // Since the original uses parseInt, fractional frame specifications are truncated toward 0
             Assert.That(Parse("1.9f", 24.0), Is.EqualTo(1.0).Within(TOLERANCE));
             Assert.That(Parse("-1.9f", 24.0), Is.EqualTo(-1.0).Within(TOLERANCE));
             Assert.That(Parse("2.5", 24.0), Is.EqualTo(2.0).Within(TOLERANCE));
@@ -161,7 +161,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void RoundsFractionalUnitLiterals()
         {
-            // 秒・分・時は Math.round（+∞ 方向）
+            // Seconds/minutes/hours use Math.round (rounds toward +infinity)
             Assert.That(Parse("1.5s", 24.0), Is.EqualTo(36.0).Within(TOLERANCE));
             Assert.That(Parse("0.5s", 25.0), Is.EqualTo(13.0).Within(TOLERANCE));
             Assert.That(Parse("1.5h", 24.0), Is.EqualTo(129600.0).Within(TOLERANCE));
@@ -203,7 +203,7 @@ namespace Tweeq.Core.Tests
 
         #endregion
 
-        #region ReplaceTimecodeWithFrames（原典 utils.test.ts の移植）
+        #region ReplaceTimecodeWithFrames (ported from the original utils.test.ts)
 
         [Test]
         public void ReplacesTimecodeWithFrames()
@@ -220,7 +220,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void ReplacesColonLiteralsWithTheGivenFrameRate()
         {
-            // 原典 Vue はここだけ 24 決め打ち（バグ）。fps 可変が要件なので frameRate を使う
+            // The original Vue hardcodes 24 here only (a bug). Since variable fps is a requirement, we use frameRate
             Assert.That(TimecodeLogic.ReplaceTimecodeWithFrames("1:00", 30.0), Is.EqualTo("30"));
             Assert.That(TimecodeLogic.ReplaceTimecodeWithFrames("00:01:00", 60.0),
                 Is.EqualTo("60"));
@@ -253,7 +253,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void ReplacementFeedsTheExpressionEvaluator()
         {
-            // 確定時の実経路: 置換 → 評価
+            // The actual path on commit: replace -> evaluate
             string code = TimecodeLogic.ReplaceTimecodeWithFrames("1:00 + 10f", 24.0);
             Assert.That(TweeqExpression.TryEvaluate(code, out double value), Is.True);
             Assert.That(value, Is.EqualTo(34.0).Within(TOLERANCE));
@@ -266,7 +266,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void ScaleSpeedFollowsTheOriginalTable()
         {
-            // frames は fps 非依存の固定感度
+            // frames has a fixed sensitivity independent of fps
             Assert.That(TimecodeLogic.ScaleSpeed(0, 24.0), Is.EqualTo(0.25).Within(TOLERANCE));
             Assert.That(TimecodeLogic.ScaleSpeed(0, 60.0), Is.EqualTo(0.25).Within(TOLERANCE));
 
@@ -311,7 +311,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void SnapToFramesRoundsHalvesTowardPositiveInfinity()
         {
-            // frames の感度が 1/4px なので、負側の .5 は日常的に出る。JS Math.round と同じ側へ倒す
+            // Since frames has a sensitivity of 1/4px, .5 on the negative side comes up routinely. Round it the same way as JS Math.round
             Assert.That(TimecodeLogic.SnapToScale(24.5, 0, 24.0), Is.EqualTo(25.0).Within(TOLERANCE));
             Assert.That(TimecodeLogic.SnapToScale(-24.5, 0, 24.0),
                 Is.EqualTo(-24.0).Within(TOLERANCE));
@@ -332,7 +332,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void SnapToScaleKeepsTheOffsetInsideTheUnit()
         {
-            // 25 フレーム目から秒スナップすると 1, 25, 49, ... に乗る（原典 tweakSnapParams）
+            // Snapping to seconds from frame 25 lands on 1, 25, 49, ... (the original tweakSnapParams)
             Assert.That(TimecodeLogic.SnapToScale(26.0, 1, 24.0, 25.0),
                 Is.EqualTo(25.0).Within(TOLERANCE));
             Assert.That(TimecodeLogic.SnapToScale(38.0, 1, 24.0, 25.0),
@@ -346,7 +346,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void SnapToScaleIsStableOnItsOwnResult()
         {
-            // 原典は offset を毎回 model % step で取り直すので、スナップ後も同じ格子に乗り続ける
+            // The original recomputes offset every time as model % step, so it keeps landing on the same grid even after snapping
             double snapped = TimecodeLogic.SnapToScale(38.0, 1, 24.0, 25.0);
             Assert.That(TimecodeLogic.SnapToScale(snapped, 1, 24.0, snapped),
                 Is.EqualTo(snapped).Within(TOLERANCE));
@@ -364,7 +364,7 @@ namespace Tweeq.Core.Tests
         {
             Assert.That(TimecodeLogic.SnapToScale(double.NaN, 1, 24.0), Is.NaN);
             Assert.That(TimecodeLogic.SnapToScale(10.0, 1, 0.0), Is.EqualTo(10.0).Within(TOLERANCE));
-            // offset が使えないときは余り保存を諦めて単位境界へ落とす
+            // When offset can't be used, give up on preserving the remainder and fall to the unit boundary
             Assert.That(TimecodeLogic.SnapToScale(10.0, 1, 24.0, double.NaN),
                 Is.EqualTo(0.0).Within(TOLERANCE));
         }

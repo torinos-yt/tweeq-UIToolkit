@@ -4,20 +4,22 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// N 要素の数値タプル（仕様 §2）の共通実装。内部は横並びの <see cref="InputGroup"/> に N 個の
-    /// <see cref="NumberInput"/> を並べただけで、フォーカス移動は素の Tab 順に任せる。
+    /// Common implementation for an N-element numeric tuple (spec §2). Internally it's just N
+    /// <see cref="NumberInput"/> instances lined up in a horizontal <see cref="InputGroup"/>, leaving
+    /// focus movement to plain Tab order.
     /// </summary>
     /// <remarks>
-    /// 値の運び方（float[] か Vector2/3/4 か）だけを派生に委ね、軸の生成・レンジ解決・
-    /// 「1 ジェスチャ 1 回」の確定はここに集約する。
-    /// 通知フックが「変わった軸番号と旧値」しか受け取らないのは、派生が配列・ボクシング・
-    /// クロージャを作らずに通知できるようにするため（軸ドラッグ中は毎フレーム走るので、
-    /// ここで確保すると GC が回る）。
-    /// 軸の値は clamp / step を通した後の <see cref="NumberInput.value"/> が唯一の正なので、
-    /// 基底側では複製を持たない（持つと丸め結果とずれる余地が増えるだけ）。
-    /// 抽象クラスだが <c>[UxmlElement]</c> を付けてある。UXML 要素としては登録されないが、
-    /// ここで宣言した <c>[UxmlAttribute]</c>（min/max/step/precision/…）を派生の
-    /// UxmlSerializedData が継承できるのは、基底にも属性が付いている場合だけ。
+    /// Only the value transport (float[] vs. Vector2/3/4) is delegated to derived classes; axis creation,
+    /// range resolution, and "one confirm per gesture" are all centralized here.
+    /// The change hook only receives "the axis index that changed and its previous value" so that derived
+    /// classes can be notified without allocating arrays, boxing, or closures (this runs every frame during
+    /// an axis drag, so allocating here would trigger GC).
+    /// An axis's value is only ever the single source of truth after passing through
+    /// <see cref="NumberInput.value"/>'s clamp/step, so the base class keeps no duplicate
+    /// (keeping one would only create room for it to drift from the rounded result).
+    /// This is an abstract class but still carries <c>[UxmlElement]</c>. It isn't registered as a UXML
+    /// element itself, but the <c>[UxmlAttribute]</c>s declared here (min/max/step/precision/…) can only be
+    /// inherited by a derived class's UxmlSerializedData if the base class also carries the attribute.
     /// </remarks>
     [UxmlElement]
     public abstract partial class VecInputBase : VisualElement, ITweeqThemed
@@ -27,7 +29,7 @@ namespace Tweeq.UIToolkit
         const int MIN_DIMENSIONS = 2;
         const int MAX_DIMENSIONS = 4;
 
-        // NumberInput.Precision の既定と同値。ここでずれると軸へ配った瞬間に表示桁が変わってしまう
+        // Matches NumberInput.Precision's default. If this drifts, the displayed digits would change the moment it's distributed to the axes
         const int DEFAULT_PRECISION = 4;
 
         static readonly string[] DEFAULT_AXIS_LABELS = { "X", "Y", "Z", "W" };
@@ -50,17 +52,17 @@ namespace Tweeq.UIToolkit
 
         TweeqTheme _theme = TweeqTheme.Dark();
 
-        // 子へ書き戻している最中の通知を自分の入力と誤認しないためのガード
+        // A guard to avoid mistaking notifications during write-back to children as our own input
         bool _syncing;
 
         #endregion
 
         #region Public API
 
-        /// <summary>軸数。コンストラクタで 2〜4 に丸められる。</summary>
+        /// <summary>The number of axes. Clamped to 2–4 in the constructor.</summary>
         public int Dimensions => _dimensions;
 
-        /// <summary>各軸の下限。null=制限なし／長さ1=全軸共通／長さN=軸ごと。</summary>
+        /// <summary>The lower bound for each axis. null = unbounded / length 1 = shared across all axes / length N = per axis.</summary>
         [UxmlAttribute]
         public double[] Min
         {
@@ -72,7 +74,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>各軸の上限。解釈は <see cref="Min"/> と同じ。</summary>
+        /// <summary>The upper bound for each axis. Interpreted the same way as <see cref="Min"/>.</summary>
         [UxmlAttribute]
         public double[] Max
         {
@@ -84,7 +86,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>各軸の量子化幅。解釈は <see cref="Min"/> と同じ。</summary>
+        /// <summary>The quantization step for each axis. Interpreted the same way as <see cref="Min"/>.</summary>
         [UxmlAttribute]
         public double[] Step
         {
@@ -96,7 +98,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>軸ラベル。null で既定（"X","Y","Z","W" の先頭 N 個）に戻る。</summary>
+        /// <summary>The axis labels. null reverts to the default (the first N of "X","Y","Z","W").</summary>
         [UxmlAttribute]
         public string[] AxisLabels
         {
@@ -108,7 +110,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>全軸の静止時表示桁。既定 4（NumberInput の既定と同じ）。</summary>
+        /// <summary>The at-rest display digits for all axes. Default 4 (same as NumberInput's default).</summary>
         [UxmlAttribute]
         public int Precision
         {
@@ -121,10 +123,11 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 操作不能状態。各軸の <see cref="NumberInput"/> へ伝播するので、視覚も軸側の実装に従う。
+        /// The disabled state. Propagates to each axis's <see cref="NumberInput"/>, so the visuals also follow the axis-side implementation.
         /// </summary>
         /// <remarks>
-        /// tweeq-react 最新版（InputVec.vue:74-75）が同じ拡張を持つので Vue 最新仕様として扱う。
+        /// Another reference implementation's latest version (InputVec.vue:74-75) carries the same
+        /// extension, so this is treated as matching the latest Vue spec.
         /// </remarks>
         [UxmlAttribute]
         public bool Disabled
@@ -142,7 +145,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>不正値表示。各軸の <see cref="NumberInput"/> へ伝播する。</summary>
+        /// <summary>Invalid-value display. Propagates to each axis's <see cref="NumberInput"/>.</summary>
         [UxmlAttribute]
         public bool Invalid
         {
@@ -159,7 +162,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>配色テーマ。子の NumberInput へそのまま伝播する。</summary>
+        /// <summary>The color theme. Propagates directly to the child NumberInputs.</summary>
         public TweeqTheme Theme
         {
             get => _theme;
@@ -176,8 +179,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 軸の NumberInput。Precision や Bar など個別の見た目を触りたい場合に使う
-        /// （API 契約 §6 には無い追加分）。範囲外なら null。
+        /// The axis's NumberInput. Use this when you need to touch an individual visual detail like
+        /// Precision or Bar (an addition not present in API contract §6). Null if out of range.
         /// </summary>
         public NumberInput GetAxis(int index)
         {
@@ -215,7 +218,7 @@ namespace Tweeq.UIToolkit
                     LeftLabel = _axisLabels[i],
                 };
 
-                // 軸番号はイベント側から引き直す（ラムダで捕まえるとその場でクロージャが 1 個増える）
+                // The axis index is re-derived from the event side (capturing it in a lambda would add a closure allocation on the spot)
                 axis.RegisterValueChangedCallback(HandleAxisValueChanged);
                 axis.Confirmed += HandleAxisConfirmed;
 
@@ -225,7 +228,7 @@ namespace Tweeq.UIToolkit
 
             ApplyRanges();
 
-            // 既定値どうしが一致していても、基底の値を唯一の正にしておく
+            // Even though the default values already match, treat the base class's value as the single source of truth
             ApplyPrecision();
         }
 
@@ -233,7 +236,7 @@ namespace Tweeq.UIToolkit
 
         #region Derived API
 
-        /// <summary>軸の現在値。複製を作らずに 1 軸だけ読む。範囲外は 0。</summary>
+        /// <summary>The axis's current value. Reads a single axis without making a copy. 0 if out of range.</summary>
         protected float GetAxisValue(int index)
         {
             if (index < 0 || index >= _dimensions)
@@ -245,11 +248,11 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 全軸をイベント無しで書く。軸数を超える引数は捨てられるので、
-        /// 2 次元なら <paramref name="v2"/> 以降に何を渡しても構わない。
+        /// Writes all axes without raising events. Arguments beyond the axis count are discarded, so for a
+        /// 2D instance it doesn't matter what you pass for <paramref name="v2"/> onward.
         /// </summary>
         /// <remarks>
-        /// 配列ではなく 4 引数で受けるのは、呼び出し側（typed 派生）に一時配列を作らせないため。
+        /// Taking 4 arguments instead of an array is so the caller (a typed derived class) doesn't need to allocate a temporary array.
         /// </remarks>
         protected void SetAxesWithoutNotify(float v0, float v1, float v2, float v3)
         {
@@ -264,24 +267,24 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 軸の値がユーザー操作で変わった。<paramref name="changedAxis"/> と
-        /// <paramref name="previousAxisValue"/> があれば、派生は変更前の値も複製無しで組み立てられる。
+        /// An axis's value changed due to user interaction. Given <paramref name="changedAxis"/> and
+        /// <paramref name="previousAxisValue"/>, a derived class can assemble the pre-change value too, without a copy.
         /// </summary>
         protected virtual void OnAxesChanged(int changedAxis, float previousAxisValue)
         {
         }
 
-        /// <summary>ドラッグ確定・Enter・blur で 1 回だけ呼ばれる（軸数ぶんは呼ばれない）。</summary>
+        /// <summary>Called exactly once on drag-confirm, Enter, or blur (not once per axis).</summary>
         protected virtual void OnConfirmed()
         {
         }
 
         /// <summary>
-        /// <c>INotifyValueChanged&lt;T&gt;</c> を実装する派生のための ChangeEvent 送出。
-        /// panel が無ければ黙って捨てる（EditMode テストや未アタッチ時に落とさないため）。
+        /// Dispatches a ChangeEvent for derived classes implementing <c>INotifyValueChanged&lt;T&gt;</c>.
+        /// Silently dropped if there's no panel (so it doesn't fail during EditMode tests or before attachment).
         /// </summary>
         /// <remarks>
-        /// ChangeEvent はプールされるので、値型 T ならドラッグ中でも新規確保もボクシングも起きない。
+        /// ChangeEvent is pooled, so for a value type T, no new allocation or boxing occurs even during a drag.
         /// </remarks>
         protected void SendChangeEvent<T>(T previous, T current)
         {
@@ -327,7 +330,7 @@ namespace Tweeq.UIToolkit
             OnAxesChanged(index, evt.previousValue);
         }
 
-        // 1 ジェスチャ = 1 軸なので、受け取った確定をそのまま 1 回だけ転送する（全軸ループはしない）
+        // One gesture = one axis, so the received confirm is forwarded exactly once as-is (no looping over all axes)
         void HandleAxisConfirmed(float axisValue)
         {
             if (_syncing)
@@ -419,7 +422,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        // null / 空 → 指定なし、長さ1 → 全軸共通、それ以外 → 軸ごと（足りない分は指定なし）
+        // null / empty → unspecified, length 1 → shared across all axes, otherwise → per axis (missing entries are unspecified)
         static double Resolve(double[] source, int index, double fallback)
         {
             if (source == null || source.Length == 0)

@@ -11,7 +11,7 @@ namespace Tweeq.Core.Tests
         static readonly TweeqRect Anchor = new TweeqRect(100.0, 100.0, 60.0, 20.0);
         static readonly TweeqVec2 Size = new TweeqVec2(40.0, 30.0);
 
-        // flip も shift も起きない十分に広い viewport
+        // A viewport wide enough that neither flip nor shift occurs.
         static readonly TweeqVec2 Viewport = new TweeqVec2(1000.0, 1000.0);
 
         static PopoverResult ResolveInWideViewport(
@@ -72,7 +72,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void MainOffsetPushesAwayAndCrossOffsetSlidesInward()
         {
-            // start は開始辺から内側へ、end は終端辺から内側へ効く（CSS の margin と同じ向き）
+            // start applies inward from the start edge, and end applies inward from the end edge (same direction as CSS margin).
             AssertPosition(ResolveInWideViewport(PopoverPlacement.BottomStart, 6.0, 4.0), 104.0, 126.0);
             AssertPosition(ResolveInWideViewport(PopoverPlacement.TopEnd, 6.0, 4.0), 116.0, 64.0);
             AssertPosition(ResolveInWideViewport(PopoverPlacement.RightStart, 6.0, 4.0), 166.0, 104.0);
@@ -115,7 +115,7 @@ namespace Tweeq.Core.Tests
 
             PopoverResult result = PopoverLogic.Resolve(anchor, size, viewport, PopoverPlacement.Right);
 
-            // flip-block は Right を変えられないので、2 番目の候補 flip-inline が採用される
+            // flip-block can't change Right, so the second candidate, flip-inline, is adopted.
             Assert.That(result.Effective, Is.EqualTo(PopoverPlacement.Left));
             AssertPosition(result, 90.0, 95.0);
             Assert.That(result.ArrowSide, Is.EqualTo(PopoverLogic.ARROW_SIDE_RIGHT));
@@ -130,7 +130,7 @@ namespace Tweeq.Core.Tests
 
             PopoverResult result = PopoverLogic.Resolve(anchor, size, viewport, PopoverPlacement.LeftStart);
 
-            // 左右配置ではブロック軸＝クロス軸なので flip-block は start↔end になる
+            // For a left/right placement, the block axis is the cross axis, so flip-block becomes start<->end.
             Assert.That(result.Effective, Is.EqualTo(PopoverPlacement.LeftEnd));
             AssertPosition(result, 260.0, 110.0);
             Assert.That(result.ArrowSide, Is.EqualTo(PopoverLogic.ARROW_SIDE_RIGHT));
@@ -145,7 +145,7 @@ namespace Tweeq.Core.Tests
 
             PopoverResult result = PopoverLogic.Resolve(anchor, size, viewport, PopoverPlacement.BottomStart);
 
-            // flip-block(TopStart) も flip-inline(BottomEnd) も収まらず、両方適用の TopEnd だけが収まる
+            // Neither flip-block(TopStart) nor flip-inline(BottomEnd) fits; only TopEnd, with both applied, fits.
             Assert.That(result.Effective, Is.EqualTo(PopoverPlacement.TopEnd));
             AssertPosition(result, 130.0, 140.0);
         }
@@ -159,7 +159,7 @@ namespace Tweeq.Core.Tests
 
             PopoverResult result = PopoverLogic.Resolve(anchor, size, viewport, PopoverPlacement.BottomStart);
 
-            // 横だけが溢れるので flip-block(TopStart) は効かず、flip-inline の BottomEnd が採用される
+            // Only the horizontal overflows, so flip-block(TopStart) has no effect; flip-inline's BottomEnd is adopted instead.
             Assert.That(result.Effective, Is.EqualTo(PopoverPlacement.BottomEnd));
             AssertPosition(result, 130.0, 120.0);
             Assert.That(result.ArrowSide, Is.EqualTo(PopoverLogic.ARROW_SIDE_TOP));
@@ -176,7 +176,7 @@ namespace Tweeq.Core.Tests
             PopoverResult result = PopoverLogic.Resolve(anchor, size, viewport, PopoverPlacement.TopStart);
 
             Assert.That(result.Effective, Is.EqualTo(PopoverPlacement.TopStart));
-            // どこにも収まらないので margin を守る左上へ寄せるだけ
+            // Nothing fits anywhere, so it's just pushed to the top-left corner that respects the margin.
             AssertPosition(result, 8.0, 8.0);
         }
 
@@ -193,7 +193,7 @@ namespace Tweeq.Core.Tests
 
             PopoverResult result = PopoverLogic.Resolve(anchor, size, viewport, PopoverPlacement.Bottom);
 
-            // 左右どちらへ flip しても収まらないので Bottom のまま cross 軸を shift する
+            // Flipping to either the left or right still doesn't fit, so it stays Bottom and shifts along the cross axis instead.
             Assert.That(result.Effective, Is.EqualTo(PopoverPlacement.Bottom));
             AssertPosition(result, 132.0, 120.0);
             Assert.That(result.X + size.X, Is.EqualTo(viewport.X - 8.0).Within(TOLERANCE));
@@ -220,7 +220,7 @@ namespace Tweeq.Core.Tests
 
             PopoverResult result = PopoverLogic.Resolve(anchor, size, viewport, PopoverPlacement.Bottom);
 
-            // 両端が溢れる時は開始側（左端）を優先する（Popover.vue のコメントどおり）
+            // When both edges overflow, the start side (left edge) is prioritized (as noted in Popover.vue's own comment).
             Assert.That(result.X, Is.EqualTo(8.0).Within(TOLERANCE));
         }
 
@@ -261,7 +261,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void OverlappingPopoverFallsBackToTheRequestedSide()
         {
-            // anchor を完全に覆う大きさ＝どの辺でも判定できないので requestedSide の対辺を使う
+            // Sized to fully cover the anchor, i.e. no edge can be determined, so the opposite side of requestedSide is used.
             var anchor = new TweeqRect(20.0, 20.0, 10.0, 10.0);
             var size = new TweeqVec2(100.0, 100.0);
             var viewport = new TweeqVec2(50.0, 50.0);
@@ -272,7 +272,7 @@ namespace Tweeq.Core.Tests
                 Is.EqualTo(PopoverLogic.ARROW_SIDE_TOP));
             Assert.That(PopoverLogic.Resolve(anchor, size, viewport, PopoverPlacement.Right).ArrowSide,
                 Is.EqualTo(PopoverLogic.ARROW_SIDE_LEFT));
-            // Vue 原典が丸ごと 'right' にしていたケース。Left 希望なら右辺で正しい
+            // The case where the Vue original just used 'right' outright. With a Left request, the right edge is actually correct.
             Assert.That(PopoverLogic.Resolve(anchor, size, viewport, PopoverPlacement.LeftEnd).ArrowSide,
                 Is.EqualTo(PopoverLogic.ARROW_SIDE_RIGHT));
         }
@@ -286,7 +286,7 @@ namespace Tweeq.Core.Tests
             PopoverResult result = PopoverLogic.Resolve(
                 anchor, size, Viewport, PopoverPlacement.BottomStart);
 
-            // anchor 中心 130 - popover 左端 100
+            // anchor center 130 - popover left edge 100
             Assert.That(result.ArrowOffset, Is.EqualTo(30.0).Within(TOLERANCE));
 
             PopoverResult centered = PopoverLogic.Resolve(anchor, size, Viewport, PopoverPlacement.Bottom);
@@ -301,7 +301,7 @@ namespace Tweeq.Core.Tests
             var size = new TweeqVec2(60.0, 30.0);
             var viewport = new TweeqVec2(200.0, 1000.0);
 
-            // shift で popover が anchor から離れた分、矢印は端へ寄るが radius+AW/2 = 20 で止まる
+            // As shift moves the popover away from the anchor, the arrow drifts toward the edge, but stops at radius+AW/2 = 20.
             PopoverResult shifted = PopoverLogic.Resolve(anchor, size, viewport, PopoverPlacement.Bottom);
 
             Assert.That(shifted.ArrowOffset, Is.EqualTo(size.X - 20.0).Within(TOLERANCE));
@@ -316,7 +316,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void ArrowSitsAtTheCenterWhenTheEdgeIsTooShort()
         {
-            // 辺が radius+AW/2 の 2 倍以下だとクランプ域が反転するので中央固定になる
+            // When the edge is at most twice radius+AW/2, the clamp range inverts, so it's fixed to the center.
             var size = new TweeqVec2(30.0, 20.0);
 
             PopoverResult result = PopoverLogic.Resolve(Anchor, size, Viewport, PopoverPlacement.Bottom);
@@ -334,7 +334,7 @@ namespace Tweeq.Core.Tests
             PopoverResult result = PopoverLogic.Resolve(anchor, size, Viewport, PopoverPlacement.RightStart);
 
             Assert.That(result.ArrowSide, Is.EqualTo(PopoverLogic.ARROW_SIDE_LEFT));
-            // anchor 中心 130 - popover 上端 100
+            // anchor center 130 - popover top edge 100
             Assert.That(result.ArrowOffset, Is.EqualTo(30.0).Within(TOLERANCE));
         }
 

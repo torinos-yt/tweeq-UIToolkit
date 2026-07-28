@@ -3,9 +3,9 @@ using NUnit.Framework;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// StringShuffleInput（UXML 用の string 特化ラッパ）の契約。
-    /// 基底 ShuffleInput の挙動は ShuffleInputTests が見るので、ここでは
-    /// 「既定 Generate = Options からの抽選」と Options のコピー境界だけを見る。
+    /// Contract for StringShuffleInput (a string-specialized wrapper for UXML).
+    /// The behavior of the base ShuffleInput is covered by ShuffleInputTests, so here
+    /// we only cover the "default Generate = draw from Options" behavior and the Options copy boundary.
     /// </summary>
     public class StringShuffleInputTests
     {
@@ -16,7 +16,7 @@ namespace Tweeq.UIToolkit.Tests
             return input;
         }
 
-        #region 既定 Generate
+        #region Default Generate
 
         [Test]
         public void Default_ClickPicksFromOptions()
@@ -33,7 +33,7 @@ namespace Tweeq.UIToolkit.Tests
         {
             StringShuffleInput input = Create("a", "a", "b");
 
-            // 2 択なら「同じものを引いたら隣へずらす」の効果でクリックごとに必ず入れ替わる
+            // With 2 options, the "shift to the neighbor if the same one is drawn" effect guarantees a swap on every click
             for (int i = 0; i < 20; i++)
             {
                 string before = input.value;

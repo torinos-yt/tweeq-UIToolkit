@@ -4,14 +4,14 @@ using NUnit.Framework;
 namespace Tweeq.Core.Tests
 {
     /// <summary>
-    /// FuzzySearch の一致条件と順位（m6-wave2-spec.md「テスト契約」の FuzzySearch 項目）を検証する。
+    /// Verifies FuzzySearch's match conditions and ranking (the FuzzySearch entry of m6-wave2-spec.md's "test contracts").
     ///
-    /// スコアの絶対値は実装都合なので一切見ない。見るのは
-    /// 「通す／落とす」と「prefix &gt; 語頭 &gt; 連続 &gt; 疎」の相対順位だけ。
+    /// The absolute score value is never looked at, since that's an implementation detail. What's
+    /// checked is only "pass/drop" and the relative ranking of "prefix &gt; word-start &gt; contiguous &gt; sparse."
     /// </summary>
     public class FuzzySearchTests
     {
-        // 一致の種別だけが違う 4 件。先頭位置・語頭性・連続性を 1 つずつ剥がしてある
+        // 4 entries that differ only in match kind. Leading position, word-startness, and contiguity are each peeled off one at a time.
         static readonly string[] Kinds = { "abc", "x ab", "xab", "xaxb" };
 
         static List<int> Filter(string query, params string[] labels)
@@ -26,7 +26,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void OnlySubsequenceMatchesPass()
         {
-            // "ba" は a→b の順で辿れないので落ちる（タイプミス救済はしない）
+            // "ba" is dropped since it can't be traced in the a->b order (typo recovery is not performed).
             Assert.AreEqual(new[] { 0 }, Filter("ab", "ab", "ba").ToArray());
         }
 
@@ -99,7 +99,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void SeparatorsCountAsWordStart()
         {
-            // 区切り扱いする文字はどれも語頭ボーナスを生む
+            // Any character treated as a separator produces a word-start bonus.
             Assert.IsTrue(FuzzySearch.TryScore("ab", "xab", out int plain));
 
             foreach (string label in new[] { "x ab", "x_ab", "x-ab", "x/ab", "x.ab", "x:ab" })
@@ -142,7 +142,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void TiesKeepTheOriginalOrderWhenInterleavedWithBetterMatches()
         {
-            // 同点の "x ab" 同士は元順のまま、prefix の "abc" だけが前に出る
+            // The tied "x ab" entries keep their original order; only the prefix match "abc" moves ahead.
             Assert.AreEqual(
                 new[] { 2, 0, 1 },
                 Filter("ab", "x ab", "x ab", "abc").ToArray());
@@ -222,7 +222,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void NullEntriesAreStillCountedByAnEmptyQuery()
         {
-            // 空クエリは「絞り込み無し」なので、中身に関わらず全件を返す
+            // An empty query means "no filtering," so every entry is returned regardless of content.
             Assert.AreEqual(new[] { 0, 1 }, Filter(string.Empty, null, "abc").ToArray());
         }
 

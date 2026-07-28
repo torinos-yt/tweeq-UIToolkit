@@ -4,7 +4,7 @@ using UnityEngine.UIElements;
 
 namespace Tweeq.UIToolkit
 {
-    /// <summary>テキストの水平整列（Vue の InputAlign 相当）。</summary>
+    /// <summary>The text's horizontal alignment (equivalent to Vue's InputAlign).</summary>
     public enum TweeqTextAlign
     {
         Left,
@@ -13,18 +13,18 @@ namespace Tweeq.UIToolkit
     }
 
     /// <summary>
-    /// 文字列入力欄（string-color-spec.md「StringInput」節）。
+    /// A string input field (string-color-spec.md, the "StringInput" section).
     ///
-    /// NumberInput と違い、テキスト編集を邪魔するジェスチャ（スクラブ）が無いので
-    /// TextField を常時前面に置いたままにする。表示用オーバーレイと編集用 TextField を
-    /// 切り替える二段構えを取らないのは、仕様の「ポインタ由来のフォーカスでは全選択せず
-    /// クリック位置にキャレット」を成立させるため（クリック後に TextField を出す方式だと
-    /// 押した座標のキャレットが失われる）。
+    /// Unlike NumberInput, there's no gesture (scrub) that would interfere with text editing, so
+    /// TextField is kept in front at all times. The reason it doesn't switch between a display overlay
+    /// and an editing TextField the way NumberInput does is to satisfy the spec's "pointer-originated
+    /// focus doesn't select all; the caret goes to the click position" (with a scheme that only shows
+    /// TextField after a click, the caret at the clicked coordinate would be lost).
     ///
-    /// 編集セッションの状態機械（<see cref="BeginEditing" /> / <see cref="SetEditingText" /> /
-    /// <see cref="CommitEditing" /> / <see cref="EndEditing" /> / <see cref="CancelEditing" />）は
-    /// panel 非依存にしてある。実 UI のフォーカス・キー入力はこの層を叩くだけなので、
-    /// panel 未接続でも例外を出さずに状態だけが進む（EditMode テストはこの層を叩く）。
+    /// The edit session's state machine (<see cref="BeginEditing" /> / <see cref="SetEditingText" /> /
+    /// <see cref="CommitEditing" /> / <see cref="EndEditing" /> / <see cref="CancelEditing" />) is kept
+    /// panel-independent. The real UI's focus and key input just drive this layer, so even without a
+    /// panel attached, state still advances without throwing (EditMode tests drive this layer).
     /// </summary>
     [UxmlElement]
     public partial class StringInput
@@ -32,10 +32,10 @@ namespace Tweeq.UIToolkit
     {
         #region Constants
 
-        // 仕様: 左右パディング 0.5em。fontSize 12px 基準で 6px
+        // Spec: 0.5em left/right padding. 6px based on a 12px fontSize.
         const float TEXT_PADDING = 6f;
 
-        // TextField の内側要素（整列だけは widget 固有なのでここから触る）
+        // TextField's inner element (touched from here since only the alignment is widget-specific).
         const string TEXT_INPUT_NAME = "unity-text-input";
 
         #endregion
@@ -44,15 +44,15 @@ namespace Tweeq.UIToolkit
 
         string _value = string.Empty;
 
-        // 表示中の生テキスト。リジェクト中は _value と乖離する（Vue の display ref 相当）
+        // The raw text currently displayed. Diverges from _value while rejected (equivalent to Vue's display ref).
         string _display = string.Empty;
 
-        // 編集開始時の値。Escape の復元先
+        // The value at the start of editing. What Escape restores to.
         string _valueAtEditStart = string.Empty;
 
         Func<string, bool> _validator;
 
-        // _display が validator を通っていない状態。文字色を Error にするだけで表示は据え置く
+        // Whether _display hasn't passed the validator. Only changes the text color to Error; the display itself is left as-is.
         bool _rejected;
 
         TweeqTextAlign _align = TweeqTextAlign.Left;
@@ -61,11 +61,11 @@ namespace Tweeq.UIToolkit
         bool _editing;
         bool _hovered;
 
-        // 直近のフォーカスがポインタ由来か（NumberInput C-2 と同じ手）。
-        // Tab 由来なら全選択、クリック由来ならキャレット位置を尊重する
+        // Whether the most recent focus originated from a pointer (same approach as NumberInput C-2).
+        // If it originated from Tab, select all; if from a click, respect the caret position instead.
         bool _focusFromPointer;
 
-        // 現在の編集セッションが全選択で始まったか。panel 非依存に「Tab 全選択」を検証するために持つ
+        // Whether the current edit session started with select-all. Kept so "Tab select-all" can be verified panel-independently.
         bool _selectedAllAtEditStart;
 
         TweeqBoxPosition _inlinePosition = TweeqBoxPosition.None;
@@ -83,15 +83,15 @@ namespace Tweeq.UIToolkit
         #region Public API
 
         /// <summary>
-        /// validator を通過したキー入力ごとに発火する（値が実際に動いたときだけ）。
-        /// Escape による巻き戻しでも発火する。
+        /// Fires for each keystroke that passes the validator (only when the value actually changes).
+        /// Also fires on a rollback via Escape.
         /// </summary>
         public event Action<string> ValueChanged;
 
-        /// <summary>blur / Enter のときだけ発火する。キー入力・Escape では発火しない。</summary>
+        /// <summary>Fires only on blur / Enter. Does not fire on keystrokes or Escape.</summary>
         public event Action<string> Confirmed;
 
-        /// <summary>検証済みの出力値。</summary>
+        /// <summary>The validated output value.</summary>
         [UxmlAttribute]
         public string value
         {
@@ -112,8 +112,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 入力の受理判定。null なら常に許容する。
-        /// false を返した入力は表示だけ残り、<see cref="value" /> は据え置かれる（Vue の validLocal 方式）。
+        /// Decides whether input is accepted. Always allowed when null.
+        /// Input that returns false is left displayed as-is, while <see cref="value" /> stays unchanged (Vue's validLocal approach).
         /// </summary>
         public Func<string, bool> Validator
         {
@@ -122,13 +122,13 @@ namespace Tweeq.UIToolkit
             {
                 _validator = value;
 
-                // 判定基準が変わったので、今出ている表示を評価し直す
+                // The acceptance criteria changed, so re-evaluate what's currently displayed.
                 _rejected = !IsAccepted(_display);
                 Refresh();
             }
         }
 
-        /// <summary>テキストの整列。既定は左寄せ（Number と違い文中編集を想定するため）。</summary>
+        /// <summary>The text's alignment. Defaults to left (unlike Number, since mid-text editing is expected).</summary>
         [UxmlAttribute]
         public TweeqTextAlign Align
         {
@@ -145,7 +145,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>操作不能状態。</summary>
+        /// <summary>Non-interactive state.</summary>
         [UxmlAttribute]
         public bool Disabled
         {
@@ -161,9 +161,9 @@ namespace Tweeq.UIToolkit
 
                 if (_disabled && _editing)
                 {
-                    // 無効化の瞬間に編集が生きていると、確定する手段が無くなる。
-                    // ただし「操作していないのに Confirmed が飛ぶ」のは事故なので確定はしない
-                    // （NumberInput の Disabled → SetEditing(false) と同じ扱い）
+                    // If editing is still active at the moment of disabling, there would be no way left to confirm it.
+                    // However, "Confirmed firing without any actual operation" would be a mistake, so it isn't confirmed here
+                    // (same treatment as NumberInput's Disabled -> SetEditing(false)).
                     FinishEditing(false);
                 }
 
@@ -172,7 +172,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>外部から与える不正値表示。validator によるリジェクトと OR で合成される。</summary>
+        /// <summary>Externally supplied invalid-value display. Combined via OR with rejection by the validator.</summary>
         [UxmlAttribute]
         public bool Invalid
         {
@@ -184,7 +184,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>配色テーマ。null を渡した場合は Dark() にフォールバックする。</summary>
+        /// <summary>The color theme. Falls back to Dark() when null is passed.</summary>
         public TweeqTheme Theme
         {
             get => _theme;
@@ -196,7 +196,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>横方向グループでの位置。設定すると角丸が潰れる。</summary>
+        /// <summary>Position within a horizontal group. Setting this collapses the corner radius.</summary>
         public TweeqBoxPosition InlinePosition
         {
             get => _inlinePosition;
@@ -212,7 +212,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>縦方向グループでの位置。</summary>
+        /// <summary>Position within a vertical group.</summary>
         public TweeqBoxPosition BlockPosition
         {
             get => _blockPosition;
@@ -228,27 +228,27 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>表示中の生テキスト。リジェクト中は <see cref="value" /> と食い違う。</summary>
+        /// <summary>The raw text currently displayed. Diverges from <see cref="value" /> while rejected.</summary>
         public string DisplayText => _display;
 
-        /// <summary>編集セッション中か。</summary>
+        /// <summary>Whether an edit session is in progress.</summary>
         public bool IsEditing => _editing;
 
-        /// <summary>現在の表示が validator に弾かれているか。</summary>
+        /// <summary>Whether the current display is being rejected by the validator.</summary>
         public bool IsRejected => _rejected;
 
-        /// <summary>編集開始時の値（Escape の復元先）。</summary>
+        /// <summary>The value at the start of editing (what Escape restores to).</summary>
         public string ValueAtEditStart => _valueAtEditStart;
 
-        /// <summary>現在の編集セッションが全選択で始まったか（Tab フォーカス）。</summary>
+        /// <summary>Whether the current edit session started with select-all (Tab focus).</summary>
         public bool SelectedAllAtEditStart => _selectedAllAtEditStart;
 
-        /// <summary>ChangeEvent / ValueChanged を発火せずに値を設定する。</summary>
+        /// <summary>Sets the value without firing ChangeEvent / ValueChanged.</summary>
         public void SetValueWithoutNotify(string newValue)
         {
             _value = newValue ?? string.Empty;
 
-            // 編集中の打鍵を外部設定で壊さない（Vue の display watcher と同じ条件）
+            // An external set doesn't disturb an in-progress keystroke (same condition as Vue's display watcher).
             if (!_editing)
             {
                 _display = _value;
@@ -264,10 +264,10 @@ namespace Tweeq.UIToolkit
         #region Editing session
 
         /// <summary>
-        /// 編集セッションを開始する。fromPointer=false（Tab などキーボード由来）なら全選択する。
-        /// 既に編集中なら何もしない。
+        /// Begins an edit session. Selects all when fromPointer=false (originating from Tab or another keyboard source).
+        /// Does nothing if already editing.
         /// </summary>
-        /// <param name="fromPointer">ポインタ由来のフォーカスか。true なら全選択しない。</param>
+        /// <param name="fromPointer">Whether the focus originated from a pointer. If true, doesn't select all.</param>
         public void BeginEditing(bool fromPointer = false)
         {
             if (_disabled || _editing)
@@ -290,10 +290,10 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 打鍵 1 回ぶんの表示更新。validator を通れば値へ反映して
-        /// <see cref="ValueChanged" /> を出し、弾かれたら表示だけ残す。
+        /// Updates the display for a single keystroke. If it passes the validator, this reflects into the
+        /// value and fires <see cref="ValueChanged" />; if rejected, only the display is left updated.
         /// </summary>
-        /// <param name="text">入力欄の新しい表示テキスト。null は空文字として扱う。</param>
+        /// <param name="text">The field's new display text. null is treated as an empty string.</param>
         public void SetEditingText(string text)
         {
             if (_disabled)
@@ -309,7 +309,7 @@ namespace Tweeq.UIToolkit
             {
                 _rejected = false;
 
-                // 値が動いたときだけ ValueChanged が出る（setter 側の等値ガード）
+                // ValueChanged only fires when the value actually changes (the equality guard on the setter side).
                 this.value = next;
             }
             else
@@ -321,8 +321,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// Enter 確定。リジェクト中の表示を <see cref="value" /> へ巻き戻し、
-        /// <see cref="Confirmed" /> を 1 回発火する。編集セッションは続く（Enter では blur しない）。
+        /// Confirms on Enter. Rolls the rejected display back to <see cref="value" /> and
+        /// fires <see cref="Confirmed" /> exactly once. The edit session continues (Enter doesn't blur).
         /// </summary>
         public void CommitEditing()
         {
@@ -336,7 +336,7 @@ namespace Tweeq.UIToolkit
             Confirmed?.Invoke(_value);
         }
 
-        /// <summary>blur 確定。<see cref="CommitEditing" /> と同じ確定をしてから編集を終える。</summary>
+        /// <summary>Confirms on blur. Performs the same confirmation as <see cref="CommitEditing" />, then ends editing.</summary>
         public void EndEditing()
         {
             if (!_editing)
@@ -348,10 +348,11 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// Escape。編集開始時の値へ復元して編集を終える（<see cref="Confirmed" /> は発火しない）。
+        /// Escape. Restores the value at the start of editing and ends editing (<see cref="Confirmed" /> does not fire).
         ///
-        /// 原典に Escape の取り消しは無いが、Number / Rotary で採用済みの
-        /// 「Escape = 開始値復元」との一貫性を優先する意図的逸脱（string-color-spec.md）。
+        /// The original has no cancel behavior for Escape, but this is an intentional deviation that
+        /// prioritizes consistency with the "Escape = restore starting value" behavior already adopted
+        /// in Number / Rotary (string-color-spec.md).
         /// </summary>
         public void CancelEditing()
         {
@@ -360,19 +361,19 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // blur 経路（OnFocusOut → EndEditing）に確定させないよう、先にセッションを畳む
+            // The session is torn down first so the blur path (OnFocusOut -> EndEditing) doesn't also confirm.
             _editing = false;
 
-            // ドラッグのキャンセルと同じく、途中で通知した値を巻き戻す方向の通知も出す
+            // Just like canceling a drag, this also fires a notification rolling back the value notified mid-way.
             this.value = _valueAtEditStart;
 
-            // 値が動かなかった（リジェクト表示だけだった）場合もここで表示が揃う
+            // This also aligns the display for the case where the value never actually changed (it was only a rejected display).
             RollbackDisplayToValue();
             Refresh();
             BlurTextField();
         }
 
-        /// <summary>表示テキストを全選択する。panel 未接続なら記録だけ行う。</summary>
+        /// <summary>Selects all the display text. Only records the intent if no panel is attached.</summary>
         public void SelectAll()
         {
             _selectedAllAtEditStart = true;
@@ -382,7 +383,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // フォーカスが確定した次のフレームでないと選択範囲が上書きされる（NumberInput と同じ）
+            // The selection range gets overwritten unless this waits until the frame after focus is settled (same as NumberInput).
             this.schedule.Execute(() =>
             {
                 if (_textField != null && _editing)
@@ -417,7 +418,7 @@ namespace Tweeq.UIToolkit
             Refresh();
         }
 
-        // 確定時の巻き戻し。Vue の confirm() が display = local = model を置き直すのと同じ
+        // Rollback on confirm. Same as Vue's confirm() resetting display = local = model.
         void RollbackDisplayToValue()
         {
             _display = _value;
@@ -438,8 +439,8 @@ namespace Tweeq.UIToolkit
         {
             this.AddToClassList("tweeq-string-input");
 
-            // ルート自身はフォーカスを取らない。内包する TextField が唯一のタブストップになる
-            // （ルートも focusable にすると 1 フィールドで 2 回 Tab が止まる）
+            // The root itself never takes focus. The TextField it contains is the sole tab stop
+            // (making the root focusable too would make Tab stop twice on a single field).
             this.focusable = false;
             this.style.height = _theme.InputHeight;
             this.style.minWidth = _theme.InputHeight;
@@ -450,10 +451,10 @@ namespace Tweeq.UIToolkit
             ApplyStaticStyles();
             ApplyInteractivity();
 
-            // TextField より先に Enter / Escape を横取りするため TrickleDown で登録する
+            // Registered with TrickleDown to intercept Enter / Escape before TextField does.
             this.RegisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
 
-            // フォーカス移動より先に「ポインタで始まったか」を立てたいので TrickleDown
+            // TrickleDown so "whether it started from a pointer" gets set before focus moves.
             this.RegisterCallback<PointerDownEvent>(OnPointerDown, TrickleDown.TrickleDown);
             this.RegisterCallback<PointerEnterEvent>(OnPointerEnter);
             this.RegisterCallback<PointerLeaveEvent>(OnPointerLeave);
@@ -470,8 +471,8 @@ namespace Tweeq.UIToolkit
             {
                 name = "tweeq-string-text",
 
-                // 1 文字ごとに ValueChanged を出す必要がある（仕様の2層イベント契約）。
-                // isDelayed = true だと Enter / blur まで ChangeEvent が来ない
+                // ValueChanged needs to fire on every character (the spec's two-tier event contract).
+                // With isDelayed = true, ChangeEvent wouldn't arrive until Enter / blur.
                 isDelayed = false,
                 multiline = false,
             };
@@ -489,12 +490,12 @@ namespace Tweeq.UIToolkit
 
             _textInput = _textField.Q(TEXT_INPUT_NAME);
 
-            // 実際に字を描くのは unity-text-input の中の TextElement。
-            // 縦潰れは input 側だけ直しても残るのでこちらにも同じ指定を掛ける（NumberInput A-6）
+            // The character actually gets drawn by the TextElement inside unity-text-input.
+            // Vertical squashing persists even if only the input side is fixed, so the same setting is applied here too (NumberInput A-6).
             _textElement = _textInput != null ? _textInput.Q<TextElement>() : null;
 
-            // フォーカスリングは別レイヤの border で描く。ルート側に border を足すと
-            // 絶対配置の子が 1px 内側へずれてしまう
+            // The focus ring is drawn using a separate layer's border. Adding a border on the root side
+            // would shift the absolutely-positioned children 1px inward.
             _focusRing = TweeqFocusRing.Attach(this);
             _focusRing.name = "tweeq-string-focus-ring";
         }
@@ -511,16 +512,16 @@ namespace Tweeq.UIToolkit
             ApplyCornerRadius();
             TweeqInputBoxStyles.SetBorderColor(this, _theme.Border);
 
-            // 背景のみ 0.15s / cubic-bezier(0.4,0,0.2,1)。UI Toolkit に同一カーブが無いので
-            // EaseInOutCubic で近似する（NumberInput / RotaryInput と同じ判断）
+            // Background only, 0.15s / cubic-bezier(0.4,0,0.2,1). UI Toolkit has no identical curve,
+            // so EaseInOutCubic is used as an approximation (same judgment as NumberInput / RotaryInput).
             TweeqInputBoxStyles.ApplyBackgroundTransition(this, _theme);
 
-            // 高さ・余白・キャレット色の正規化は公開ヘルパへ寄せた（EXT-03-A）
+            // Normalization of height, padding, and caret color was moved into the shared public helper (EXT-03-A).
             TweeqInputBoxStyles.ApplyTextField(_textField, _theme);
 
             if (_textInput != null)
             {
-                // ヘルパは左右 0 に倒すので、仕様の 0.5em をここで入れ直す
+                // The helper resets left/right to 0, so the spec's 0.5em is reapplied here.
                 _textInput.style.paddingLeft = TEXT_PADDING;
                 _textInput.style.paddingRight = TEXT_PADDING;
             }
@@ -577,7 +578,7 @@ namespace Tweeq.UIToolkit
         {
             TweeqInputBoxStyles.ApplyCornerRadius(this, _theme, _inlinePosition, _blockPosition);
 
-            // フォーカスリングは別レイヤなので同じ角丸を掛け直す
+            // The focus ring is a separate layer, so the same corner radius is reapplied to it.
             if (_focusRing != null)
             {
                 _focusRing.Apply(_theme, _inlinePosition, _blockPosition);
@@ -595,7 +596,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 降ろすのは FocusOut のときだけ（＝「今のフォーカスはポインタで始まった」を意味する）
+            // Only cleared on FocusOut (i.e. it means "the current focus began from a pointer").
             _focusFromPointer = true;
         }
 
@@ -629,15 +630,15 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 次に来る FocusIn は「新しいフォーカスセッションの開始」として判定し直す
+            // The next FocusIn is re-evaluated as "the start of a new focus session."
             _focusFromPointer = false;
 
-            // Escape 経路は先にセッションを畳んでいるので、ここでは確定しない
+            // The Escape path already tears down the session first, so this doesn't confirm here.
             EndEditing();
         }
 
-        // ポインタ由来かどうかは「同じフレームの PointerDown を処理し終えたあと」でないと確定しない。
-        // schedule はそのフレームのイベント処理がすべて終わってから走るので、そこで判定する
+        // Whether it originated from a pointer isn't settled until "after this frame's PointerDown finishes processing."
+        // schedule runs only after all of this frame's event processing is done, so the check happens there.
         void ScheduleKeyboardSelectAll()
         {
             if (this.panel == null)
@@ -707,8 +708,8 @@ namespace Tweeq.UIToolkit
             return element != null && _textField.Contains(element);
         }
 
-        // TextField は delegatesFocus なので、実際に focus を持つのは内側の要素。
-        // _textField.Blur() では外れないことがあるため、focusedElement 側から降ろす
+        // TextField is delegatesFocus, so the element that actually holds focus is the inner one.
+        // _textField.Blur() sometimes fails to release it, so this clears it from the focusedElement side instead.
         void BlurTextField()
         {
             if (_textField == null || this.panel == null)
@@ -747,7 +748,7 @@ namespace Tweeq.UIToolkit
 
         #region Refresh
 
-        // 打鍵ごとに通る経路なので、文字列を作らない・比較だけで済ませる
+        // This runs on every keystroke, so it avoids building a string and only does a comparison.
         void SyncTextField()
         {
             if (_textField == null || _textField.value == _display)
@@ -786,7 +787,7 @@ namespace Tweeq.UIToolkit
             this.style.backgroundColor = TweeqInputBoxStyles.ResolveBackground(_theme, _hovered);
         }
 
-        // 仕様: invalid は文字色を Error に変えるだけ（枠線・アイコンは変えない）
+        // Spec: invalid only changes the text color to Error (the border and icon are left unchanged).
         void UpdateTextColor()
         {
             Color color = ShowInvalid ? _theme.Error : _theme.Text;

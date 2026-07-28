@@ -6,8 +6,8 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// 真偽値のチェックボックス（仕様 §1）。クリックでトグル、左右スワイプで true/false を直接指定できる。
-    /// 角丸融合（<see cref="ITweeqInputBox"/>）に参加する。
+    /// A boolean checkbox (spec §1). Click to toggle; a left/right swipe can directly specify true/false.
+    /// Participates in corner-radius fusion (<see cref="ITweeqInputBox"/>).
     /// </summary>
     [UxmlElement]
     public partial class CheckboxInput
@@ -18,20 +18,20 @@ namespace Tweeq.UIToolkit
         const float ICON_SIZE = 18f;
         const float MARK_STROKE_WIDTH = 2f;
 
-        // off のマークは TextSubtle の α を 0.3 に「する」（掛けるのではない。Vue の set-alpha）
+        // The off-state mark "sets" TextSubtle's alpha to 0.3 (not multiplies it — matches the Vue original's set-alpha)
         const float MARK_OFF_ALPHA = 0.3f;
 
-        // active 系トランジション 64ms（仕様の遷移表）
+        // active-family transition of 64ms (per the spec's transition table)
         const float ACTIVE_TRANSITION_DURATION = 0.064f;
 
         const float FOCUS_RING_WIDTH = 1f;
         const float DISABLED_BORDER_WIDTH = 1f;
 
-        // ラベルとの間隔は 1em（rem12 ＝ 12px）
+        // Gap to the label is 1em (rem12 = 12px)
         const float LABEL_GAP = 12f;
 
-        // チェックマーク（18px アイコン内の正規化座標）。mdi:check-bold を 2 セグメントの折れ線に単純化した。
-        // 折れ線の上下端が箱の中心に対して対称になるよう y を選んである
+        // Checkmark (normalized coordinates within an 18px icon). mdi:check-bold simplified to a 2-segment polyline.
+        // The y values are chosen so the polyline's top and bottom ends are symmetric about the box's center
         static readonly Vector2 MARK_START = new Vector2(0.18f, 0.50f);
         static readonly Vector2 MARK_ELBOW = new Vector2(0.42f, 0.74f);
         static readonly Vector2 MARK_END = new Vector2(0.82f, 0.26f);
@@ -48,7 +48,7 @@ namespace Tweeq.UIToolkit
         TweeqBoxPosition _inlinePosition = TweeqBoxPosition.None;
         TweeqBoxPosition _blockPosition = TweeqBoxPosition.None;
 
-        // 角丸を潰す／残すの判定結果。style とフォーカスリングの描画で共有する
+        // Result of deciding which corners to flatten/keep. Shared between the style and the focus-ring drawing
         bool _radiusTopLeft = true;
         bool _radiusTopRight = true;
         bool _radiusBottomLeft = true;
@@ -64,18 +64,18 @@ namespace Tweeq.UIToolkit
         bool _hovered;
         bool _focused;
 
-        // UI Toolkit には :focus-visible が無いので、直近のフォーカスがポインタ由来かを自前で覚える。
-        // Vue の checkbox は :focus-visible なので、クリックしただけではリングを出さない
+        // UI Toolkit has no :focus-visible, so we track ourselves whether the most recent focus came from a pointer.
+        // The Vue original's checkbox uses :focus-visible, so a mere click does not show the ring
         bool _focusFromPointer;
 
         #endregion
 
         #region Public API
 
-        /// <summary>クリック／スワイプのリリース／キー入力ごとに 1 回発火する。</summary>
+        /// <summary>Fires once per click / swipe release / key input.</summary>
         public event Action<bool> Confirmed;
 
-        /// <summary>チェック状態。</summary>
+        /// <summary>Checked state.</summary>
         [UxmlAttribute]
         public bool value
         {
@@ -93,7 +93,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>箱の右に置くラベル。空文字なら非表示。</summary>
+        /// <summary>Label placed to the right of the box. Hidden if empty.</summary>
         [UxmlAttribute("label")]
         public string Label
         {
@@ -105,7 +105,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>操作不能状態（仕様 §1）。</summary>
+        /// <summary>Disabled (non-interactive) state (spec §1).</summary>
         [UxmlAttribute("disabled")]
         public bool Disabled
         {
@@ -119,7 +119,7 @@ namespace Tweeq.UIToolkit
 
                 _disabled = value;
 
-                // 無効化の瞬間にドラッグが生きていると、離す手段が無くなる
+                // If a drag is still active at the moment of disabling, there would be no way to release it
                 if (_disabled)
                 {
                     _gesture.Cancel();
@@ -131,7 +131,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>配色テーマ。null を渡した場合は Dark() にフォールバックする。</summary>
+        /// <summary>Color theme. Falls back to Dark() if null is passed.</summary>
         public TweeqTheme Theme
         {
             get => _theme;
@@ -143,7 +143,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>横方向グループでの位置。設定すると箱の角丸が仕様 §1 の表どおりに潰れる。</summary>
+        /// <summary>Position within a horizontal group. Setting it flattens the box's corners as per the table in spec §1.</summary>
         public TweeqBoxPosition InlinePosition
         {
             get => _inlinePosition;
@@ -159,7 +159,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>縦方向グループでの位置。</summary>
+        /// <summary>Position within a vertical group.</summary>
         public TweeqBoxPosition BlockPosition
         {
             get => _blockPosition;
@@ -175,7 +175,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>ChangeEvent を発火せずに値を設定する。</summary>
+        /// <summary>Sets the value without firing a ChangeEvent.</summary>
         public void SetValueWithoutNotify(bool newValue)
         {
             _value = newValue;
@@ -190,13 +190,13 @@ namespace Tweeq.UIToolkit
         {
             this.AddToClassList("tweeq-checkbox-input");
 
-            // キーボードショートカット（T/F/Space...）を受け取るため
+            // To receive keyboard shortcuts (T/F/Space...)
             this.focusable = true;
             this.style.flexDirection = FlexDirection.Row;
             this.style.alignItems = Align.Center;
             this.style.flexShrink = 0f;
 
-            // ドラッグ中のプレビューオーバーレイは箱の外へはみ出す
+            // The preview overlay during dragging spills outside the box
             this.style.overflow = Overflow.Visible;
 
             BuildChildren();
@@ -226,14 +226,14 @@ namespace Tweeq.UIToolkit
             _box.style.flexShrink = 0f;
             _box.style.overflow = Overflow.Visible;
 
-            // チェックマークは箱自身の generateVisualContent で描く。
-            // 要素の背景 → 生成メッシュ → 子要素 の順に描かれるので、背景の上・リングの下に来る
+            // The checkmark is drawn via the box's own generateVisualContent.
+            // Drawing order is element background -> generated mesh -> child elements, so it lands above the background and below the ring
             _box.generateVisualContent += OnGenerateBoxContent;
             _box.RegisterCallback<PointerEnterEvent>(OnBoxPointerEnter);
             _box.RegisterCallback<PointerLeaveEvent>(OnBoxPointerLeave);
             this.hierarchy.Add(_box);
 
-            // フォーカスリングは箱の外側 1px にも出るので、箱と同じ矩形を持つ別レイヤに描く
+            // The focus ring also extends 1px outside the box, so it is drawn on a separate layer sharing the same rect as the box
             _ring = new VisualElement
             {
                 name = "tweeq-checkbox-focus-ring",
@@ -277,8 +277,8 @@ namespace Tweeq.UIToolkit
                 _box.style.width = size;
                 _box.style.height = size;
 
-                // 仕様 §1: 箱の背景のみ 64ms。Vue は cubic-bezier(0.4,0,0.2,1) だが
-                // UI Toolkit に同一カーブが無いため EaseInOutCubic で近似する
+                // Spec §1: only the box's background transitions, at 64ms. The Vue original uses cubic-bezier(0.4,0,0.2,1), but
+                // UI Toolkit has no identical curve, so EaseInOutCubic is used as an approximation
                 _box.style.transitionProperty = new StyleList<StylePropertyName>(
                     new List<StylePropertyName> { new StylePropertyName("background-color") });
                 _box.style.transitionDuration = new StyleList<TimeValue>(
@@ -303,7 +303,7 @@ namespace Tweeq.UIToolkit
                 : DisplayStyle.Flex;
         }
 
-        // 仕様 §1 の角丸表。両軸の指定は OR で合成する（片方でも「潰す」なら潰す）
+        // Corner-radius table from spec §1. The two axes' settings are combined with OR (if either says "flatten," it flattens)
         void ApplyCornerRadius()
         {
             _radiusTopLeft = true;
@@ -386,13 +386,13 @@ namespace Tweeq.UIToolkit
 
         void OnPointerDown(PointerDownEvent evt)
         {
-            // BoolSwipeGesture が Focus() を呼ぶ前に「ポインタ由来のフォーカス」を記録しておく
+            // Record "focus originated from a pointer" before BoolSwipeGesture calls Focus()
             _focusFromPointer = true;
         }
 
         void OnKeyDown(KeyDownEvent evt)
         {
-            // キーを触った時点で :focus-visible 相当に昇格させる
+            // Promote to the equivalent of :focus-visible the moment a key is touched
             if (_focusFromPointer)
             {
                 _focusFromPointer = false;
@@ -473,7 +473,7 @@ namespace Tweeq.UIToolkit
 
             if (_disabled)
             {
-                // 仕様 §1: 未チェックは透明＋1px Border 枠、チェック済みは TextSubtle 塗り
+                // Spec §1: unchecked is transparent + 1px Border outline; checked is filled with TextSubtle
                 if (_value)
                 {
                     SetBorderWidth(_box, 0f);
@@ -544,7 +544,7 @@ namespace Tweeq.UIToolkit
 
         #region Painting
 
-        // 生成メッシュの座標原点は要素のボーダーボックス左上なので、layout の実寸をそのまま使う
+        // The generated mesh's coordinate origin is the element's border-box top-left, so the layout's actual size is used as-is
         Rect BoxRect()
         {
             if (_box == null)
@@ -562,7 +562,7 @@ namespace Tweeq.UIToolkit
             return new Rect(0f, 0f, width, height);
         }
 
-        // 仕様 §1: マークは常時描画して色だけ変える（遷移なし＝即時）
+        // Spec §1: the mark is always drawn, only the color changes (no transition = instant)
         void OnGenerateBoxContent(MeshGenerationContext context)
         {
             if (context == null || _theme == null)
@@ -591,7 +591,7 @@ namespace Tweeq.UIToolkit
             Color color;
             if (_value)
             {
-                // disabled でも塗りが TextSubtle に変わるだけで、マークは背景色のまま読める
+                // Even when disabled, only the fill changes to TextSubtle -- the mark remains readable, staying at the background color
                 color = _theme.Background;
             }
             else
@@ -611,7 +611,7 @@ namespace Tweeq.UIToolkit
             painter.Stroke();
         }
 
-        // 仕様 §1: off＝外周 1px Accent / on＝内側 1px Input ＋ 外周 1px Accent の二重
+        // Spec §1: off = outer 1px Accent / on = double ring of inner 1px Input + outer 1px Accent
         void OnGenerateRingContent(MeshGenerationContext context)
         {
             if (context == null || _theme == null || !ShowFocusRing)
@@ -639,13 +639,13 @@ namespace Tweeq.UIToolkit
 
             if (_value)
             {
-                // inset の 1px リング。線幅の半分だけ内側に寄せると [edge-1, edge] を覆う
+                // The inset 1px ring. Shifting inward by half the line width covers [edge-1, edge]
                 painter.strokeColor = _theme.Input;
                 TraceRoundedRect(painter, Expand(rect, -half), radius - half);
                 painter.Stroke();
             }
 
-            // 外周の 1px リング（box-shadow 0 0 0 1px 相当）
+            // The outer 1px ring (equivalent to box-shadow 0 0 0 1px)
             painter.strokeColor = _theme.Accent;
             TraceRoundedRect(painter, Expand(rect, half), radius + half);
             painter.Stroke();
@@ -705,7 +705,7 @@ namespace Tweeq.UIToolkit
             painter.ClosePath();
         }
 
-        // 辺の終点まで直線を引いてから角を丸める。半径 0 の角は Arc が退化するので直線で畳む
+        // Draw a straight line to the edge's end point, then round the corner. For a radius-0 corner the Arc degenerates, so fold it with a straight line instead
         static void TraceCorner(
             Painter2D painter,
             Vector2 edgeEnd,

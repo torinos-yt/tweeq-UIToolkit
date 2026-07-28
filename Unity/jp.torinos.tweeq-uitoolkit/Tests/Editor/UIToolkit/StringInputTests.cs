@@ -6,15 +6,16 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// StringInput の編集セッションと2層イベント契約（string-color-spec.md「テスト契約」の
-    /// StringInput 項目）を検証する。
+    /// Verifies StringInput's editing session and two-tier event contract (the StringInput item
+    /// of string-color-spec.md's "test contract").
     ///
-    /// StringInput は BeginEditing / SetEditingText / CommitEditing / EndEditing / CancelEditing を
-    /// panel 非依存の論理層として持つので、キー入力・確定・巻き戻しはここで完結する。
-    /// 以下は panel と実フォーカスが要るので Play Mode 側の担当:
-    /// - クリック位置へのキャレット配置（全選択しないこと自体はここで検証する）
-    /// - 実際の選択範囲（TextField.SelectAll の結果）
-    /// - Tab によるフォーカス移動そのもの
+    /// StringInput has BeginEditing / SetEditingText / CommitEditing / EndEditing / CancelEditing
+    /// as a panel-independent logic layer, so keystrokes, confirm, and rollback are fully covered
+    /// here. The following require a panel and real focus, so they are the responsibility of the
+    /// Play Mode side:
+    /// - Caret placement at the click position (that select-all does NOT happen is verified here)
+    /// - The actual selection range (the result of TextField.SelectAll)
+    /// - Focus movement via Tab itself
     /// </summary>
     public class StringInputTests
     {
@@ -30,7 +31,7 @@ namespace Tweeq.UIToolkit.Tests
             return length.value.value;
         }
 
-        // 「3 文字まで」の validator。リジェクト経路の検証に使う
+        // A "3 characters max" validator, used to verify the rejection path
         static readonly Func<string, bool> MaxThree = text => text != null && text.Length <= 3;
 
         #region ValueChanged per keystroke
@@ -135,7 +136,8 @@ namespace Tweeq.UIToolkit.Tests
             input.SetEditingText("abc");
             input.SetEditingText("abcd");
 
-            // 表示は打った文字のまま、値は最後に通った文字列（Vue の validLocal 方式）
+            // The display stays as what was typed, while the value is the last string that passed
+            // validation (the Vue original's validLocal approach)
             Assert.AreEqual("abcd", input.DisplayText);
             Assert.AreEqual("abc", input.value);
             Assert.IsTrue(input.IsRejected);
@@ -176,7 +178,7 @@ namespace Tweeq.UIToolkit.Tests
 
             input.Validator = MaxThree;
 
-            // 値は動かさず、invalid 表示だけが立つ
+            // The value does not change; only the invalid display is raised
             Assert.IsTrue(input.IsRejected);
             Assert.AreEqual("abcd", input.value);
         }
@@ -265,7 +267,7 @@ namespace Tweeq.UIToolkit.Tests
             input.CommitEditing();
             input.EndEditing();
 
-            // Enter と blur はどちらも「確定」なので 2 回。ただし 1 操作につき 1 回ずつ
+            // Both Enter and blur are "confirm" actions, hence 2 total, but exactly once per action
             Assert.AreEqual(2, confirmed);
         }
 
@@ -345,7 +347,7 @@ namespace Tweeq.UIToolkit.Tests
             input.SetEditingText("abcd");
             input.CommitEditing();
 
-            // 巻き戻しは表示だけの話なので、値は一度も動いていない
+            // The rollback is a display-only matter, so the value never changed even once
             Assert.AreEqual(new[] { "abc" }, changed.ToArray());
         }
 
@@ -358,7 +360,7 @@ namespace Tweeq.UIToolkit.Tests
             input.BeginEditing(true);
             input.CommitEditing();
 
-            // 外から入った不正値は勝手に直さない。invalid 表示だけが残る
+            // An invalid value entered from outside is not silently corrected; only the invalid display remains
             Assert.AreEqual("abcd", input.value);
             Assert.IsTrue(input.IsRejected);
         }
@@ -394,7 +396,8 @@ namespace Tweeq.UIToolkit.Tests
             input.SetEditingText("edited");
             input.CancelEditing();
 
-            // 進めた分と戻した分の 2 回。途中で通知した値を巻き戻すので戻しも通知する
+            // 2 notifications: one for the change made, one for the rollback. Because the value
+            // notified partway through gets rolled back, the rollback is also notified
             Assert.AreEqual(new[] { "edited", "start" }, changed.ToArray());
             Assert.AreEqual(0, confirmed);
         }
@@ -570,7 +573,7 @@ namespace Tweeq.UIToolkit.Tests
             input.SetEditingText("typed");
             input.SetValueWithoutNotify("external");
 
-            // 打鍵中の表示を外部設定で壊さない（Vue の display watcher と同じ条件）
+            // An external assignment does not clobber the display while typing (the same condition as the Vue original's display watcher)
             Assert.AreEqual("typed", input.DisplayText);
             Assert.AreEqual("external", input.value);
         }
@@ -695,7 +698,7 @@ namespace Tweeq.UIToolkit.Tests
 
             input.Invalid = true;
 
-            // 外部 invalid は validator の判定を汚さない（表示の合成は OR）
+            // An external invalid flag does not taint the validator's own judgment (the display composition is an OR)
             Assert.IsTrue(input.Invalid);
             Assert.IsFalse(input.IsRejected);
         }

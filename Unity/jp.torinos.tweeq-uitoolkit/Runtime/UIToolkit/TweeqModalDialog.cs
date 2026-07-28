@@ -2,29 +2,29 @@ using System;
 using UnityEngine;
 using UnityEngine.UIElements;
 
-// クラス側に string Title プロパティを持つので、Label 型は別名で参照する（ButtonInput と同じ理由）
+// The class has its own string Title property, so the Label type is referenced under an alias (same reason as ButtonInput)
 using UILabel = UnityEngine.UIElements.Label;
 
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// タイトル＋スクロール本文＋Cancel/確定フッターの定型モーダル
-    /// （m8-modal-tabs-spec.md §B・Vue 版 PaneModalComplex / PaneModalTabs のシェル相当）。
+    /// A boilerplate modal with title + scrollable body + Cancel/confirm footer
+    /// (m8-modal-tabs-spec.md §B; equivalent to the shell of the Vue original's PaneModalComplex / PaneModalTabs).
     /// </summary>
     /// <remarks>
     /// <para>
-    /// 本家はスキーマ駆動フォーム（InputComplex）前提のシングルトンだが、こちらは
-    /// <b>シェルだけを汎用化</b>して中身を利用者に任せる（意図的逸脱・仕様書が根拠）。
+    /// The original assumes a singleton built around a schema-driven form (InputComplex), but this port
+    /// <b>generalizes only the shell</b> and leaves the content to the caller (an intentional deviation, grounded in the spec).
     /// </para>
     /// <para>
-    /// <b>値のロールバックは利用者責務</b>。スキーマが無いので、Cancel で元へ戻したい場合は
-    /// <see cref="TweeqModal.Opened"/> で現在値を控えて <see cref="Cancelled"/> で書き戻すこと。
-    /// このクラスは中身の値には一切触らない。
+    /// <b>Rolling back values is the caller's responsibility.</b> Since there's no schema, if you want Cancel
+    /// to revert values, capture the current value in <see cref="TweeqModal.Opened"/> and write it back in
+    /// <see cref="Cancelled"/>. This class never touches the content's values itself.
     /// </para>
     /// <para>
-    /// キーは開いている間だけパネル root の<b>バブル段階</b>で拾う。内側の部品
-    /// （TextField 編集・ドラッグ中の Escape 復元・LightDismiss ポップオーバー）が先に処理して
-    /// StopPropagation した場合は届かない＝それが正しい優先順。
+    /// Keys are only picked up during the panel root's <b>bubble phase</b> while open. If an inner widget
+    /// (TextField editing, Escape-restore during a drag, a LightDismiss popover) handles the key first and calls
+    /// StopPropagation, it never reaches here — that's the intended priority order.
     /// </para>
     /// </remarks>
     [UxmlElement]
@@ -32,17 +32,17 @@ namespace Tweeq.UIToolkit
     {
         #region Constants
 
-        /// <summary>タイトルの文字サイズ（px）。</summary>
+        /// <summary>The title's font size (px).</summary>
         public const float TITLE_FONT_SIZE = 14f;
 
-        /// <summary><see cref="ConfirmLabel"/> の既定値。</summary>
+        /// <summary>The default value for <see cref="ConfirmLabel"/>.</summary>
         public const string DEFAULT_CONFIRM_LABEL = "Save";
 
-        /// <summary><see cref="CancelLabel"/> の既定値。</summary>
+        /// <summary>The default value for <see cref="CancelLabel"/>.</summary>
         public const string DEFAULT_CANCEL_LABEL = "Cancel";
 
-        // 本文 ScrollView のクリップ境界の内側に取る安全マージン。
-        // フォーカスリング（inset −3px）等の枠外描画が viewport で切られるのを防ぐ
+        // A safety margin kept inside the body ScrollView's clip boundary.
+        // Prevents out-of-bounds drawing (e.g. the focus ring at inset −3px) from being clipped by the viewport
         const float CLIP_SAFE_PADDING = 4f;
 
         #endregion
@@ -58,23 +58,23 @@ namespace Tweeq.UIToolkit
         string _titleText = string.Empty;
         bool _footerStretch = true;
 
-        // 毎回のメソッドグループ変換はデリゲートを確保するので、登録／解除で使い回す実体を持つ
+        // A method-group conversion allocates a delegate every time, so keep a single instance to reuse across register/unregister
         readonly EventCallback<KeyDownEvent> _onRootKeyDown;
 
-        // 登録先を覚えておく。層が入れ替わっても必ず同じ相手から外すため
+        // Remember the registration target, so we always unregister from the same object even if the layer gets swapped
         VisualElement _keyRoot;
 
         #endregion
 
         #region Public API
 
-        /// <summary>確定ボタン（または Enter）で発火する。発火後 <see cref="TweeqModal.Open"/> は false になる。</summary>
+        /// <summary>Fires on the confirm button (or Enter). After firing, <see cref="TweeqModal.Open"/> becomes false.</summary>
         public event Action Confirmed;
 
-        /// <summary>取り消しボタン（または Escape）で発火する。発火後 <see cref="TweeqModal.Open"/> は false になる。</summary>
+        /// <summary>Fires on the cancel button (or Escape). After firing, <see cref="TweeqModal.Open"/> becomes false.</summary>
         public event Action Cancelled;
 
-        /// <summary>見出し。空なら行ごと消える。</summary>
+        /// <summary>The heading. If empty, the whole row disappears.</summary>
         [UxmlAttribute("title")]
         public string Title
         {
@@ -92,7 +92,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>確定ボタンの文字列。</summary>
+        /// <summary>The confirm button's label text.</summary>
         [UxmlAttribute("confirm-label")]
         public string ConfirmLabel
         {
@@ -100,7 +100,7 @@ namespace Tweeq.UIToolkit
             set => _confirm.Label = string.IsNullOrEmpty(value) ? DEFAULT_CONFIRM_LABEL : value;
         }
 
-        /// <summary>取り消しボタンの文字列。</summary>
+        /// <summary>The cancel button's label text.</summary>
         [UxmlAttribute("cancel-label")]
         public string CancelLabel
         {
@@ -109,8 +109,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// フッターのボタンを均等割にするか（既定 true・Vue の PaneModalComplex）。
-        /// false は右寄せ（PaneModalTabs）。
+        /// Whether to distribute the footer buttons evenly (default true, matching the Vue original's PaneModalComplex).
+        /// false right-aligns them instead (PaneModalTabs).
         /// </summary>
         [UxmlAttribute("footer-stretch")]
         public bool FooterStretch
@@ -128,27 +128,27 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>本文のスクロールビュー。中身は普通に Add すればここへ入る。</summary>
+        /// <summary>The body's scroll view. Content added normally via Add goes in here.</summary>
         public ScrollView Body => _body;
 
-        /// <summary>取り消しボタン。ラベル以外を触りたい場合に使う。</summary>
+        /// <summary>The cancel button. Use this when you need to touch something other than the label.</summary>
         public ButtonInput CancelButton => _cancel;
 
-        /// <summary>確定ボタン。ラベル以外を触りたい場合に使う。</summary>
+        /// <summary>The confirm button. Use this when you need to touch something other than the label.</summary>
         public ButtonInput ConfirmButton => _confirm;
 
-        /// <summary>中身は本文のスクロールビューへ入る。</summary>
+        /// <summary>Content goes into the body's scroll view.</summary>
         public override VisualElement contentContainer
             => _body != null ? _body.contentContainer : base.contentContainer;
 
-        /// <summary>取り消しを発火して閉じる。ボタンと Escape の共通経路。</summary>
+        /// <summary>Fires cancel and closes. The shared path for the button and Escape.</summary>
         public void PerformCancel()
         {
             Cancelled?.Invoke();
             this.Open = false;
         }
 
-        /// <summary>確定を発火して閉じる。ボタンと Enter の共通経路。</summary>
+        /// <summary>Fires confirm and closes. The shared path for the button and Enter.</summary>
         public void PerformConfirm()
         {
             Confirmed?.Invoke();
@@ -156,11 +156,11 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 開いている間のキー処理。パネル root のバブル段階から呼ばれる。
-        /// 戻り値 true は「消費した」＝呼び出し側が StopPropagation する。
+        /// Key handling while open. Called from the panel root's bubble phase.
+        /// A return value of true means "consumed" — the caller should call StopPropagation.
         /// </summary>
-        /// <param name="keyCode">押されたキー。</param>
-        /// <param name="source">キーの発生元（＝フォーカス中の要素）。null 可。</param>
+        /// <param name="keyCode">The key that was pressed.</param>
+        /// <param name="source">The origin of the key event (i.e. the focused element). May be null.</param>
         public bool PerformKey(KeyCode keyCode, VisualElement source)
         {
             if (!this.Open)
@@ -168,8 +168,8 @@ namespace Tweeq.UIToolkit
                 return false;
             }
 
-            // Vue の「:popover-open が 1 つより多ければ何もしない」に相当。
-            // 層にポップオーバーが開いている間は、そちらがキーの持ち主（ネストしたドロップダウン等）
+            // Equivalent to the Vue original's "do nothing if more than one :popover-open".
+            // While a popover is open in this layer, that popover owns the key (e.g. a nested dropdown)
             if (HasOpenPopover())
             {
                 return false;
@@ -183,7 +183,7 @@ namespace Tweeq.UIToolkit
 
             if (keyCode == KeyCode.Return || keyCode == KeyCode.KeypadEnter)
             {
-                // 複数行 TextField の中では改行を優先する（確定は明示的にボタンで）
+                // Inside a multiline TextField, prioritize the newline (confirm only via the explicit button)
                 if (IsInsideMultilineText(source))
                 {
                     return false;
@@ -204,13 +204,13 @@ namespace Tweeq.UIToolkit
         {
             this.name = "tweeq-modal-dialog";
 
-            // 層へ載るのは構築後だが、ハンドラの実体は先に確保しておく（登録／解除で使い回す）
+            // It gets added to the layer after construction, but reserve the handler instance up front (reused across register/unregister)
             _onRootKeyDown = OnRootKeyDown;
 
             TweeqTheme theme = this.Theme;
 
-            // バルーンの中身は縦積み。本文だけが伸縮して内部スクロールになるよう、
-            // 収縮を許す指定（UI Toolkit の既定は flex-shrink: 0）をこの階層から掛ける
+            // The balloon's content stacks vertically. To make only the body stretch and scroll internally,
+            // apply a shrink-allowing setting from this level down (UI Toolkit's default is flex-shrink: 0)
             VisualElement content = this.Pane.contentContainer;
             content.style.flexDirection = FlexDirection.Column;
             content.style.flexShrink = 1f;
@@ -231,8 +231,8 @@ namespace Tweeq.UIToolkit
             _body.style.flexShrink = 1f;
             _body.style.minHeight = 0f;
 
-            // viewport は枠外描画（フォーカスリング等）を切るので、クリップ境界の内側に
-            // 安全マージンを取る（TweeqTabs の CLIP_SAFE_PADDING と同じ理由）
+            // The viewport clips out-of-bounds drawing (e.g. the focus ring), so keep a safety margin
+            // inside the clip boundary (same reason as TweeqTabs's CLIP_SAFE_PADDING)
             VisualElement bodyContent = _body.contentContainer;
             if (bodyContent != null)
             {
@@ -290,7 +290,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // バブル段階（TrickleDown ではない）。内側の部品が先に処理して止めたらここへは来ない
+            // Bubble phase (not TrickleDown). If an inner widget handles it first and stops it, this never gets called
             _keyRoot = root;
             _keyRoot.RegisterCallback(_onRootKeyDown);
         }
@@ -313,7 +313,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // キーイベントの target はフォーカス中の要素。複数行判定はここを起点に遡る
+            // The key event's target is the focused element. The multiline check walks up starting from here
             if (PerformKey(evt.keyCode, evt.target as VisualElement))
             {
                 evt.StopPropagation();
@@ -352,7 +352,7 @@ namespace Tweeq.UIToolkit
 
         static bool IsInsideMultilineText(VisualElement source)
         {
-            // TextField の実フォーカスは内部の入力要素へ移るので、祖先を遡って持ち主を探す
+            // A TextField's actual focus moves to its internal input element, so walk up the ancestors to find the owner
             for (VisualElement node = source; node != null; node = node.hierarchy.parent)
             {
                 if (node is TextField field && field.multiline)
@@ -383,8 +383,8 @@ namespace Tweeq.UIToolkit
 
             _title.style.color = theme.Text;
 
-            // 見出しフォント（Geist SemiBold）は実ウェイトを持つので FontStyle.Bold を併せない。
-            // ロードできなかった場合だけ、太く見せる手段が擬似ボールドしか無いので Bold を残す
+            // The heading font (Geist SemiBold) has a real weight, so we don't combine it with FontStyle.Bold.
+            // Only when it fails to load do we keep Bold, since faux-bold is the only way left to make it look bold
             FontDefinition heading = theme.FontHeading;
             TweeqFonts.Apply(_title, heading);
             _title.style.unityFontStyleAndWeight = TweeqFonts.IsEmpty(heading)
@@ -407,8 +407,8 @@ namespace Tweeq.UIToolkit
             ApplyGaps();
         }
 
-        // UI Toolkit に CSS の gap が無いのでマージンで作る。タイトルが消えている時に
-        // 本文の上へ余白が残らないよう、可視状態を見て自前で配る
+        // UI Toolkit has no CSS gap, so this is built with margins. To avoid leaving space above the body
+        // when the title is hidden, distribute margins manually based on visibility
         void ApplyGaps()
         {
             TweeqTheme theme = this.Theme;
@@ -424,7 +424,7 @@ namespace Tweeq.UIToolkit
 
         void ApplyFooterLayout()
         {
-            // 均等割は Vue の ModalComplex（2 択を等価に見せる）、右寄せは ModalTabs
+            // Even distribution matches the Vue original's ModalComplex (making a 2-choice look equal); right-align matches ModalTabs
             _footer.style.justifyContent = _footerStretch ? Justify.FlexStart : Justify.FlexEnd;
 
             ApplyFooterButton(_cancel);

@@ -6,28 +6,28 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// 真偽値のトグルスイッチ（仕様 §2）。クリックでトグル、左右スワイプで true/false を直接指定できる。
-    /// 角丸融合には参加せず、disabled も持たない（Vue 準拠。仕様 Unity 向け決定事項 3）。
+    /// A boolean toggle switch (spec §2). Toggles on click; a left/right swipe can set true/false directly.
+    /// Doesn't participate in corner-radius merging, and has no disabled state (matching Vue; spec Unity-specific decision 3).
     /// </summary>
     [UxmlElement]
     public partial class SwitchInput : VisualElement, INotifyValueChanged<bool>, ITweeqThemed
     {
         #region Constants
 
-        // トラックは 48×24（高さの 2 倍）
+        // The track is 48x24 (twice its height).
         const float TRACK_WIDTH_FACTOR = 2f;
 
-        // ハンドルは inset 4px の 16×16。ドラッグ中は 4px 中央側へ伸びて 20px になる
+        // The handle is 16x16 with a 4px inset. It stretches 4px toward the center to become 20px while dragging.
         const float HANDLE_INSET = 4f;
 
-        // active 系トランジション 64ms（仕様の遷移表）
+        // The active-family transition is 64ms (per the spec's transition table).
         const float ACTIVE_TRANSITION_DURATION = 0.064f;
 
-        // フォーカスリングは inset -3px の 1px ピル
+        // The focus ring is a 1px pill with a -3px inset.
         const float FOCUS_RING_INSET = 3f;
         const float FOCUS_RING_WIDTH = 1f;
 
-        // ラベルとの間隔は 1em（rem12 ＝ 12px）
+        // The gap to the label is 1em (rem12 = 12px).
         const float LABEL_GAP = 12f;
 
         #endregion
@@ -53,10 +53,10 @@ namespace Tweeq.UIToolkit
 
         #region Public API
 
-        /// <summary>クリック／スワイプのリリース／キー入力ごとに 1 回発火する。</summary>
+        /// <summary>Fires once for each click / swipe release / key input.</summary>
         public event Action<bool> Confirmed;
 
-        /// <summary>オン／オフ。</summary>
+        /// <summary>On/off.</summary>
         [UxmlAttribute]
         public bool value
         {
@@ -74,7 +74,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>トラックの右に置くラベル。空文字なら非表示。</summary>
+        /// <summary>The label placed to the right of the track. Hidden when empty.</summary>
         [UxmlAttribute("label")]
         public string Label
         {
@@ -86,7 +86,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>配色テーマ。null を渡した場合は Dark() にフォールバックする。</summary>
+        /// <summary>The color theme. Falls back to Dark() when null is passed.</summary>
         public TweeqTheme Theme
         {
             get => _theme;
@@ -98,7 +98,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>ChangeEvent を発火せずに値を設定する。</summary>
+        /// <summary>Sets the value without firing ChangeEvent.</summary>
         public void SetValueWithoutNotify(bool newValue)
         {
             _value = newValue;
@@ -113,13 +113,13 @@ namespace Tweeq.UIToolkit
         {
             this.AddToClassList("tweeq-switch-input");
 
-            // キーボードショートカット（T/F/Space...）を受け取るため
+            // To receive keyboard shortcuts (T/F/Space...).
             this.focusable = true;
             this.style.flexDirection = FlexDirection.Row;
             this.style.alignItems = Align.Center;
             this.style.flexShrink = 0f;
 
-            // フォーカスリングとプレビューオーバーレイはトラックの外へはみ出す
+            // The focus ring and preview overlay both spill outside the track.
             this.style.overflow = Overflow.Visible;
 
             BuildChildren();
@@ -159,7 +159,7 @@ namespace Tweeq.UIToolkit
             _handle.style.top = HANDLE_INSET;
             _track.hierarchy.Add(_handle);
 
-            // リングはトラックの外側 3px にも出るので、トラックと同じ矩形を持つ別レイヤに描く
+            // The ring also extends 3px outside the track, so it's drawn on a separate layer with the same rect as the track.
             _ring = new VisualElement
             {
                 name = "tweeq-switch-focus-ring",
@@ -203,7 +203,7 @@ namespace Tweeq.UIToolkit
                 _track.style.width = height * TRACK_WIDTH_FACTOR;
                 _track.style.height = height;
 
-                // border-radius 9999px ＝ 高さの半分でピルになる
+                // border-radius 9999px, i.e. it becomes a pill at half the height.
                 SetBorderRadius(_track, height * 0.5f);
                 ApplyTransition(_track, new[] { "background-color" });
             }
@@ -217,9 +217,9 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        // 仕様 §2: トラック背景・ハンドルの left/width/背景 すべて 64ms。
-        // Vue は cubic-bezier(0.4,0,0.2,1) だが UI Toolkit に同一カーブが無いため
-        // EaseInOutCubic で近似する（RotaryInput / NumberInput と同じ判断）
+        // Spec §2: the track background and the handle's left/width/background are all 64ms.
+        // Vue uses cubic-bezier(0.4,0,0.2,1), but since UI Toolkit has no identical curve,
+        // EaseInOutCubic is used as an approximation (same judgment as RotaryInput / NumberInput).
         static void ApplyTransition(VisualElement element, string[] properties)
         {
             if (element == null || properties == null)
@@ -326,7 +326,7 @@ namespace Tweeq.UIToolkit
 
         float HandleSize => _theme != null ? _theme.InputHeight - HANDLE_INSET * 2f : 0f;
 
-        // ドラッグ中は 4px 中央側へ伸びる（外側エッジは固定）
+        // Stretches 4px toward the center while dragging (the outer edge stays fixed).
         float HandleTweakingWidth => _theme != null ? _theme.InputHeight - HANDLE_INSET : 0f;
 
         void Refresh()
@@ -371,7 +371,7 @@ namespace Tweeq.UIToolkit
             bool tweaking = _gesture != null && _gesture.Dragging;
             float width = tweaking ? HandleTweakingWidth : HandleSize;
 
-            // on 側は右端（トラック幅 - inset）に外側エッジを固定したまま太る
+            // The on side grows while keeping its outer edge fixed to the right end (track width - inset).
             float left = _value ? TrackWidth - HANDLE_INSET - width : HANDLE_INSET;
 
             _handle.style.width = width;
@@ -422,7 +422,7 @@ namespace Tweeq.UIToolkit
 
         #region Painting
 
-        // 仕様 §2: :focus 相当なので、クリックでフォーカスした場合もリングを出す
+        // Spec §2: equivalent to :focus, so the ring is shown even when focus came from a click.
         void OnGenerateRingContent(MeshGenerationContext context)
         {
             if (context == null || _theme == null || !_focused || _track == null)
@@ -443,7 +443,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // Vue は inset -3px の要素に 1px ボーダー＝線の中心は -2.5px
+            // Vue puts a 1px border on an element inset by -3px, so the line's center sits at -2.5px.
             float offset = FOCUS_RING_INSET - FOCUS_RING_WIDTH * 0.5f;
             Rect ring = new Rect(
                 -offset,

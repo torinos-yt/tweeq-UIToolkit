@@ -3,17 +3,20 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// <see cref="TweeqTabs"/> の 1 枚（M8 仕様 §D「TweeqTab」）。
-    /// 自身はパネル本体で、ヘッダー（タブリストの項目）は親の <see cref="TweeqTabs"/> が描く。
+    /// One panel of <see cref="TweeqTabs"/> (M8 spec §D "TweeqTab").
+    /// This is the panel body itself; the header (the tab-list item) is drawn by the parent
+    /// <see cref="TweeqTabs"/>.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// 親への登録は Vue の provide/inject 相当を <see cref="AttachToPanelEvent"/> で代替する。
-    /// UXML から組んだ木は「子が揃ってからパネルに載る」ので、このタイミングが最も取りこぼしが少ない。
+    /// Registration with the parent substitutes <see cref="AttachToPanelEvent"/> for Vue's
+    /// provide/inject equivalent. A tree built from UXML "gets attached to the panel only
+    /// after its children are all in place", so this timing misses the fewest cases.
     /// </para>
     /// <para>
-    /// Vue は祖先に Tabs が無いと throw するが、公演現場ではランタイム例外＝事故なので
-    /// <b>例外を投げず、単独の可視コンテナとして振る舞う</b>（意図的逸脱・m8-modal-tabs-spec.md §D）。
+    /// Vue throws if there is no Tabs ancestor, but in live-performance settings a runtime
+    /// exception is an incident, so <b>this does not throw and instead behaves as a
+    /// standalone, visible container</b> (intentional deviation — m8-modal-tabs-spec.md §D).
     /// </para>
     /// </remarks>
     [UxmlElement]
@@ -21,7 +24,7 @@ namespace Tweeq.UIToolkit
     {
         #region Constants
 
-        /// <summary>この要素に付く USS クラス。</summary>
+        /// <summary>USS class attached to this element.</summary>
         public const string USS_CLASS_NAME = "tweeq-tab";
 
         #endregion
@@ -32,12 +35,12 @@ namespace Tweeq.UIToolkit
 
         string _tabName = string.Empty;
 
-        // 明示 id。空なら TabName のスラグへフォールバックする（Vue の computed id と同じ）
+        // Explicit id. Falls back to a slug of TabName if empty (same as Vue's computed id)
         string _explicitId = string.Empty;
 
         bool _isDisabled;
 
-        // 単独使用（親なし）でも見えていなければならないので初期値は true
+        // Must remain visible even when used standalone (no parent), so the initial value is true
         bool _isActive = true;
 
         TweeqTabs _owner;
@@ -46,7 +49,7 @@ namespace Tweeq.UIToolkit
 
         #region Public API
 
-        /// <summary>ヘッダーに出る表示名。空なら id も空になり「名無しタブ」として扱われる。</summary>
+        /// <summary>Display name shown in the header. If empty, the id is also empty and it's treated as an "unnamed tab".</summary>
         [UxmlAttribute("tab-name")]
         public string TabName
         {
@@ -61,13 +64,14 @@ namespace Tweeq.UIToolkit
 
                 _tabName = next;
 
-                // Vue の watch → updateTab 相当。id もラベルもここで変わり得る
+                // Equivalent to Vue's watch → updateTab. Both the id and the label can change here
                 _owner?.UpdateTab(this);
             }
         }
 
         /// <summary>
-        /// タブ id。明示しなければ <see cref="TabName"/> を小文字化・空白→`-` にしたスラグ。
+        /// Tab id. If not specified explicitly, this is a slug made by lowercasing
+        /// <see cref="TabName"/> and replacing spaces with `-`.
         /// </summary>
         [UxmlAttribute("id")]
         public string Id
@@ -86,7 +90,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>ヘッダーを無効表示にし、選択できなくする。</summary>
+        /// <summary>Displays the header as disabled and makes it unselectable.</summary>
         [UxmlAttribute("disabled")]
         public bool IsDisabled
         {
@@ -103,27 +107,28 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>登録先の <see cref="TweeqTabs"/>。単独使用なら null。</summary>
+        /// <summary>The <see cref="TweeqTabs"/> this is registered to. Null if used standalone.</summary>
         public TweeqTabs Owner => _owner;
 
-        /// <summary>今このパネルが表示されているか。単独使用なら常に true。</summary>
+        /// <summary>Whether this panel is currently displayed. Always true when used standalone.</summary>
         public bool IsActive => _isActive;
 
-        /// <summary>配色テーマ。中身の <see cref="ITweeqThemed"/> 子孫へ転送する。</summary>
+        /// <summary>Color theme. Forwarded to <see cref="ITweeqThemed"/> descendants inside.</summary>
         public TweeqTheme Theme
         {
             get => _theme;
             set
             {
-                // 同一インスタンスでも打ち切らない。テーマ設定後に足された中身へ届ける。
-                // 自身は色を持たない容れ物だが、TweeqRoot は ITweeqThemed で探索を打ち切るので
-                // ここで配らないと中身までテーマが届かない
+                // Doesn't short-circuit even for the same instance. Delivers the theme to
+                // content added after the theme was set. This is itself a colorless container,
+                // but TweeqRoot stops its search at ITweeqThemed, so without distributing here
+                // the theme would never reach the content inside.
                 _theme = value ?? TweeqTheme.Dark();
                 TweeqThemeDistribution.Distribute(this, _theme);
             }
         }
 
-        /// <summary>表示名からタブ id を作る（小文字化・空白をハイフンへ）。</summary>
+        /// <summary>Builds a tab id from the display name (lowercase, spaces to hyphens).</summary>
         public static string NormalizeId(string name)
         {
             if (string.IsNullOrEmpty(name))
@@ -131,14 +136,15 @@ namespace Tweeq.UIToolkit
                 return string.Empty;
             }
 
-            // カルチャ依存の ToLower はトルコ語ロケールで I を潰すので Invariant 固定
+            // Culture-dependent ToLower mangles "I" under the Turkish locale, so this is pinned to Invariant
             return name.ToLowerInvariant().Replace(' ', '-');
         }
 
         /// <summary>
-        /// 祖先の <see cref="TweeqTabs"/> を探して登録する。祖先が無ければ何もしない。
-        /// 通常は <see cref="AttachToPanelEvent"/> から自動で呼ばれるが、パネルに載せずに
-        /// 木を組む場合（テスト・エディタ拡張）はここを直接叩く。
+        /// Finds the ancestor <see cref="TweeqTabs"/> and registers with it. Does nothing if
+        /// there is no ancestor. Normally called automatically from
+        /// <see cref="AttachToPanelEvent"/>, but call this directly when building a tree
+        /// without attaching it to a panel (tests, editor extensions).
         /// </summary>
         public void ConnectToTabs()
         {
@@ -146,15 +152,15 @@ namespace Tweeq.UIToolkit
 
             if (_owner != null && !ReferenceEquals(_owner, tabs))
             {
-                // 付け替えられた。古い親から先に外さないとヘッダーが二重に残る
+                // Reparented. Must detach from the old parent first, or the header would remain duplicated
                 _owner.UnregisterTab(this);
             }
 
-            // 親が無いのは異常ではない（単独の可視要素として振る舞う契約）
+            // Having no parent is not an error (the contract is to behave as a standalone visible element)
             tabs?.RegisterTab(this);
         }
 
-        /// <summary>登録先から外れる。単独使用なら何もしない。</summary>
+        /// <summary>Unregisters from wherever it was registered. Does nothing when used standalone.</summary>
         public void DisconnectFromTabs()
         {
             _owner?.UnregisterTab(this);
@@ -169,7 +175,7 @@ namespace Tweeq.UIToolkit
             this.AddToClassList(USS_CLASS_NAME);
             this.style.flexDirection = FlexDirection.Column;
 
-            // Vue の `.TqTab { height: 100% }` 相当。パネル領域いっぱいに広がる
+            // Equivalent to Vue's `.TqTab { height: 100% }`. Expands to fill the panel area
             this.style.flexGrow = 1f;
             this.style.minHeight = 0f;
 
@@ -194,14 +200,16 @@ namespace Tweeq.UIToolkit
 
         #region Tabs interop
 
-        // 親からのみ呼ばれる。登録簿と表示状態の持ち主を 1 つに保つための入口
+        // Called only by the parent. The entry point that keeps a single owner for the
+        // registry and display state
         internal void SetOwner(TweeqTabs owner)
         {
             _owner = owner;
 
             if (_owner == null)
             {
-                // 単独に戻ったら必ず見える状態へ（display:none のまま孤児になるのを防ぐ）
+                // Always return to a visible state once reverted to standalone (prevents
+                // becoming orphaned while still display:none)
                 SetActive(true);
             }
         }
@@ -215,9 +223,10 @@ namespace Tweeq.UIToolkit
 
             _isActive = active;
 
-            // 非アクティブは display:none（意図的逸脱・m8-modal-tabs-spec.md §D）。
-            // Vue は grid 同一セル重ね＋opacity で高さを最長タブに保つが、UITK に同等の
-            // レイアウトが無く、opacity を選ぶ理由だった Monaco 対策も Unity には無い
+            // Inactive is display:none (intentional deviation — m8-modal-tabs-spec.md §D).
+            // Vue keeps the height at the tallest tab by stacking grid cells in the same cell
+            // plus opacity, but UI Toolkit has no equivalent layout, and the Monaco workaround
+            // that was the reason for choosing opacity doesn't apply in Unity either.
             this.style.display = _isActive ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
@@ -235,8 +244,9 @@ namespace Tweeq.UIToolkit
             DisconnectFromTabs();
         }
 
-        // ParameterGrid.Find と同じ手動の祖先探索。UQuery は型制約でインターフェースを
-        // 取れず、contentContainer を差し替えた部品を跨ぐので hierarchy を自前で辿る
+        // The same manual ancestor search as ParameterGrid.Find. UQuery can't take an
+        // interface due to type constraints, and this needs to cross parts that swapped out
+        // contentContainer, so the hierarchy is walked manually.
         TweeqTabs FindTabs()
         {
             VisualElement current = this.hierarchy.parent;

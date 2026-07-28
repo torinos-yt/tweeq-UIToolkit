@@ -5,9 +5,9 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// 2 軸固定の数値タプル（仕様 §2）。既定の軸ラベルは X / Y。
+    /// A numeric tuple with a fixed 2 axes (spec §2). The default axis labels are X / Y.
     /// </summary>
-    /// <remarks>設計意図は <see cref="Vec3Input"/> と同じ（通知経路でアロケーションしない）。</remarks>
+    /// <remarks>The design intent is the same as <see cref="Vec3Input"/> (no allocation on the notification path).</remarks>
     [UxmlElement]
     public partial class Vec2Input : VecInputBase, INotifyValueChanged<Vector2>
     {
@@ -20,16 +20,16 @@ namespace Tweeq.UIToolkit
         #region Public API
 
         /// <summary>
-        /// 値が変わるたびに発火する。1 ジェスチャで動くのは 1 軸だけなので、
-        /// 仕様 §2 の「1 フレーム 1 回」はコアレスなしで満たされる。
+        /// Fires every time the value changes. Since only 1 axis moves per gesture, spec §2's
+        /// "once per frame" is satisfied without needing coalescing.
         /// </summary>
         public event Action<Vector2> ValueChanged;
 
-        /// <summary>ドラッグ確定・Enter・blur で 1 回だけ発火する（軸数ぶんは発火しない）。</summary>
+        /// <summary>Fires exactly once on drag confirm, Enter, or blur (not once per axis).</summary>
         public event Action<Vector2> Confirmed;
 
         /// <summary>
-        /// 現在値。<c>INotifyValueChanged</c> の規約に合わせて名前だけ小文字にしている。
+        /// The current value. Only the name is lowercased to match the <c>INotifyValueChanged</c> convention.
         /// </summary>
         [UxmlAttribute]
         public Vector2 value
@@ -41,8 +41,9 @@ namespace Tweeq.UIToolkit
                 WriteAxes(value);
                 Vector2 current = ReadValue();
 
-                // 比較は軸から読み直した値どうしで行う（軸の保持値が唯一の正）。
-                // Vector2.Equals は成分ごとの厳密比較なので、== の近似判定で潰されない
+                // The comparison is done between values re-read from the axes (the axes' held
+                // values are the single source of truth). Vector2.Equals does an exact
+                // component-wise comparison, so it isn't swallowed by the approximate == check.
                 if (previous.Equals(current))
                 {
                     return;
@@ -52,7 +53,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>イベントを発火せずに値を設定する。</summary>
+        /// <summary>Sets the value without firing events.</summary>
         public void SetValueWithoutNotify(Vector2 newValue)
         {
             WriteAxes(newValue);
@@ -74,7 +75,7 @@ namespace Tweeq.UIToolkit
         {
             Vector2 current = ReadValue();
 
-            // 動いたのは 1 軸だけなので、その成分を旧値へ差し戻せば変更前の値になる
+            // Only 1 axis moved, so reverting that component to its previous value reproduces the pre-change value
             Vector2 previous = current;
             if (changedAxis >= 0 && changedAxis < DIMENSIONS)
             {
@@ -104,7 +105,7 @@ namespace Tweeq.UIToolkit
             return new Vector2(this.GetAxisValue(0), this.GetAxisValue(1));
         }
 
-        // 第 3・第 4 引数は軸数 2 の時点で基底に捨てられる
+        // The 3rd and 4th arguments are discarded by the base class since the axis count is 2
         void WriteAxes(Vector2 source)
         {
             this.SetAxesWithoutNotify(source.x, source.y, 0f, 0f);

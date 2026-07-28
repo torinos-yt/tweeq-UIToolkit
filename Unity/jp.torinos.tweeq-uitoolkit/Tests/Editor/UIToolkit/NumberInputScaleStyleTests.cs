@@ -6,15 +6,15 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// NumberInput のスケール表示スタイル。既定が本家忠実のドットであることと、
-    /// ドットの表示ゲートを見る。点の座標そのものは NumberScaleDotsTests（純関数）の担当。
+    /// NumberInput's scale display style. Covers the default being dots that faithfully match the Vue original,
+    /// and the dots' display gate. The dot coordinates themselves are handled by NumberScaleDotsTests (pure functions).
     /// </summary>
     public class NumberInputScaleStyleTests
     {
         const BindingFlags LOOKUP =
             BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
 
-        #region 既定値
+        #region Default value
 
         [Test]
         public void ScaleStyleDefaultsToDots()
@@ -38,7 +38,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region 表示ゲート
+        #region Display gate
 
         [Test]
         public void DotsAreVisibleOnAPlainField()
@@ -118,8 +118,8 @@ namespace Tweeq.UIToolkit.Tests
         #region UXML
 
         /// <summary>
-        /// RotaryInputTests と同じ手法。UXML 文字列からの Instantiate は VisualTreeAsset の
-        /// インポートが要るため、生成された UxmlSerializedData を直接叩いて代用する。
+        /// Same technique as RotaryInputTests. Instantiating from a UXML string requires importing
+        /// a VisualTreeAsset, so this instead drives the generated UxmlSerializedData directly.
         /// </summary>
         [Test]
         public void Uxml_SerializedDataAppliesScaleStyle()
@@ -139,7 +139,7 @@ namespace Tweeq.UIToolkit.Tests
             Assert.AreEqual(NumberScaleStyle.Values, ((NumberInput)instance).ScaleStyle);
         }
 
-        /// <summary>属性未指定の UXML では既定（ドット）のまま。</summary>
+        /// <summary>With no attribute specified in UXML, it stays at the default (dots).</summary>
         [Test]
         public void Uxml_KeepsDotsWhenTheAttributeIsAbsent()
         {
@@ -158,7 +158,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #region Helpers
 
-        // ゲートは描画専用の内部状態なので公開していない
+        // The gate is not exposed publicly since it's internal state used only for rendering
         static bool ScaleDotsVisible(NumberInput input)
         {
             PropertyInfo property = typeof(NumberInput).GetProperty("ScaleDotsVisible", LOOKUP);
@@ -167,7 +167,7 @@ namespace Tweeq.UIToolkit.Tests
             return (bool)property.GetValue(input);
         }
 
-        // 生成コードは「UXML に書かれた属性か」をフラグで判定してから実体へ書く
+        // Generated code first checks a flag for "was this attribute written in UXML" before writing the actual value
         static void OverrideAttribute(Type dataType, object data, string name, object value)
         {
             FieldInfo field = dataType.GetField(name, LOOKUP);

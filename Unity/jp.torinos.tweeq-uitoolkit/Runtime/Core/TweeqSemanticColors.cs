@@ -5,78 +5,78 @@ namespace Tweeq.Core
     #region Data
 
     /// <summary>
-    /// 状態を表す色。ref/tweeq/src/theme/palette.ts の buildSemanticColors に対応する。
+    /// Colors representing state. Corresponds to buildSemanticColors in ref/tweeq/src/theme/palette.ts.
     /// </summary>
     public struct SemanticColors
     {
-        /// <summary>エラー（不正な入力値・失敗）。</summary>
+        /// <summary>Error (invalid input value / failure).</summary>
         public Rgba32 Error;
 
-        /// <summary>エラーの淡い面色。</summary>
+        /// <summary>Error's soft fill color.</summary>
         public Rgba32 ErrorSoft;
 
-        /// <summary>警告。</summary>
+        /// <summary>Warning.</summary>
         public Rgba32 Warning;
 
-        /// <summary>警告の淡い面色。</summary>
+        /// <summary>Warning's soft fill color.</summary>
         public Rgba32 WarningSoft;
 
-        /// <summary>成功。</summary>
+        /// <summary>Success.</summary>
         public Rgba32 Success;
 
-        /// <summary>成功の淡い面色。</summary>
+        /// <summary>Success's soft fill color.</summary>
         public Rgba32 SuccessSoft;
 
-        /// <summary>情報。</summary>
+        /// <summary>Info.</summary>
         public Rgba32 Info;
 
-        /// <summary>情報の淡い面色。</summary>
+        /// <summary>Info's soft fill color.</summary>
         public Rgba32 InfoSoft;
 
-        /// <summary>録画インジケータ。原典の指定どおり <see cref="Error"/> と同値。</summary>
+        /// <summary>Recording indicator. Equal to <see cref="Error"/>, per the original's specification.</summary>
         public Rgba32 Rec;
     }
 
     #endregion
 
     /// <summary>
-    /// 曲線的に選ばれた base16 風の色相パレットから、アクセントに寄せたセマンティック色を作る。
-    /// ref/tweeq/src/theme/palette.ts の移植。
+    /// Builds semantic colors nudged toward the accent from a curated, base16-like hue palette.
+    /// Ported from ref/tweeq/src/theme/palette.ts.
     /// </summary>
     /// <remarks>
-    /// 「代表色」は Radix スケールを通さず、アクセントの明度・彩度をそのまま流用して色相だけ
-    /// 差し替える。UI 全体が同じ鮮やかさで揃うのが狙いで、色相のナッジには上限を掛けて
-    /// 赤が赤に見えなくなるのを防いでいる。
+    /// The "representative color" doesn't go through the Radix scale — it reuses the accent's lightness
+    /// and chroma as-is and only swaps the hue. The goal is for the whole UI to share the same vividness,
+    /// and a cap is placed on the hue nudge to keep red from stopping looking like red.
     /// </remarks>
     public static class TweeqSemanticColors
     {
         #region Constants
 
-        /// <summary>赤のシード色相（Radix red step9 #e5484d）。</summary>
+        /// <summary>Red seed hue (Radix red step9 #e5484d).</summary>
         public static readonly Rgba SeedRed = FromHex(0xE5, 0x48, 0x4D);
 
-        /// <summary>黄のシード色相（Radix amber step9 #ffc53d）。</summary>
+        /// <summary>Yellow seed hue (Radix amber step9 #ffc53d).</summary>
         public static readonly Rgba SeedYellow = FromHex(0xFF, 0xC5, 0x3D);
 
-        /// <summary>緑のシード色相（Radix grass step9 #46a758）。</summary>
+        /// <summary>Green seed hue (Radix grass step9 #46a758).</summary>
         public static readonly Rgba SeedGreen = FromHex(0x46, 0xA7, 0x58);
 
-        /// <summary>青のシード色相（Radix blue step9 #3e63dd）。</summary>
+        /// <summary>Blue seed hue (Radix blue step9 #3e63dd).</summary>
         public static readonly Rgba SeedBlue = FromHex(0x3E, 0x63, 0xDD);
 
-        // アクセント色相へ寄せる割合と、シードから離れられる上限。
-        // 上限があるからこそ、アクセントが色相環の反対側にあっても赤は赤に見える
+        // The ratio to nudge toward the accent hue, and the cap on how far it may move from the seed.
+        // Precisely because of this cap, red still looks like red even when the accent sits on the opposite side of the hue wheel
         const double NUDGE_T = 0.3;
         const double NUDGE_MAX_DEG = 24.0;
 
-        // 淡い面色を作るときの、背景から代表色へ向かう混合率
+        // The mix ratio from background toward the representative color, used when building the soft fill color
         const double SOFT_TINT_T = 0.15;
 
         #endregion
 
         #region Public
 
-        /// <summary>背景色とアクセント色からセマンティック色一式を作る。</summary>
+        /// <summary>Builds the full set of semantic colors from the background color and the accent color.</summary>
         public static SemanticColors Build(Rgba background, Rgba accent)
         {
             Rgba32 red = RepresentativeColor(SeedRed, accent);
@@ -99,8 +99,8 @@ namespace Tweeq.Core
         }
 
         /// <summary>
-        /// シード色相の代表色。アクセントの明度・彩度をそのまま使い、色相だけをシードから
-        /// アクセント方向へ最大 <see cref="NUDGE_MAX_DEG"/> 度だけ寄せる。
+        /// The representative color for a seed hue. Uses the accent's lightness and chroma as-is,
+        /// and nudges only the hue from the seed toward the accent, by at most <see cref="NUDGE_MAX_DEG"/> degrees.
         /// </summary>
         public static Rgba32 RepresentativeColor(Rgba seed, Rgba accent)
         {
@@ -116,13 +116,13 @@ namespace Tweeq.Core
             return TweeqOklch.OklchToBytes(new Oklch(accentColor.L, accentColor.C, hue));
         }
 
-        /// <summary>代表色を背景側へ寄せた淡い面色。OKLCH 上で 15% 混合する。</summary>
+        /// <summary>The soft fill color, the representative color pulled toward the background. Mixed 15% in OKLCH.</summary>
         public static Rgba32 SoftTint(Rgba background, Rgba32 color)
         {
             Oklch backgroundColor = TweeqOklch.SrgbToOklch(background.R, background.G, background.B);
             Oklch target = TweeqOklch.SrgbToOklch(color.R / 255.0, color.G / 255.0, color.B / 255.0);
 
-            // 色相は短いほうの弧で補間する（原典 colorjs.io の hue: 'shorter'）
+            // Hue is interpolated along the shorter arc (hue: 'shorter' in the original's colorjs.io)
             double h1 = backgroundColor.H;
             double h2 = target.H;
             double delta = h2 - h1;
@@ -146,7 +146,8 @@ namespace Tweeq.Core
         #region Helpers
 
         /// <summary>
-        /// シード色相をアクセント色相へ短い弧で寄せる。どちらかが無彩色ならシードのまま返す。
+        /// Nudges the seed hue toward the accent hue along the shorter arc. Returns the seed unchanged
+        /// if either one is achromatic.
         /// </summary>
         public static double NudgedHue(double seedHue, double accentHue)
         {
@@ -163,7 +164,7 @@ namespace Tweeq.Core
             return (shifted % 360.0 + 360.0) % 360.0;
         }
 
-        // 片側が未定義（NaN）なら、もう片側の値をそのまま採る（原典の補間規則）
+        // If one side is undefined (NaN), take the other side's value as-is (the original's interpolation rule)
         static double Interpolate(double from, double to)
         {
             if (double.IsNaN(from))

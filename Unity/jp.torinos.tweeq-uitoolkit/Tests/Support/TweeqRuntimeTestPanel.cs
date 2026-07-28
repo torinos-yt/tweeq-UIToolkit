@@ -9,21 +9,21 @@ using UnityEditor;
 namespace Tweeq.UIToolkit.TestSupport
 {
     /// <summary>
-    /// 合成イベントを流すための使い捨て UIDocument。
+    /// A disposable UIDocument for streaming synthetic events through.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Manipulator やフォーカス配線は「イベントが来たら何をするか」が全てなので、
-    /// panel 無しでは契約を観測できない。倍率が絡むと閾値の px が意味を変えてしまうため、
-    /// ConstantPixelSize / scale=1 に固定して 1px = 1px を保証する。
+    /// Manipulators and focus wiring are entirely about "what happens when an event arrives",
+    /// so the contract can't be observed without a panel. Since scale factors would change the
+    /// meaning of threshold px values, we pin ConstantPixelSize / scale=1 to guarantee 1px = 1px.
     /// </para>
     /// <para>
-    /// EditMode のパネルは「ポインタ下の要素」を持たないので、PointerDown を届けるには
-    /// 被験要素側で <c>CapturePointer</c> しておく必要がある。
+    /// An EditMode panel has no "element under the pointer", so delivering a PointerDown
+    /// requires the element under test to call <c>CapturePointer</c> itself beforehand.
     /// </para>
     /// <para>
-    /// 外部プロジェクトから使うには、consumer 側 manifest の <c>testables</c> に
-    /// <c>jp.torinos.tweeq-uitoolkit</c> を入れること。
+    /// To use this from an external project, add <c>jp.torinos.tweeq-uitoolkit</c> to
+    /// <c>testables</c> in the consumer's manifest.
     /// </para>
     /// </remarks>
     public sealed class TweeqRuntimeTestPanel : IDisposable
@@ -38,10 +38,10 @@ namespace Tweeq.UIToolkit.TestSupport
 
         #region Public API
 
-        /// <summary>パネルに載ったルート要素。ここへ被験要素を Add する。</summary>
+        /// <summary>The root element mounted on the panel. Add the element under test here.</summary>
         public VisualElement Root { get; }
 
-        /// <summary>パネルを 1 枚用意する。作れなかった場合はテストを Ignore にする。</summary>
+        /// <summary>Prepares a single panel. Ignores the test if one couldn't be created.</summary>
         public static TweeqRuntimeTestPanel Create()
         {
             TweeqRuntimeTestPanel panel = new TweeqRuntimeTestPanel();
@@ -78,8 +78,8 @@ namespace Tweeq.UIToolkit.TestSupport
             _settings.scaleMode = PanelScaleMode.ConstantPixelSize;
             _settings.scale = 1f;
 
-            // テーマ未設定の PanelSettings は「テーマ無し」の警告を出す。
-            // 見た目は検証しないので、プロジェクトにある物を何でも 1 枚借りて黙らせる
+            // A PanelSettings with no theme set logs a "no theme" warning.
+            // We don't verify appearance, so silence it by borrowing whatever theme exists in the project.
             ThemeStyleSheet theme = FindAnyTheme();
             if (theme != null)
             {

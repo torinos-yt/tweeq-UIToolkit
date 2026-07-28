@@ -7,17 +7,17 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// TweeqRoot のテーマ配布を検証する。
+    /// Verifies TweeqRoot's theme distribution.
     ///
-    /// USS カスタムプロパティの解決（CustomStyleResolvedEvent）は実パネルとスタイル解決が
-    /// 必要で EditMode から合成できないため、ここでは配布ロジックと優先順位だけを見る。
-    /// USS 経路は uloop でのスクショ確認担当。
+    /// USS custom property resolution (CustomStyleResolvedEvent) requires a real panel and style
+    /// resolution, which can't be synthesized from EditMode, so this only looks at the distribution
+    /// logic and priority order. The USS path is verified via uloop screenshot checks.
     /// </summary>
     public class TweeqRootTests
     {
         #region Helpers
 
-        /// <summary>テーマが届いたかを数えるだけの ITweeqThemed 実装。</summary>
+        /// <summary>An ITweeqThemed implementation that just counts whether the theme arrived.</summary>
         sealed class ThemedProbe : VisualElement, ITweeqThemed
         {
             TweeqTheme _theme;
@@ -81,7 +81,7 @@ namespace Tweeq.UIToolkit.Tests
         [Test]
         public void Redistribute_StopsAtThemedChild()
         {
-            // 複合部品は自分の子へ自分で転送する契約なので、ルートは中まで潜らない
+            // Composite components are contracted to forward the theme to their own children themselves, so the root doesn't descend inside
             TweeqRoot root = new TweeqRoot();
             ThemedProbe outer = new ThemedProbe();
             ThemedProbe inner = new ThemedProbe();
@@ -234,7 +234,7 @@ namespace Tweeq.UIToolkit.Tests
         [Test]
         public void UxmlAttributes_ExposePaintBackgroundOnly()
         {
-            // Theme は UXML に出さない契約（TweeqRoot / コードで配布する）
+            // Contract: Theme isn't exposed to UXML (distributed via TweeqRoot / code instead)
             PropertyInfo theme = typeof(TweeqRoot).GetProperty(nameof(TweeqRoot.Theme));
             PropertyInfo paint = typeof(TweeqRoot).GetProperty(nameof(TweeqRoot.PaintBackground));
 

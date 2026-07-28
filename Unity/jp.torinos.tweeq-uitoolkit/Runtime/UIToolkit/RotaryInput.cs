@@ -7,8 +7,8 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// 円形の角度スクラバー。値は度数で、多回転により ±360 を超える値も保持する。
-    /// 相対モード（既定）と絶対モード（針側ホバー or A キー）を持つ。
+    /// A circular angle scrubber. The value is in degrees, and multi-turn rotation lets it hold values beyond +/-360.
+    /// Has a relative mode (default) and an absolute mode (hovering the needle side, or the A key).
     /// </summary>
     [UxmlElement]
     public partial class RotaryInput : VisualElement, INotifyValueChanged<float>, ITweeqInputBox, ITweeqThemed
@@ -17,47 +17,50 @@ namespace Tweeq.UIToolkit
 
         const float DEFAULT_SIZE = 24f;
 
-        // Vue / React は「機能だけ無効・見た目不変」だが、隣の NumberInput が dim するのにノブだけ
-        // 生きて見えるのは公演現場で事故のもと。ButtonInput 方式の減光を意図的逸脱として採る
-        // （m7-disabled-invalid-spec.md の裁定）
+        // The Vue version and another reference implementation both leave the knob's appearance unchanged
+        // when disabled, only turning off the functionality. But with the neighboring NumberInput dimming
+        // while only the knob still looks alive, that's an accident waiting to happen in a live performance
+        // setting. Dimming it the same way ButtonInput does is adopted as an intentional deviation
+        // (ruling in m7-disabled-invalid-spec.md).
         const float DISABLED_OPACITY = 0.4f;
         const float MOUSE_DRAG_THRESHOLD = 3f;
         const float TOUCH_DRAG_THRESHOLD = 5f;
 
-        // ホバー／ドラッグ中は 1.8 倍に膨らむ（Vue の transform: scale(1.8)）
+        // Swells to 1.8x while hovered/dragging (Vue's transform: scale(1.8)).
         const float HOVER_SCALE = 1.8f;
 
-        // フォーカスリングは 24px 箱の inset -3px ＝ 直径 30px
+        // The focus ring is a 24px box with an inset of -3px, i.e. a 30px diameter.
         const float FOCUS_RING_INSET = 3f;
         const float FOCUS_RING_WIDTH = 1f;
 
-        // スナップリング帯域（egui 版 SNAP_INNER_RADIUS_FACTOR / SNAP_OUTER_RADIUS と同値）
+        // The snap-ring band (same values as another reference implementation's SNAP_INNER_RADIUS_FACTOR / SNAP_OUTER_RADIUS).
         const float SNAP_RING_INNER_FACTOR = 4f;
         const float SNAP_RING_OUTER_RADIUS = 160f;
 
-        // 1 回転ごとに同心円をずらす量（24 * 0.25 = 6px）
+        // The amount by which concentric circles are offset per turn (24 * 0.25 = 6px).
         const float ARC_RADIUS_STEP_FACTOR = 0.25f;
         const float MIN_ARC_RADIUS = 8f;
 
-        // 値が壊れていても描画ループが爆発しないための上限
+        // Upper bound so the draw loop doesn't blow up even if the value is broken.
         const int MAX_METER_LINES = 720;
         const int MAX_TURN_CIRCLES = 64;
 
         const double FINE_SCALE = 0.1;
 
-        // Vue 版は angleOffset の既定が -90（値 0 が真上）。API 契約では AngleOffset の既定を 0 と
-        // したため、「0°=真上」の基準はここで吸収し、描画と絶対モードの双方に同じ値を掛ける。
+        // The Vue version defaults angleOffset to -90 (value 0 points straight up). Since the API contract
+        // defaults AngleOffset to 0 instead, the "0deg = straight up" baseline is absorbed here, and the
+        // same value is applied to both drawing and absolute-mode calculations.
         const double UP_ANGLE_OFFSET = -90.0;
 
-        // Vue 版 tip パス（viewBox 32、中心 16）＝半径比 4/16 と 14/16
+        // The Vue version's tip path (viewBox 32, center 16) = radius ratios of 4/16 and 14/16.
         const float INDICATOR_INNER_RATIO = 0.25f;
         const float INDICATOR_OUTER_RATIO = 0.875f;
         const float INDICATOR_WIDTH = 3f;
 
-        // 中心付近は針の左右どちらに居るかが不安定になるので、絶対モード判定を無効にする
+        // Near the center, which side of the needle you're on becomes unstable, so absolute-mode detection is disabled there.
         const float ABSOLUTE_DEAD_ZONE_RATIO = 0.4375f;
 
-        // 中心付近では方向ベクトルが暴れるので、この長さ（二乗）未満のベクトルからは角度を取らない
+        // Near the center the direction vector goes erratic, so angle isn't taken from a vector shorter than this length (squared).
         const float MIN_VECTOR_SQR_LENGTH = 1f;
 
         #endregion
@@ -66,7 +69,7 @@ namespace Tweeq.UIToolkit
 
         float _value;
 
-        // スナップ前の生の累積角度。スナップは出力側にのみ掛け、ここには残さない
+        // The raw accumulated angle before snapping. Snapping is only applied on the output side and never left in here.
         double _local;
 
         double _snap = 45.0;
@@ -75,7 +78,7 @@ namespace Tweeq.UIToolkit
         bool _disabled;
         TweeqTheme _theme = TweeqTheme.Dark();
 
-        // スケールする層。フォーカスリングを巻き込まないため描画を分けている
+        // The layer that scales. Drawing is split out so the focus ring doesn't get caught up in it.
         VisualElement _knob;
         TweakOverlay _overlay;
 
@@ -107,10 +110,10 @@ namespace Tweeq.UIToolkit
 
         #region Public API
 
-        /// <summary>ドラッグ確定時（ポインタを離した時）に発火する。</summary>
+        /// <summary>Fires when a drag is confirmed (when the pointer is released).</summary>
         public event Action<float> Confirmed;
 
-        /// <summary>現在の角度（度数）。</summary>
+        /// <summary>The current angle (degrees).</summary>
         [UxmlAttribute]
         public float value
         {
@@ -128,7 +131,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>スナップ角度（度数）。既定 45。</summary>
+        /// <summary>The snap angle (degrees). Default 45.</summary>
         [UxmlAttribute]
         public double Snap
         {
@@ -140,7 +143,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>出力の量子化ステップ。0 以下で無効。</summary>
+        /// <summary>The quantization step for the output. Disabled at 0 or below.</summary>
         [UxmlAttribute]
         public double Step
         {
@@ -152,7 +155,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>インジケータの角度オフセット（度数）。既定 0（0°が真上）。</summary>
+        /// <summary>The indicator's angle offset (degrees). Default 0 (0deg is straight up).</summary>
         [UxmlAttribute]
         public double AngleOffset
         {
@@ -165,7 +168,7 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 操作不能状態。ドラッグ中に立てた場合はジェスチャを破棄して開始値へ戻す。
+        /// Non-interactive state. If set while dragging, the gesture is discarded and the value reverts to the start value.
         /// </summary>
         [UxmlAttribute]
         public bool Disabled
@@ -182,7 +185,8 @@ namespace Tweeq.UIToolkit
 
                 if (_disabled && (_pointerDown || _dragging))
                 {
-                    // 無効化の瞬間にドラッグが生きていると、離す手段＝隠したカーソルを取り戻す手段が無くなる
+                    // If a drag is still alive at the moment of disabling, there would be no way left to
+                    // release it, i.e. no way left to recover the hidden cursor.
                     CancelDrag();
                 }
 
@@ -191,7 +195,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>配色テーマ。null を渡した場合は Dark() にフォールバックする。</summary>
+        /// <summary>The color theme. Falls back to Dark() when null is passed.</summary>
         public TweeqTheme Theme
         {
             get => _theme;
@@ -204,22 +208,22 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 横方向グループでの位置。ノブは円形で潰す角を持たないため、保持するだけの no-op（仕様 §5-1）。
+        /// Position within a horizontal group. Since the knob is circular and has no corners to collapse, this is a no-op that only retains the value (spec §5-1).
         /// </summary>
         public TweeqBoxPosition InlinePosition { get; set; } = TweeqBoxPosition.None;
 
-        /// <summary>縦方向グループでの位置。InlinePosition と同じく no-op。</summary>
+        /// <summary>Position within a vertical group. A no-op, same as InlinePosition.</summary>
         public TweeqBoxPosition BlockPosition { get; set; } = TweeqBoxPosition.None;
 
-        /// <summary>ドラッグセッション中か。</summary>
+        /// <summary>Whether a drag session is in progress.</summary>
         public bool Dragging => _dragging;
 
         /// <summary>
-        /// ドラッグセッションを開始する（panel 非依存）。実操作はポインタイベント経由だが、
-        /// 外部ドライバとテストのために口を開けてある（TranslateInput と同じ構成）。
+        /// Begins a drag session (panel-independent). Real operation goes through pointer events, but
+        /// this is left open for external drivers and tests (same setup as TranslateInput).
         /// </summary>
         /// <remarks>
-        /// ポインタ座標を伴わないので絶対モードの引き寄せは起きない（相対モード相当）。
+        /// Since no pointer coordinate is involved, absolute mode's pull-to-position never happens (equivalent to relative mode).
         /// </remarks>
         public void BeginRotaryDrag()
         {
@@ -237,7 +241,7 @@ namespace Tweeq.UIToolkit
             UpdateVisualState();
         }
 
-        /// <summary>ドラッグ中の角度増分（度数）を適用する。</summary>
+        /// <summary>Applies an angle increment (degrees) during a drag.</summary>
         public void UpdateRotaryDrag(double deltaDegrees)
         {
             if (!_dragging)
@@ -248,7 +252,7 @@ namespace Tweeq.UIToolkit
             ApplyDelta(deltaDegrees);
         }
 
-        /// <summary>ドラッグを確定して終了する。<see cref="Confirmed"/> が 1 回だけ発火する。</summary>
+        /// <summary>Confirms and ends the drag. <see cref="Confirmed"/> fires exactly once.</summary>
         public void EndRotaryDrag()
         {
             if (!_dragging)
@@ -263,7 +267,7 @@ namespace Tweeq.UIToolkit
             Confirmed?.Invoke(_value);
         }
 
-        /// <summary>ドラッグを破棄して開始値へ戻す（Escape 相当）。<see cref="Confirmed"/> は発火しない。</summary>
+        /// <summary>Discards the drag and reverts to the start value (equivalent to Escape). <see cref="Confirmed"/> does not fire.</summary>
         public void CancelRotaryDrag()
         {
             if (!_dragging)
@@ -274,12 +278,12 @@ namespace Tweeq.UIToolkit
             CancelDrag();
         }
 
-        /// <summary>ChangeEvent を発火せずに値を設定する。累積角度も同期される。</summary>
+        /// <summary>Sets the value without firing ChangeEvent. The accumulated angle is also synced.</summary>
         public void SetValueWithoutNotify(float newValue)
         {
             _value = newValue;
 
-            // 外部からの設定はドラッグセッションの外にあるので、生の累積器も揃えておく
+            // An external set happens outside any drag session, so the raw accumulator is kept in sync too.
             _local = newValue;
             Refresh();
         }
@@ -295,14 +299,14 @@ namespace Tweeq.UIToolkit
             this.style.height = DEFAULT_SIZE;
             this.style.flexShrink = 0f;
 
-            // 1.8 倍に膨らんだノブとフォーカスリングを切らない
+            // So the knob swollen to 1.8x and the focus ring aren't clipped.
             this.style.overflow = Overflow.Visible;
 
             _knob = new VisualElement
             {
                 name = "tweeq-rotary-knob",
 
-                // ヒット判定は外側（非スケール層）に集約する
+                // Hit testing is consolidated on the outer (non-scaling) layer.
                 pickingMode = PickingMode.Ignore,
             };
             _knob.style.position = Position.Absolute;
@@ -359,10 +363,10 @@ namespace Tweeq.UIToolkit
             _shiftHeld = (evt.modifiers & EventModifiers.Shift) != 0;
             _altHeld = (evt.modifiers & EventModifiers.Alt) != 0;
 
-            // ドラッグ開始時のモードで固定するので、押した瞬間の位置で一度だけ決める
+            // The mode is fixed at drag start, so it's decided exactly once, from the position at the moment of the press.
             UpdateModeByPointer(_pressPosition);
 
-            // KeyDown/KeyUp（Q/A/R/Escape）を受け取るためフォーカスを取る
+            // Takes focus in order to receive KeyDown/KeyUp (Q/A/R/Escape).
             this.Focus();
 
             if (this.panel != null)
@@ -383,7 +387,7 @@ namespace Tweeq.UIToolkit
 
             if (!_pointerDown)
             {
-                // ホバー中のみモード判定を更新する（ドラッグ中は凍結）
+                // Mode detection is only updated while hovered (frozen during a drag).
                 UpdateModeByPointer(LocalPosition(evt));
                 return;
             }
@@ -441,7 +445,7 @@ namespace Tweeq.UIToolkit
             UpdateVisualState();
         }
 
-        // キャプチャを失った場合でもドラッグ状態（＝隠したカーソル・オーバーレイ）を残さない
+        // Never leaves the drag state (i.e. the hidden cursor and overlay) stranded even if capture is lost.
         void OnPointerCaptureOut(PointerCaptureOutEvent evt)
         {
             if (!_pointerDown && !_dragging)
@@ -478,7 +482,7 @@ namespace Tweeq.UIToolkit
 
         void OnDetachFromPanel(DetachFromPanelEvent evt)
         {
-            // パネルから外れてもカーソルとオーバーレイを取り残さない
+            // Never leaves the cursor and overlay stranded even after detaching from the panel.
             ResetDragState();
         }
 
@@ -524,7 +528,7 @@ namespace Tweeq.UIToolkit
 
             if (_dragging)
             {
-                // スナップ／モードの切り替えは出力へ即座に反映する（累積角度は動かさない）
+                // Toggling snap/mode reflects into the output immediately (the accumulated angle isn't touched).
                 ApplyDelta(0.0);
             }
 
@@ -594,7 +598,7 @@ namespace Tweeq.UIToolkit
             HideCursor();
             AcquireOverlay();
 
-            // 絶対モードで掴んだ場合は、その場でポインタ角度へ引き寄せる（Vue 版 onDragStart 相当）
+            // If grabbed in absolute mode, it's immediately pulled to the pointer's angle (equivalent to the Vue version's onDragStart).
             if (AbsoluteMode)
             {
                 ApplyDelta(AbsoluteDelta(position, Center()));
@@ -614,7 +618,7 @@ namespace Tweeq.UIToolkit
             ResetDragState();
             ReleasePointerSafely(pointerId);
 
-            // ドラッグ中に通知した値を巻き戻すので、こちらも通知する
+            // The value notified during the drag is being rolled back, so notify this too.
             this.value = restored;
             UpdateVisualState();
         }
@@ -656,7 +660,7 @@ namespace Tweeq.UIToolkit
                 return 0.0;
             }
 
-            // 前フレームと現フレームのベクトル間の符号付き角度を積むので多回転が自然に扱える
+            // Accumulates the signed angle between the previous and current frame's vectors, so multi-turn rotation is handled naturally.
             return TweeqMath.SignedAngleBetween(ScreenAngle(currentVector), ScreenAngle(previousVector));
         }
 
@@ -670,7 +674,7 @@ namespace Tweeq.UIToolkit
 
             double target = ScreenAngle(vector) - _angleOffset - UP_ANGLE_OFFSET;
 
-            // スナップ済みの出力ではなく生の累積値を基準にすることで、スナップが累積器へ漏れない
+            // Using the raw accumulated value as the reference rather than the snapped output keeps snapping from leaking into the accumulator.
             return TweeqMath.SignedAngleBetween(target, _local);
         }
 
@@ -715,15 +719,15 @@ namespace Tweeq.UIToolkit
 
         #region Mode
 
-        /// <summary>ホバー／ドラッグで「膨らんでいる」状態か。</summary>
+        /// <summary>Whether it's "swollen" from hover/drag.</summary>
         bool Active => _hovered || _dragging;
 
         bool AbsoluteMode
         {
             get
             {
-                // A/R を押している間はキーが勝つ（両押しは後から押した方）。
-                // 押していなければポインタ位置由来のモードに委ねる。
+                // While A/R is held, the key wins (whichever of the two was pressed most recently, if both).
+                // If neither is held, it's left to the mode derived from pointer position.
                 if (_absoluteKeyHeld && _relativeKeyHeld)
                 {
                     return _absoluteKeyWasLast;
@@ -754,8 +758,8 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        // 針が向く側の半円ウェッジ（デッドゾーン外）に入ったら絶対モード。
-        // ドラッグ中は開始時のモードを保つため一切更新しない。
+        // Entering the half-circle wedge the needle points toward (outside the dead zone) switches to absolute mode.
+        // While dragging, this is never updated at all, to preserve the mode fixed at the start.
         void UpdateModeByPointer(Vector2 localPosition)
         {
             if (_dragging)
@@ -823,7 +827,7 @@ namespace Tweeq.UIToolkit
             TweeqOverlayLayer layer = TweeqOverlayLayer.GetOrCreate(this);
             if (layer == null)
             {
-                // パネル未接続ならガイドは諦める（操作自体は成立させる）
+                // Give up on the guide if no panel is attached (the operation itself still proceeds).
                 return;
             }
 
@@ -864,8 +868,8 @@ namespace Tweeq.UIToolkit
                 Pointer = _pointerPanelPosition,
                 StartAngle = _valueOnDragStart + offset,
 
-                // Vue は弧の終端に model.value（スナップ・量子化後の出力）を使う。
-                // 生の累積角度 _local を渡すとスナップ中もグルグルが滑ってしまう
+                // Vue uses model.value (the snapped, quantized output) for the arc's end point.
+                // Passing the raw accumulated angle _local would make it slip and swirl even while snapping.
                 CurrentAngle = _value + offset,
                 ValueAngle = _value + offset,
                 Value = _value,
@@ -894,12 +898,13 @@ namespace Tweeq.UIToolkit
             return Mathf.Min(rect.width, rect.height) * 0.5f;
         }
 
-        // 見た目の半径。判定はスケール後の円で行う
+        // The visual radius. Detection is performed against the post-scale circle.
         float KnobVisualRadius()
         {
-            // 目標スケール（1.8）ではなくアニメーション中の補間値を使う。
-            // 目標値で判定するとホバー開始直後（まだ小さい）にノブの外周ギリギリでも
-            // 絶対モード扱いになり、暗い accentSoft でスケールが始まって見える
+            // Uses the interpolated value mid-animation rather than the target scale (1.8).
+            // Judging by the target value would treat even a position right at the knob's outer edge
+            // as absolute mode right when hovering starts (while it's still small), making the scale
+            // appear to begin with the dark accentSoft.
             float scale = Active ? HOVER_SCALE : 1f;
             if (_knob != null)
             {
@@ -913,21 +918,21 @@ namespace Tweeq.UIToolkit
             return KnobRadius() * scale;
         }
 
-        // キャプチャ中も座標系がぶれないよう、パネル座標からローカルへ変換する
+        // Converts from panel coordinates to local so the coordinate system doesn't drift during capture either.
         Vector2 LocalPosition(IPointerEvent evt)
         {
             Vector3 position = evt.position;
             return this.WorldToLocal(new Vector2(position.x, position.y));
         }
 
-        // オーバーレイはパネル座標で描くので、変換しない生の位置も持っておく
+        // The overlay is drawn in panel coordinates, so the raw, untransformed position is kept too.
         static Vector2 PanelPosition(IPointerEvent evt)
         {
             Vector3 position = evt.position;
             return new Vector2(position.x, position.y);
         }
 
-        // スクリーン座標は y 下向きなので、時計回りが正になる
+        // Screen coordinates have y pointing down, so clockwise ends up being positive.
         static double ScreenAngle(Vector2 vector)
         {
             return Mathf.Rad2Deg * Mathf.Atan2(vector.y, vector.x);
@@ -944,7 +949,7 @@ namespace Tweeq.UIToolkit
             return _value + _angleOffset + UP_ANGLE_OFFSET;
         }
 
-        // float の丸め誤差で「スナップ角ちょうど」を取りこぼさないための許容幅
+        // Tolerance so float rounding error doesn't cause a "value exactly at the snap angle" to be missed.
         static bool NearlyMultiple(double value, double step)
         {
             if (!TweeqMath.IsFinite(value) || !TweeqMath.IsFinite(step) || step == 0.0)
@@ -970,8 +975,8 @@ namespace Tweeq.UIToolkit
 
             float duration = _theme != null ? _theme.HoverTransitionDuration : 0.15f;
 
-            // Vue は cubic-bezier(0.4, 0, 0.2, 1)（Material standard）。UI Toolkit の EasingMode に
-            // 同一カーブが無いため、立ち上がりと収束が最も近い EaseInOutCubic で近似する。
+            // Vue uses cubic-bezier(0.4, 0, 0.2, 1) (the Material standard). UI Toolkit's EasingMode has
+            // no identical curve, so EaseInOutCubic, whose ramp-up and settle are the closest match, is used as an approximation.
             _knob.style.transitionProperty = new StyleList<StylePropertyName>(
                 new List<StylePropertyName> { new StylePropertyName("scale") });
             _knob.style.transitionDuration = new StyleList<TimeValue>(
@@ -1002,7 +1007,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 減光した状態で膨らんだまま／リングが残ったままにならないよう、見た目の状態も落とす
+            // The visual state is also cleared, so it doesn't stay swollen or keep the ring while dimmed.
             _focused = false;
             _hovered = false;
             _modeByPointer = false;
@@ -1017,7 +1022,7 @@ namespace Tweeq.UIToolkit
             Refresh();
         }
 
-        // 外側（フォーカスリング）とノブは別レイヤなので、必ず両方を汚す
+        // The outer layer (focus ring) and the knob are separate layers, so both are always marked dirty.
         void Refresh()
         {
             this.MarkDirtyRepaint();
@@ -1034,7 +1039,7 @@ namespace Tweeq.UIToolkit
 
         #region Painting
 
-        // 外側はスケールしない層。仕様 §1 のフォーカスリングだけを描く
+        // The outer layer never scales. It only draws the spec §1 focus ring.
         void OnGenerateVisualContent(MeshGenerationContext context)
         {
             if (context == null || _theme == null || !_focused)
@@ -1063,7 +1068,7 @@ namespace Tweeq.UIToolkit
             painter.Stroke();
         }
 
-        // ノブ層。scale はこの要素に掛かるので、描画は常に等倍の 24px 箱で行う
+        // The knob layer. Since scale applies to this element, drawing is always done in an unscaled 24px box.
         void OnGenerateKnobContent(MeshGenerationContext context)
         {
             if (context == null || _theme == null || _knob == null)
@@ -1117,7 +1122,7 @@ namespace Tweeq.UIToolkit
 
         #region Tweak overlay
 
-        /// <summary>ドラッグ中だけ生きるオーバーレイの描画パラメータ。角度は描画オフセット込み。</summary>
+        /// <summary>Drawing parameters for the overlay that only lives during a drag. Angles include the drawing offset.</summary>
         struct TweakOverlayState
         {
             public TweeqTheme Theme;
@@ -1135,8 +1140,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// スナップメーター・多回転サークル・弧＋矢印・絶対ガイド線・値ラベルを描く層。
-        /// 座標は全てパネル座標（＝この要素のローカル座標）。
+        /// The layer that draws the snap meter, multi-turn circles, arc + arrow, absolute guide line, and value label.
+        /// All coordinates are in panel space (i.e. this element's local coordinates).
         /// </summary>
         sealed class TweakOverlay : VisualElement
         {
@@ -1153,10 +1158,10 @@ namespace Tweeq.UIToolkit
             const float METER_WIDTH = 1f;
             const float METER_SNAP_WIDTH = 2f;
 
-            // これ未満の掃き角は「まだ動いていない」とみなす（度）
+            // A sweep angle below this is treated as "hasn't moved yet" (degrees).
             const double MIN_ARC_SWEEP = 1e-4;
 
-            // 全長 6px（先端 4 + 尾 2）、幅 6px の塗り三角
+            // A filled triangle with a total length of 6px (tip 4 + tail 2) and a width of 6px.
             const float ARROW_TIP_OFFSET = 4f;
             const float ARROW_TAIL_OFFSET = 2f;
             const float ARROW_HALF_WIDTH = 3f;
@@ -1176,11 +1181,11 @@ namespace Tweeq.UIToolkit
             Label _rightChevron;
             Vector2 _labelPoint;
 
-            // 直近にフォントを適用したテーマ。ドラッグ中は毎フレーム Sync が走るので、
-            // managed 値（FontDefinition）の代入はテーマが変わった時だけに絞る
+            // The theme whose font was applied most recently. Sync runs every frame during a drag,
+            // so assignment of the managed value (FontDefinition) is restricted to only when the theme actually changes.
             TweeqTheme _fontTheme;
 
-            // 角度表示は 0.1° 単位なので、同じ表示に落ちるフレームでは文字列を作り直さない
+            // The angle display is in 0.1deg increments, so the string isn't rebuilt for frames that round to the same display.
             long _angleKeyRevolutions;
             double _angleKeyTenths;
             bool _hasAngleKey;
@@ -1211,7 +1216,7 @@ namespace Tweeq.UIToolkit
                 _labelRoot.style.flexDirection = FlexDirection.Row;
                 _labelRoot.style.alignItems = Align.Center;
 
-                // 中心合わせは実解決サイズが要るので、確定した時点で置き直す
+                // Centering needs the actual resolved size, so it's repositioned once that size is finalized.
                 _labelRoot.RegisterCallback<GeometryChangedEvent>(OnLabelGeometryChanged);
 
                 _leftChevron = CreateChevron("<");
@@ -1228,7 +1233,7 @@ namespace Tweeq.UIToolkit
                 _pill.style.flexShrink = 0f;
                 SetBorderWidth(_pill, 1f);
 
-                // 高さ固定なので「完全ピル」は半径 = 高さ/2 で計算できる
+                // With a fixed height, a "true pill" shape can be computed as radius = height/2.
                 SetBorderRadius(_pill, PILL_HEIGHT * 0.5f);
 
                 _valueLabel = new Label(string.Empty) { pickingMode = PickingMode.Ignore };
@@ -1237,7 +1242,7 @@ namespace Tweeq.UIToolkit
                 ClearMargin(_valueLabel);
                 _pill.Add(_valueLabel);
 
-                // Vue の .arrows 相当: ピル本体は水平のまま、この層だけがノブ→ポインタ方向に回転する
+                // Equivalent to Vue's .arrows: the pill itself stays horizontal, and only this layer rotates toward the knob-to-pointer direction.
                 _arrowsRoot = new VisualElement { pickingMode = PickingMode.Ignore };
                 _arrowsRoot.style.position = Position.Absolute;
                 _arrowsRoot.style.left = 0f;
@@ -1260,7 +1265,7 @@ namespace Tweeq.UIToolkit
                 label.style.unityTextAlign = TextAnchor.MiddleCenter;
                 ClearMargin(label);
 
-                // ピルの外側（左右）に張り出す。Vue の right:100% / left:100% 相当
+                // Extends outward (left/right) of the pill. Equivalent to Vue's right:100% / left:100%.
                 label.style.position = Position.Absolute;
                 label.style.top = Length.Percent(50);
                 label.style.translate = new StyleTranslate(new Translate(0f, Length.Percent(-50)));
@@ -1297,7 +1302,7 @@ namespace Tweeq.UIToolkit
                 this.MarkDirtyRepaint();
             }
 
-            // Sync はポインタが動かないフレームでも走るので、表示が変わるときだけ文字列を作る
+            // Sync runs even on frames where the pointer isn't moving, so a string is only built when the display actually changes.
             void SyncValueLabel(double value)
             {
                 bool cacheable = TweeqFormat.TryGetAngleDisplayKey(
@@ -1313,7 +1318,7 @@ namespace Tweeq.UIToolkit
 
                 _valueLabel.text = TweeqFormat.FormatAngle(value);
 
-                // 丸め境界付近や非有限値はキー化できないので、次フレームも作り直させる
+                // Values near a rounding boundary or non-finite values can't be turned into a key, so force a rebuild on the next frame too.
                 _hasAngleKey = cacheable;
                 _angleKeyRevolutions = revolutions;
                 _angleKeyTenths = tenths;
@@ -1331,7 +1336,7 @@ namespace Tweeq.UIToolkit
                 {
                     _fontTheme = theme;
 
-                    // 角度そのものを読む欄なので数値フォント（シェブロンは記号なので UI 既定のまま）
+                    // This is a field for reading the raw angle, so it uses the numeric font (the chevrons are symbols, so they stay on the UI default).
                     TweeqFonts.Apply(_valueLabel, theme.FontNumeric);
                 }
             }
@@ -1356,8 +1361,8 @@ namespace Tweeq.UIToolkit
                 Vector2 pointerVector = _state.Pointer - _state.Center;
                 if (pointerVector.sqrMagnitude > MIN_VECTOR_SQR_LENGTH)
                 {
-                    // ノブ→ポインタの向きに直交させると、ドラッグ方向に沿って読める。
-                    // 回転はシェブロン層のみ（Vue と同じくピル本体は水平を保つ）
+                    // Orienting it perpendicular to the knob-to-pointer direction makes it readable along the drag direction.
+                    // Only the chevron layer rotates (the pill body stays horizontal, same as Vue).
                     float degrees = (float)(ScreenAngle(pointerVector) + 90.0);
                     _arrowsRoot.style.rotate = new StyleRotate(new Rotate(new Angle(degrees, AngleUnit.Degree)));
                 }
@@ -1478,7 +1483,7 @@ namespace Tweeq.UIToolkit
 
             void PaintAbsoluteGuide(Painter2D painter, TweeqTheme theme)
             {
-                // カーソルを消しているので、この線がそのままポインタの代わりになる
+                // The cursor is hidden, so this line stands in directly for the pointer.
                 float innerRadius = theme.InputHeight;
                 float distance = Mathf.Max(Vector2.Distance(_state.Pointer, _state.Center), innerRadius);
                 Vector2 direction = AngleDirection(_state.ValueAngle);
@@ -1525,15 +1530,16 @@ namespace Tweeq.UIToolkit
                 double remainder = total - turns * (double)sign * 360.0;
                 float arcRadius = Mathf.Max(MIN_ARC_RADIUS, baseRadius + sign * turns * step);
 
-                // 多回転すると開始角が数千度になる。弧の形は 360 の剰余でしか決まらないので畳んでおく
+                // With multi-turn rotation, the start angle can reach into the thousands of degrees. Since the
+                // arc's shape is only ever determined by its remainder mod 360, this folds it down first.
                 double startAngle = TweeqMath.UnsignedMod(_state.StartAngle, 360.0);
                 double endAngle = startAngle + remainder;
                 bool forward = remainder >= 0.0;
 
-                // 掃き角 0 を Arc に渡すと全周と区別できないので、動き出すまで弧は描かない
+                // Passing a 0 sweep angle to Arc would be indistinguishable from a full circle, so no arc is drawn until movement actually starts.
                 if (Math.Abs(remainder) > MIN_ARC_SWEEP)
                 {
-                    // UI Toolkit は y 下向きなので、角度が増える向き＝画面上の時計回り
+                    // UI Toolkit has y pointing down, so the direction of increasing angle is clockwise on screen.
                     painter.BeginPath();
                     painter.Arc(
                         _state.Center,
@@ -1552,7 +1558,7 @@ namespace Tweeq.UIToolkit
                 Vector2 direction = AngleDirection(endAngle);
                 Vector2 endPoint = _state.Center + direction * radius;
 
-                // 弧の接線＝半径ベクトルの直交。逆回転なら向きを反転する（egui 版と同じ構成）
+                // The arc's tangent is perpendicular to the radius vector. For the reverse direction, the orientation is flipped (same setup as another reference implementation).
                 Vector2 tangent = forward
                     ? new Vector2(-direction.y, direction.x)
                     : new Vector2(direction.y, -direction.x);
@@ -1575,7 +1581,7 @@ namespace Tweeq.UIToolkit
 
             #region Helpers
 
-            // ラベルは「開始点→ポインタ」のレイ上に居たまま、内側へ引き戻す
+            // Pulls the label back inward while keeping it on the "start point -> pointer" ray.
             static Vector2 ClampAlongRay(Vector2 origin, Vector2 target, Rect bounds)
             {
                 if (bounds.Contains(target))

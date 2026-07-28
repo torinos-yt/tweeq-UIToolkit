@@ -3,17 +3,18 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// キーボードナビゲーションをパネル単位で調整するヘルパー（feedback-fixes-01.md C-3）。
-    /// tweeq のコントロールは矢印キーを値操作に使うため、パネル全体でフォーカス移動を
-    /// 止めたいことが多い。ただしライブラリ既定では強制せず、呼び出し側のオプトインにする。
+    /// Helper that adjusts keyboard navigation on a per-panel basis (feedback-fixes-01.md C-3).
+    /// Since tweeq's controls use arrow keys for value manipulation, it is often desirable to
+    /// stop focus movement across the whole panel. However, the library does not force this by
+    /// default — it is opt-in for the caller.
     /// </summary>
     public static class TweeqNavigation
     {
         /// <summary>
-        /// root 配下で ↑↓←→ によるフォーカス移動を止める。Tab（Next / Previous）は素通しする。
-        /// 既に無効化済みの root へ再度呼んでも二重登録にはならない。
+        /// Stops focus movement via ↑↓←→ under root. Tab (Next / Previous) passes through
+        /// untouched. Calling this again on an already-disabled root does not double-register.
         /// </summary>
-        /// <param name="root">対象のルート要素。null なら何もしない。</param>
+        /// <param name="root">Target root element. Does nothing if null.</param>
         public static void DisableArrowFocusNavigation(VisualElement root)
         {
             if (root == null)
@@ -21,16 +22,16 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 個々のコントロール（NumberInput / RadioInput）より先に食い止めたいので TrickleDown。
-            // panel が未接続でも登録自体は可能なので、ここでは panel を要求しない
+            // TrickleDown so this intercepts before individual controls (NumberInput / RadioInput).
+            // Registration itself is possible even if panel is not yet attached, so panel is not required here.
             root.RegisterCallback<NavigationMoveEvent>(OnNavigationMove, TrickleDown.TrickleDown);
         }
 
         /// <summary>
-        /// <see cref="DisableArrowFocusNavigation" /> を取り消して既定の挙動へ戻す。
-        /// 登録していない root へ呼んでも無害。
+        /// Undoes <see cref="DisableArrowFocusNavigation" /> and restores default behavior.
+        /// Harmless to call on a root that was never registered.
         /// </summary>
-        /// <param name="root">対象のルート要素。null なら何もしない。</param>
+        /// <param name="root">Target root element. Does nothing if null.</param>
         public static void EnableArrowFocusNavigation(VisualElement root)
         {
             if (root == null)
@@ -41,12 +42,13 @@ namespace Tweeq.UIToolkit
             root.UnregisterCallback<NavigationMoveEvent>(OnNavigationMove, TrickleDown.TrickleDown);
         }
 
-        // コールバックを static メソッドにしてあるので、root → デリゲートの対応表
-        // （ConditionalWeakTable や static Dictionary）を一切持たない。
-        // 対応表を持つと static が root を強参照してツリーごとリークする（ConditionalWeakTable なら
-        // 避けられるが、そもそも不要）。static メソッド由来のデリゲートは target が null で
-        // メソッドも同一なので、Register / Unregister が UI Toolkit の等価判定で必ず一致する。
-        // ＝「状態を持たない」が最も単純でリークしない解になる
+        // The callback is a static method, so no root → delegate mapping table
+        // (ConditionalWeakTable or static Dictionary) is kept at all.
+        // Keeping such a table would let the static field strongly reference root and leak the
+        // whole tree (a ConditionalWeakTable would avoid that, but it's unnecessary to begin with).
+        // A delegate derived from a static method has a null target and the same method, so
+        // Register / Unregister always match under UI Toolkit's equality check.
+        // In other words, "holding no state" is the simplest solution and does not leak.
         static void OnNavigationMove(NavigationMoveEvent evt)
         {
             if (evt == null)
@@ -63,14 +65,14 @@ namespace Tweeq.UIToolkit
                     break;
 
                 default:
-                    // Next / Previous（Tab）はフォーカス移動そのものが目的なので触らない
+                    // Next / Previous (Tab) is left untouched since its whole purpose is to move focus.
                     return;
             }
 
             evt.StopPropagation();
 
-            // Unity 6 で「フォーカス移動そのもの」を止められるのは IgnoreEvent（PreventDefault は非推奨）。
-            // 登録時点では panel が無いこともあるので、focusController は毎回 currentTarget から引く
+            // In Unity 6, IgnoreEvent is what actually stops focus movement (PreventDefault is deprecated).
+            // panel may not exist yet at registration time, so focusController is fetched from currentTarget every time.
             VisualElement target = evt.currentTarget as VisualElement;
             target?.focusController?.IgnoreEvent(evt);
         }

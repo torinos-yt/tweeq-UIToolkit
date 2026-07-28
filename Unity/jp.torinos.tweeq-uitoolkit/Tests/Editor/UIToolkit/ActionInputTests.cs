@@ -4,12 +4,13 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// ButtonInput / ButtonToggleInput / RadioInput のうち panel 非依存の部分
-    /// （値の受け入れ規則・Options のコピー意味論・Disabled のゲート）を検証する。
+    /// Verifies the panel-independent parts of ButtonInput / ButtonToggleInput / RadioInput
+    /// (value acceptance rules, Options copy semantics, Disabled gating).
     ///
-    /// ChangeEvent は panel が無いと送れないので、ここでは value プロパティと
-    /// Confirmed / Clicked（ただの C# イベント）で確認する。ポインタ操作・遷移・
-    /// Blink / Flash の見た目は panel と描画が要るので Play Mode 側の担当。
+    /// ChangeEvent cannot be sent without a panel, so this checks the value property and
+    /// Confirmed / Clicked (plain C# events) instead. Pointer interaction, transitions, and the
+    /// visual appearance of Blink / Flash need a panel and rendering, so those are covered on
+    /// the Play Mode side.
     /// </summary>
     public class ActionInputTests
     {
@@ -280,7 +281,7 @@ namespace Tweeq.UIToolkit.Tests
         {
             ButtonInput button = new ButtonInput("Go");
 
-            // panel が無いとスケジューラが回らない。例外を出さずに素通りすることだけ保証する
+            // The scheduler doesn't run without a panel; this only guarantees it passes through without throwing
             Assert.DoesNotThrow(() => button.Flash());
             Assert.DoesNotThrow(() => button.Flash());
         }

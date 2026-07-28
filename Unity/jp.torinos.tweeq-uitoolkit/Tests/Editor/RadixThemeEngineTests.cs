@@ -6,7 +6,7 @@ namespace Tweeq.Core.Tests
     {
         #region Helpers
 
-        // Vue 版ストアの既定入力（stores/theme.ts）
+        // The Vue original's store's default inputs (stores/theme.ts)
         const string DEFAULT_ACCENT = "#0000ff";
         const string DEFAULT_GRAY = "#8B8D98";
         const string LIGHT_BACKGROUND = "#ffffff";
@@ -34,8 +34,8 @@ namespace Tweeq.Core.Tests
 
         #region Snapshot
 
-        // 期待値は移植元 ref/tweeq-react の Vitest スナップショット
-        // (packages/core/src/theme/__snapshots__/computeTheme.test.ts.snap) から取っている。
+        // Expected values are taken from a reference port's Vitest snapshot
+        // (packages/core/src/theme/__snapshots__/computeTheme.test.ts.snap).
         [Test]
         public void GenerateThemeColors_MatchesLightSnapshot()
         {
@@ -112,7 +112,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void GenerateThemeColors_KeepsAccentSeedAsStep9()
         {
-            // 背景から十分離れたシードは step9 にそのまま採用される（Radix の設計そのもの）
+            // A seed sufficiently far from the background is adopted as-is for step9 (this is Radix's design itself)
             string[] accents = { "#0000ff", "#46a758", "#e5484d", "#3e63dd" };
 
             foreach (string accent in accents)
@@ -135,7 +135,7 @@ namespace Tweeq.Core.Tests
             RadixThemeColors dark = Generate(
                 RadixAppearance.Dark, DARK_BACKGROUND, DEFAULT_ACCENT, DEFAULT_GRAY);
 
-            // step1 は背景とほぼ同じ明るさ、step12 は反対側に振り切れている
+            // step1 is nearly the same lightness as the background, step12 is pinned to the opposite extreme
             Assert.That(Luma(light.GrayScale[0]), Is.GreaterThan(Luma(light.GrayScale[11])));
             Assert.That(Luma(dark.GrayScale[0]), Is.LessThan(Luma(dark.GrayScale[11])));
 
@@ -146,8 +146,8 @@ namespace Tweeq.Core.Tests
         [Test]
         public void GenerateThemeColors_GrayScaleLightnessIsMonotonic()
         {
-            // 面色として使う 1〜8 段（index 0〜7）は背景から一方向に離れていく。
-            // 9 段目以降は文字色の役割に切り替わるので単調性は保証されない
+            // Steps 1-8 (index 0-7), used as surface colors, move away from the background in one direction.
+            // From step 9 onward the role switches to text color, so monotonicity is not guaranteed
             RadixThemeColors light = Generate(
                 RadixAppearance.Light, LIGHT_BACKGROUND, DEFAULT_ACCENT, DEFAULT_GRAY);
             RadixThemeColors dark = Generate(
@@ -165,7 +165,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void GenerateThemeColors_PureWhiteAccentBorrowsGrayTint()
         {
-            // 純白／純黒は色相を持たないので、スケールはグレー側の色味を丸ごと借りる
+            // Pure white/black has no hue, so the scale borrows the gray side's tint wholesale
             foreach (string accent in new[] { "#ffffff", "#000000" })
             {
                 RadixThemeColors radix = Generate(
@@ -182,8 +182,8 @@ namespace Tweeq.Core.Tests
         [Test]
         public void GenerateThemeColors_AchromaticAccentKeepsAchromaticSurfaces()
         {
-            // 逆に、色相を持たないシードでも「無彩色のまま」ではなくグレーの色味が乗る＝
-            // 背景に馴染む面色になること（借りた結果が背景色と同系であることの確認）
+            // Conversely, even a hue-less seed doesn't stay "achromatic" — it picks up gray's tint,
+            // meaning it becomes a surface color that blends with the background (confirms the borrowed result is in the same family as the background color)
             RadixThemeColors radix = Generate(
                 RadixAppearance.Light, LIGHT_BACKGROUND, "#ffffff", DEFAULT_GRAY);
 
@@ -218,7 +218,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void ToAlphaOverBackground_HonorsAFixedAlpha()
         {
-            // Radix の accentSurface はライト 0.8 / ダーク 0.5 で不透明度を決め打ちする
+            // Radix's accentSurface pins opacity at light 0.8 / dark 0.5
             Rgba32 target = new Rgba32(0xC9, 0xDF, 0xFF, 255);
             Rgba32 background = new Rgba32(0xFF, 0xFF, 0xFF, 255);
 
@@ -276,7 +276,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void NudgedHue_StaysWithinTheCanonicalBand()
         {
-            // アクセントが色相環の反対側にあっても、シードから 24 度以上は動かない
+            // Even if the accent sits on the opposite side of the hue wheel, it never moves more than 24 degrees from the seed
             for (int accentHue = 0; accentHue < 360; accentHue += 5)
             {
                 double nudged = TweeqSemanticColors.NudgedHue(30.0, accentHue);
@@ -297,7 +297,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void SoftTint_StaysCloseToTheBackground()
         {
-            // 淡い面色は背景から 15% しか離れないので、背景側の明暗に寄っていること
+            // A subtle surface color moves only 15% away from the background, so it should lean toward the background's own lightness/darkness
             Rgba32 error = TweeqSemanticColors.RepresentativeColor(
                 TweeqSemanticColors.SeedRed, Parse(DEFAULT_ACCENT));
 
@@ -317,7 +317,7 @@ namespace Tweeq.Core.Tests
             return (int)(0.299 * color.R + 0.587 * color.G + 0.114 * color.B);
         }
 
-        // ブラウザと同じ「各項を丸めて足す」合成。アルファ版スケールの検算用
+        // The same "round each term then add" compositing as browsers. Used to verify the alpha-scale results
         static Rgba32 Composite(Rgba32 foreground, Rgba32 background)
         {
             double alpha = foreground.A / 255.0;

@@ -4,16 +4,16 @@ namespace Tweeq.Core
 {
     #region Data
 
-    /// <summary>制約適用の結果。フラグは「その段で実際に値が動いたか」。</summary>
+    /// <summary>The result of applying constraints. Each flag is "did the value actually move at that stage".</summary>
     public struct NumberValidation
     {
-        /// <summary>クランプ・量子化を通した値。</summary>
+        /// <summary>The value after clamping and quantization.</summary>
         public double Value;
 
-        /// <summary>クランプで値が変わった。</summary>
+        /// <summary>Clamping changed the value.</summary>
         public bool Clamped;
 
-        /// <summary>step / snap の量子化で値が変わった。</summary>
+        /// <summary>step / snap quantization changed the value.</summary>
         public bool Quantized;
 
         public NumberValidation(double value, bool clamped, bool quantized)
@@ -27,13 +27,13 @@ namespace Tweeq.Core
     #endregion
 
     /// <summary>
-    /// InputNumber の出力値検証。clamp → step 量子化 → snap 量子化の順に適用する。
+    /// Validates InputNumber's output value. Applies, in order, clamp -> step quantization -> snap quantization.
     /// </summary>
     public static class NumberValidator
     {
         #region Constants
 
-        // 浮動小数の丸め残差を「量子化された」と誤検出しないための許容差（TS 版 scalar.approx 相当）。
+        // A tolerance so floating-point rounding residue isn't misdetected as "quantized" (equivalent to the Vue original's scalar.approx).
         const double APPROX_EPSILON = 1e-9;
 
         #endregion
@@ -41,8 +41,8 @@ namespace Tweeq.Core
         #region Public API
 
         /// <summary>
-        /// clamp(validMin, validMax) → quantize(step) → quantize(snapEnabled ? snap : 0)。量子化の origin は 0。
-        /// 非有限値はホスト側の方針に委ねてそのまま返す。
+        /// clamp(validMin, validMax) -> quantize(step) -> quantize(snapEnabled ? snap : 0). The quantization origin is 0.
+        /// Non-finite values are left up to the host's policy and returned unchanged.
         /// </summary>
         public static NumberValidation Validate(
             double value, double validMin, double validMax,
@@ -56,7 +56,7 @@ namespace Tweeq.Core
             double clamped = TweeqMath.Clamp(value, validMin, validMax);
             bool didClamp = clamped != value;
 
-            // clamp が先。範囲端が step の倍数でない場合、量子化で端から動くのが正しい順序。
+            // Clamp comes first. When the range boundary isn't a multiple of step, moving away from the boundary during quantization is the correct order.
             double quantized = TweeqMath.Quantize(clamped, step, 0.0);
             if (snapEnabled)
             {

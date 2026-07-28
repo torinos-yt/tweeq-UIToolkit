@@ -6,11 +6,11 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// 外部 asmdef 向けに公開したクローム API（ext-custom-widgets-spec.md EXT-01-A）の検証。
+    /// Verification of the chrome API exposed to external asmdefs (ext-custom-widgets-spec.md EXT-01-A).
     ///
-    /// 抽出元は NumberInput なので、角丸表そのものに加えて
-    /// 「NumberInput / StringInput の見た目が抽出前後で変わっていないこと」も併せて確かめる。
-    /// VisualElement は panel が無くても style を設定できるので EditMode で完結する。
+    /// The extraction source is NumberInput, so besides the corner-radius table itself, this also confirms
+    /// that "the appearance of NumberInput / StringInput has not changed before and after the extraction".
+    /// A VisualElement can have its style set without a panel, so this is self-contained within EditMode.
     /// </summary>
     public class TweeqInputBoxStylesTests
     {
@@ -103,7 +103,7 @@ namespace Tweeq.UIToolkit.Tests
         [Test]
         public void ApplyCornerRadius_BothAxes_CombineWithOr()
         {
-            // 横 Start（右を潰す）と縦 End（上を潰す）の合成は左下だけが丸く残る
+            // Combining a horizontal Start (squares the right side) with a vertical End (squares the top) leaves only the bottom-left rounded
             AssertCorners(
                 Cornered(TweeqBoxPosition.Start, TweeqBoxPosition.End),
                 0f, 0f, RADIUS, 0f);
@@ -264,7 +264,7 @@ namespace Tweeq.UIToolkit.Tests
         [Test]
         public void NumberInput_AndStringInput_ShareTheSameChrome()
         {
-            // クロームの抽出はこの 2 つにだけ入れたので、両者がずれていないことを固定する
+            // The chrome extraction was only applied to these two, so this pins down that they haven't drifted apart
             NumberInput number = new NumberInput { InlinePosition = TweeqBoxPosition.Middle };
             StringInput text = new StringInput { InlinePosition = TweeqBoxPosition.Middle };
 
@@ -324,7 +324,7 @@ namespace Tweeq.UIToolkit.Tests
             Assert.AreEqual(0f, element.style.borderTopWidth.value);
             Assert.AreEqual(0f, element.style.borderBottomWidth.value);
 
-            // 通常時の背景は hover を知っている呼び出し側の責務。helper は塗り直さない
+            // The normal-state background is the responsibility of the caller, which knows about hover; the helper does not repaint it
             Assert.AreEqual(Color.clear, element.style.backgroundColor.value);
         }
 
@@ -426,8 +426,8 @@ namespace Tweeq.UIToolkit.Tests
             TweeqTheme theme = TweeqTheme.Dark();
             TextField field = NormalizedField(theme);
 
-            // 推奨 API（--unity-selection-color）は C# からインスタンス単位で設定できないので、
-            // 検証側も obsolete なプロパティを読む
+            // The recommended API (--unity-selection-color) cannot be set per-instance from C#,
+            // so the verification side also reads the obsolete property
 #pragma warning disable 618
             Assert.AreEqual(theme.Text, field.textSelection.cursorColor);
             Assert.AreEqual(theme.AccentSoft, field.textSelection.selectionColor);
@@ -453,8 +453,8 @@ namespace Tweeq.UIToolkit.Tests
         [Test]
         public void AdoptingWidgets_KeepTheirOwnHorizontalPadding()
         {
-            // ヘルパは左右 padding を 0 に倒すので、各 widget が呼び出し後に入れ直せているか
-            // （＝置換で見た目が痩せていないか）を固定する
+            // The helper resets left/right padding to 0, so this pins down whether each widget re-applies its own
+            // padding after the call (i.e. whether the replacement has left the appearance looking thinner)
             VisualElement numberInput = new NumberInput().Q("unity-text-input");
             VisualElement stringInput = new StringInput().Q("unity-text-input");
 

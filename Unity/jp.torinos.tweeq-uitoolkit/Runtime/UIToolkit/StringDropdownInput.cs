@@ -5,20 +5,19 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// string 特化の <see cref="DropdownInput{T}" />。UXML / UI Builder から置けるようにするための
-    /// 薄いラッパで、振る舞いは基底そのまま（m7-wave2-spec.md「UXML 対応」）。
+    /// A string-specialized <see cref="DropdownInput{T}" />. A thin wrapper that lets it be placed from
+    /// UXML / UI Builder, with behavior left exactly as the base class's (m7-wave2-spec.md, "UXML support").
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <c>[UxmlElement]</c> はジェネリック型に付けられないため、UXML 化するには型を閉じた
-    /// 非ジェネリックのクラスが必要になる。基底の public API はそのまま使えるので、
-    /// ここにあるのは UXML 属性の橋渡しだけ。
+    /// <c>[UxmlElement]</c> can't be attached to a generic type, so exposing it to UXML requires a
+    /// non-generic class with the type parameter closed. The base class's public API can be used as-is,
+    /// so all that's here is the bridging of UXML attributes.
     /// </para>
     /// <para>
-    /// 属性はすべて <c>[UxmlAttribute("...")]</c> で名前を明示した非公開プロパティにしている。
-    /// 基底側（ジェネリック）の宣言には属性を付けられず、かつ C# からは基底の
-    /// <see cref="DropdownInput{T}.Options" /> などをそのまま使うべきなので、
-    /// public な別名を増やさないための形。
+    /// Every attribute is a non-public property with its name made explicit via <c>[UxmlAttribute("...")]</c>.
+    /// Attributes can't be attached to the base (generic) class's declarations, and from C# the base
+    /// class's <see cref="DropdownInput{T}.Options" /> and similar should be used directly, so this shape avoids adding extra public aliases.
     /// </para>
     /// </remarks>
     [UxmlElement]
@@ -26,9 +25,9 @@ namespace Tweeq.UIToolkit
     {
         #region Constants
 
-        // string[] を素で UXML 属性にはできないので、カンマ区切り 1 本にする
-        // （Unity 自身の ToggleDropdown と同じ形）。要素にカンマを含む選択肢は
-        // UXML では表現できないため、その場合はコードから Options を渡す
+        // string[] can't be used raw as a UXML attribute, so it's flattened to a single comma-separated
+        // string (the same shape Unity's own ToggleDropdown uses). An option containing a comma can't be
+        // represented in UXML, so in that case Options should be passed from code instead.
         const char SEPARATOR = ',';
 
         #endregion
@@ -67,7 +66,7 @@ namespace Tweeq.UIToolkit
         {
             get => Join(this.Labels);
 
-            // 空文字は「ラベル指定なし」＝ Labelizer / 値そのものへ戻す意味にする
+            // An empty string means "no label specified," i.e. it reverts to the Labelizer / the value itself.
             set
             {
                 string[] labels = Split(value);
@@ -107,7 +106,7 @@ namespace Tweeq.UIToolkit
 
         #region Csv
 
-        /// <summary>カンマ区切り文字列を選択肢の配列へ分解する。空要素は落とす。</summary>
+        /// <summary>Splits a comma-separated string into an array of options. Empty elements are dropped.</summary>
         public static string[] Split(string csv)
         {
             if (string.IsNullOrEmpty(csv))
@@ -130,7 +129,7 @@ namespace Tweeq.UIToolkit
             return result.ToArray();
         }
 
-        /// <summary>選択肢の配列をカンマ区切り文字列へ畳む。null は空文字。</summary>
+        /// <summary>Folds an array of options into a comma-separated string. null becomes an empty string.</summary>
         public static string Join(string[] values)
         {
             return values == null || values.Length == 0

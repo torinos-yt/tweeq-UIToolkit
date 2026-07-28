@@ -6,13 +6,14 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// 比率ロック付きの 2D サイズ入力（M6 第2波仕様 §C）。
-    /// <see cref="Vec2Input"/> の右端に鎖トグルを融合させ、ロック中は片軸の変更に他軸を追従させる。
+    /// A 2D size input with a ratio lock (M6 wave-2 spec §C).
+    /// Fuses a chain toggle onto the right end of a <see cref="Vec2Input"/>; while locked, changing one
+    /// axis makes the other axis follow.
     /// </summary>
     /// <remarks>
-    /// 追従の基準は「編集開始時の値」（Vue の valueOnEdit）。直前値を基準にすると
-    /// ドラッグ中に倍率が積み上がって比率がずれていく。
-    /// 開始点は Confirmed で閉じる 1 ジェスチャの先頭で取り直す。
+    /// The baseline for following is "the value at the start of editing" (the original's valueOnEdit).
+    /// Using the previous value as the baseline would let the multiplier accumulate during a drag and
+    /// drift the ratio off. The starting point is retaken at the start of each gesture, which closes with Confirmed.
     /// </remarks>
     [UxmlElement]
     public partial class SizeInput : VisualElement, INotifyValueChanged<Vector2>, ITweeqThemed
@@ -21,7 +22,7 @@ namespace Tweeq.UIToolkit
 
         static readonly string[] DEFAULT_AXIS_LABELS = { "W", "H" };
 
-        // 鎖アイコン（egui paint_link_icon の簡易版）。24px 箱の中心基準
+        // Chain icon (a simplified version of the reference implementation's link-icon painter). Anchored to the center of the 24px box
         const float LINK_LOOP_OFFSET = 4.5f;
         const float LINK_LOOP_RADIUS = 3.2f;
         const float LINK_STROKE_WIDTH = 1.25f;
@@ -45,23 +46,23 @@ namespace Tweeq.UIToolkit
 
         TweeqTheme _theme = TweeqTheme.Dark();
 
-        // 子へ書き戻している最中の通知を自分の入力と誤認しないためのガード
+        // A guard so notifications received while writing back to children aren't mistaken for our own input
         bool _syncing;
 
         #endregion
 
         #region Public API
 
-        /// <summary>値が変わるたびに発火する。</summary>
+        /// <summary>Fires every time the value changes.</summary>
         public event Action<Vector2> ValueChanged;
 
-        /// <summary>ドラッグ確定・Enter・blur で 1 ジェスチャ 1 回だけ発火する。</summary>
+        /// <summary>Fires only once per gesture, on drag confirm, Enter, or blur.</summary>
         public event Action<Vector2> Confirmed;
 
-        /// <summary>比率ロックが切り替わったときに発火する（自動解除も含む）。</summary>
+        /// <summary>Fires when the ratio lock toggles (including automatic release).</summary>
         public event Action<bool> KeepRatioChanged;
 
-        /// <summary>現在値。</summary>
+        /// <summary>The current value.</summary>
         [UxmlAttribute]
         public Vector2 value
         {
@@ -79,7 +80,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>比率ロック。既定 on（Vue の keepRatio = ref(true)）。</summary>
+        /// <summary>Ratio lock. Defaults to on (the original's keepRatio = ref(true)).</summary>
         [UxmlAttribute]
         public bool KeepRatio
         {
@@ -94,20 +95,20 @@ namespace Tweeq.UIToolkit
                 _keepRatio = value;
                 _chain.SetValueWithoutNotify(value);
 
-                // ロック状態が変わった時点の値が、次の追従の基準になる
+                // The value at the moment the lock state changes becomes the baseline for the next following
                 _hasBaseline = false;
                 RefreshChain();
                 KeepRatioChanged?.Invoke(value);
             }
         }
 
-        /// <summary>数値タプル本体。軸ごとの Precision などを触りたい場合に使う。</summary>
+        /// <summary>The numeric tuple itself. Use this to tweak per-axis Precision and the like.</summary>
         public Vec2Input Field => _field;
 
-        /// <summary>鎖トグル本体。</summary>
+        /// <summary>The chain toggle itself.</summary>
         public ButtonToggleInput Chain => _chain;
 
-        /// <summary>配色テーマ。子へそのまま伝播する。</summary>
+        /// <summary>Color theme. Propagated to children as-is.</summary>
         public TweeqTheme Theme
         {
             get => _theme;
@@ -123,7 +124,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>各軸の下限。null=制限なし／長さ1=全軸共通／長さ2=軸ごと。</summary>
+        /// <summary>Lower bound per axis. null = unrestricted / length 1 = shared across all axes / length 2 = per axis.</summary>
         [UxmlAttribute]
         public double[] Min
         {
@@ -131,7 +132,7 @@ namespace Tweeq.UIToolkit
             set => _field.Min = value;
         }
 
-        /// <summary>各軸の上限。</summary>
+        /// <summary>Upper bound per axis.</summary>
         [UxmlAttribute]
         public double[] Max
         {
@@ -139,7 +140,7 @@ namespace Tweeq.UIToolkit
             set => _field.Max = value;
         }
 
-        /// <summary>各軸の量子化幅。</summary>
+        /// <summary>Quantization step per axis.</summary>
         [UxmlAttribute]
         public double[] Step
         {
@@ -147,7 +148,7 @@ namespace Tweeq.UIToolkit
             set => _field.Step = value;
         }
 
-        /// <summary>軸ラベル。既定は W / H。</summary>
+        /// <summary>Axis labels. Defaults to W / H.</summary>
         [UxmlAttribute]
         public string[] AxisLabels
         {
@@ -155,7 +156,7 @@ namespace Tweeq.UIToolkit
             set => _field.AxisLabels = value;
         }
 
-        /// <summary>数値欄の静止時表示桁（両軸共通）。</summary>
+        /// <summary>Display digits for the numeric field at rest (shared by both axes).</summary>
         [UxmlAttribute]
         public int Precision
         {
@@ -163,7 +164,7 @@ namespace Tweeq.UIToolkit
             set => _field.Precision = value;
         }
 
-        /// <summary>操作不能状態。数値欄と鎖トグルの両方へ配る。</summary>
+        /// <summary>Disabled state. Distributed to both the numeric field and the chain toggle.</summary>
         [UxmlAttribute]
         public bool Disabled
         {
@@ -181,7 +182,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>不正値表示。数値欄だけに配る（鎖トグルに invalid 表現は無い）。</summary>
+        /// <summary>Invalid-value display. Distributed only to the numeric field (the chain toggle has no invalid representation).</summary>
         [UxmlAttribute]
         public bool Invalid
         {
@@ -199,8 +200,9 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 数値欄側のジェスチャ確定を発火する。NumberInput の確定は panel 上のキー／ポインタ操作でしか
-        /// 起きないため、外部ドライバとテストのために口を開けてある。比率追従の基準点もここで切れる。
+        /// Fires the numeric field's gesture confirmation. Because NumberInput can only confirm via
+        /// keyboard/pointer operations on the panel, this is exposed for external drivers and tests.
+        /// The ratio-following baseline is also cut here.
         /// </summary>
         public void PerformFieldConfirm()
         {
@@ -212,7 +214,7 @@ namespace Tweeq.UIToolkit
             OnFieldConfirmed(_value);
         }
 
-        /// <summary>ChangeEvent を発火せずに値を設定する。編集の基準点もここで取り直す。</summary>
+        /// <summary>Sets the value without firing a ChangeEvent. The editing baseline is also retaken here.</summary>
         public void SetValueWithoutNotify(Vector2 newValue)
         {
             _value = newValue;
@@ -221,7 +223,7 @@ namespace Tweeq.UIToolkit
             _field.SetValueWithoutNotify(newValue);
             _syncing = false;
 
-            // 外部からの設定は編集セッションの外にあるので、次の編集は新しい値を基準にする
+            // An externally driven set falls outside an editing session, so the next edit uses the new value as its baseline
             _hasBaseline = false;
         }
 
@@ -251,7 +253,7 @@ namespace Tweeq.UIToolkit
             };
             _chain.SetValueWithoutNotify(_keepRatio);
 
-            // 鎖は 24px 固定。InputGroup の等分割に巻き込ませない
+            // The chain is fixed at 24px. Keep it out of InputGroup's equal-split distribution
             _chain.style.flexGrow = 0f;
             _chain.style.flexShrink = 0f;
 
@@ -276,8 +278,8 @@ namespace Tweeq.UIToolkit
             _group.Add(_chain);
             this.hierarchy.Add(_group);
 
-            // Vec2Input は ITweeqInputBox ではないので、InputGroup は端の角丸を割り当てられない。
-            // グループが位置を配り直した後で上書きするため、レイアウト確定のたびに掛け直す
+            // Vec2Input isn't an ITweeqInputBox, so InputGroup can't assign corner rounding to its ends.
+            // Reapplied on every layout resolution to override after the group redistributes positions
             this.RegisterCallback<GeometryChangedEvent>(OnGeometryChanged);
 
             ApplyChainSize();
@@ -301,7 +303,7 @@ namespace Tweeq.UIToolkit
             _chain.style.flexBasis = size;
         }
 
-        // [W][H][鎖] を 1 つながりに見せる。各セッタは同値なら何もしないので毎回呼んでよい
+        // Makes [W][H][chain] look like a single connected group. Each setter is a no-op for the same value, so it's fine to call every time
         void ApplyBoxFusion()
         {
             NumberInput x = _field.GetAxis(0);
@@ -328,7 +330,7 @@ namespace Tweeq.UIToolkit
 
             if (!_hasBaseline)
             {
-                // このジェスチャの基準は「動かす前の値」。次の Confirmed まで固定する
+                // This gesture's baseline is "the value before it started moving". Held fixed until the next Confirmed
                 _baseline = _value;
                 _hasBaseline = true;
             }
@@ -342,13 +344,13 @@ namespace Tweeq.UIToolkit
                 _baseline.y,
                 _keepRatio);
 
-            // 自動解除。セッタ経由なので鎖の見た目と通知もここで揃う
+            // Automatic release. Goes through the setter, so the chain's appearance and notification stay in sync here too
             this.KeepRatio = result.KeepRatio;
 
             Vector2 applied = new Vector2((float)result.X, (float)result.Y);
             if (_value.Equals(applied))
             {
-                // 比率追従で入力が打ち消された場合でも、欄の表示は結果に合わせ直す
+                // Even if the input was cancelled out by ratio-following, realign the field's display to the result
                 WriteField(applied);
                 return;
             }
@@ -378,14 +380,14 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 次のジェスチャは新しい値を基準にする
+            // The next gesture uses the new value as its baseline
             _hasBaseline = false;
             Confirmed?.Invoke(_value);
         }
 
         void OnChainConfirmed(bool next)
         {
-            // トグル側は既に自分の値を反転済み。セッタは同値なら何もしないので二重反転にはならない
+            // The toggle side has already flipped its own value. The setter is a no-op for the same value, so this doesn't double-flip
             this.KeepRatio = next;
         }
 
@@ -409,7 +411,7 @@ namespace Tweeq.UIToolkit
 
             Vector2 center = _chainIcon.contentRect.center;
 
-            // 面色はトグル側が塗るので、その上で読める色を選ぶ
+            // The fill color is painted by the toggle side, so choose a color that reads well on top of it
             painter.strokeColor = _keepRatio
                 ? TweeqTheme.ContrastText(_theme.Accent)
                 : _theme.TextSubtle;
@@ -434,7 +436,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // つながっているときだけ 2 つの輪を橋渡しする（切れていれば隙間がそのまま「外れている」記号になる）
+            // Bridge the two loops only while connected (when broken, the gap itself reads as the "disconnected" symbol)
             painter.lineWidth = LINK_BAR_WIDTH;
             painter.BeginPath();
             painter.MoveTo(new Vector2(center.x - LINK_LOOP_OFFSET, center.y));

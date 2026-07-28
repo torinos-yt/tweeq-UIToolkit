@@ -3,19 +3,22 @@ using Tweeq.Core;
 using UnityEngine;
 using UnityEngine.UIElements;
 
-// クラス側に Label 相当のプロパティは無いが、Rotary と同じく型名の衝突を避けるため別名で参照する
+// The class itself has no Label-equivalent property, but as with Rotary, reference it under an alias to avoid a type-name collision
 using UILabel = UnityEngine.UIElements.Label;
 
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// 2 軸のドラッグスクラバー（M6 第2波仕様 §C）。24×24 のボタンを掴んで動かした画素量が
-    /// そのまま値の増分になり、ドラッグ中は原点中心のドットグリッドが背後に広がる。
+    /// A 2-axis drag scrubber (M6 wave 2 spec §C). Grabbing the 24x24 button and moving it translates
+    /// the dragged pixel amount directly into a value delta, and while dragging a dot grid centered on
+    /// the origin spreads out behind it.
     /// </summary>
     /// <remarks>
-    /// 感度は px 1:1 × speed。Vue も egui も同じ 5 / 0.1 / 1 の 3 段で、修飾キーは毎イベント再評価する。
-    /// 値の累積は「直前値 + Δ をクランプ」する Vue 方式（egui は開始値 + 総移動量）。
-    /// クランプ端で押し続けても戻した瞬間に追従するので、こちらを採用している。
+    /// Sensitivity is px 1:1 x speed. Both the Vue original and another reference implementation share the same
+    /// 3-tier 5 / 0.1 / 1 scale, and modifier keys are re-evaluated on every event.
+    /// Value accumulation uses the Vue approach of clamping "previous value + delta" (another reference implementation
+    /// instead uses "start value + total movement").
+    /// This is the one adopted here, since it keeps following as soon as you pull back even after holding at a clamped edge.
     /// </remarks>
     [UxmlElement]
     public partial class TranslateInput : VisualElement, INotifyValueChanged<Vector2>, ITweeqInputBox, ITweeqThemed
@@ -24,52 +27,52 @@ namespace Tweeq.UIToolkit
 
         const float DEFAULT_SIZE = 24f;
 
-        // RotaryInput と同じ裁定（m7-disabled-invalid-spec.md）。Vue は見た目不変だが、
-        // 隣の数値欄が dim するのにボタンだけ生きて見えるのは公演現場で事故のもと
+        // Same ruling as RotaryInput (m7-disabled-invalid-spec.md). The Vue version leaves appearance unchanged, but
+        // having the adjacent numeric field dim while only the button still looks alive is a recipe for an accident on a live gig
         const float DISABLED_OPACITY = 0.4f;
 
-        // px→値の倍率。Vue computed speed / egui speed と同値
+        // px-to-value multiplier. Matches Vue's computed speed / another reference implementation's speed
         const float SPEED_COARSE = 5f;
         const float SPEED_FINE = 0.1f;
         const float SPEED_NORMAL = 1f;
 
-        // オーバーレイのグリッド倍率。Vue computed gridScale と同値（speed と逆向きに動く）
+        // The overlay's grid scale. Matches Vue's computed gridScale (moves opposite to speed)
         const float GRID_SCALE_COARSE = 0.5f;
         const float GRID_SCALE_FINE = 4f;
         const float GRID_SCALE_NORMAL = 2f;
 
-        // Vue useRafFn の 1 フレームぶんの補間係数
+        // Interpolation factor for one frame of Vue's useRafFn
         const float GRID_SCALE_LERP = 0.4f;
         const long GRID_TICK_MS = 16;
 
-        // これ以下の差は 1 フレームで詰めてしまう（毎フレームの再描画を止めるため）
+        // A difference at or below this gets snapped in a single frame (to stop repainting every frame)
         const float GRID_SCALE_EPSILON = 1e-3f;
 
-        // Vue: .overlay-grid の inset calc(-150px + h/2) ＝ 直径 300 の箱。egui: radius 150
+        // Vue: .overlay-grid's inset calc(-150px + h/2) = a box 300 in diameter. Another reference implementation uses radius 150
         const float OVERLAY_RADIUS = 150f;
         const float GRID_UNIT = 10f;
         const float DOT_RADIUS = 1f;
 
-        // Vue の mask radial-gradient(closest-side, black 50%, transparent 100%)。
-        // 半径の 50% までは不透明、そこから外周でゼロへ落ちる
+        // Vue's mask radial-gradient(closest-side, black 50%, transparent 100%).
+        // Opaque out to 50% of the radius, then falls off to zero toward the outer edge
         const float MASK_SOLID_RATIO = 0.5f;
 
-        // 濃度を帯に量子化して、帯ごとに Fill を 1 回へ畳む（ドット 1 個ずつ Fill すると描画命令が爆発する）
+        // Quantize density into bands and fold each band down to a single Fill call (Filling dot by dot would blow up the draw call count)
         const int ALPHA_BANDS = 6;
 
-        // grid scale が小さいほど点が増える。過密になる前に間隔で頭打ちにする
+        // The smaller the grid scale, the more dots there are. Cap it by spacing before it gets too dense
         const float MIN_DOT_SPACING = 4f;
 
         const float AXIS_LINE_WIDTH = 2f;
         const float RANGE_LINE_WIDTH = 1f;
 
-        // ボタン面のドット 3×3（egui paint_grid_icon 実測）
+        // The 3x3 dots on the button face (measured from another reference implementation's paint_grid_icon)
         const float ICON_SPACING = 3.5f;
         const float ICON_DOT_RADIUS = 1f;
 
         const float FOCUS_RING_WIDTH = 1f;
 
-        // Vue: translate(-50%, calc(-100% - h * .2))＝箱の上端からさらに h*0.2 上にラベル下端が来る
+        // Vue: translate(-50%, calc(-100% - h * .2)) = the label's bottom edge sits h*0.2 further above the box's top edge
         const float LABEL_GAP_RATIO = 0.2f;
         const float LABEL_FONT_SIZE = 11f;
         const float LABEL_PADDING_X = 6f;
@@ -119,13 +122,13 @@ namespace Tweeq.UIToolkit
 
         #region Public API
 
-        /// <summary>値が変わるたびに発火する（ポインタ移動 1 回につき最大 1 回）。</summary>
+        /// <summary>Fires every time the value changes (at most once per pointer move).</summary>
         public event Action<Vector2> ValueChanged;
 
-        /// <summary>ドラッグ確定（ポインタを離した時）に 1 ジェスチャ 1 回だけ発火する。</summary>
+        /// <summary>Fires exactly once per gesture, when the drag is confirmed (pointer released).</summary>
         public event Action<Vector2> Confirmed;
 
-        /// <summary>現在値。</summary>
+        /// <summary>The current value.</summary>
         [UxmlAttribute]
         public Vector2 value
         {
@@ -143,7 +146,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>下限。既定は制限なし（負の無限大）。</summary>
+        /// <summary>The lower bound. Unlimited (negative infinity) by default.</summary>
         [UxmlAttribute]
         public Vector2 Min
         {
@@ -155,7 +158,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>上限。既定は制限なし（正の無限大）。</summary>
+        /// <summary>The upper bound. Unlimited (positive infinity) by default.</summary>
         [UxmlAttribute]
         public Vector2 Max
         {
@@ -167,19 +170,19 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>両軸に同じ下限を与える（仕様の「スカラー指定」）。</summary>
+        /// <summary>Applies the same lower bound to both axes (the spec's "scalar form").</summary>
         public void SetMin(float uniform)
         {
             this.Min = new Vector2(uniform, uniform);
         }
 
-        /// <summary>両軸に同じ上限を与える（仕様の「スカラー指定」）。</summary>
+        /// <summary>Applies the same upper bound to both axes (the spec's "scalar form").</summary>
         public void SetMax(float uniform)
         {
             this.Max = new Vector2(uniform, uniform);
         }
 
-        /// <summary>ドラッグ中のオーバーレイに現在値ラベルを出すか。既定 true（Vue と同じ）。</summary>
+        /// <summary>Whether to show the current-value label on the overlay while dragging. Default true (same as Vue).</summary>
         [UxmlAttribute]
         public bool ShowOverlayLabel
         {
@@ -197,7 +200,7 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 操作不能状態。ドラッグ中に立てた場合はジェスチャを破棄して開始値へ戻す。
+        /// The disabled state. If set while dragging, discards the gesture and reverts to the start value.
         /// </summary>
         [UxmlAttribute]
         public bool Disabled
@@ -214,8 +217,8 @@ namespace Tweeq.UIToolkit
 
                 if (_disabled && _dragging)
                 {
-                    // 無効化の瞬間にドラッグが生きていると、離す手段＝隠したカーソルを取り戻す手段が無くなる。
-                    // 掴んだままのキャプチャも Escape と同じ手順で手放す
+                    // If a drag is still alive the instant it's disabled, there's no way left to release it -
+                    // i.e. no way to get the hidden cursor back. Release the held capture through the same steps as Escape
                     int pointerId = _pointerId;
                     _pointerId = PointerId.invalidPointerId;
                     CancelTranslateDrag();
@@ -227,7 +230,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>配色テーマ。null を渡した場合は Dark() にフォールバックする。</summary>
+        /// <summary>The color theme. Falls back to Dark() when null is passed.</summary>
         public TweeqTheme Theme
         {
             get => _theme;
@@ -239,7 +242,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>現在の感度（Shift=5 / Alt=0.1 / 既定 1）。</summary>
+        /// <summary>The current sensitivity (Shift=5 / Alt=0.1 / default 1).</summary>
         public float Speed
         {
             get
@@ -253,7 +256,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>現在のグリッド倍率の目標値（Shift=0.5 / Alt=4 / 既定 2）。</summary>
+        /// <summary>The current target grid scale (Shift=0.5 / Alt=4 / default 2).</summary>
         public float GridScaleTarget
         {
             get
@@ -267,10 +270,10 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>ドラッグセッション中か。</summary>
+        /// <summary>Whether a drag session is in progress.</summary>
         public bool Dragging => _dragging;
 
-        /// <summary>横方向グループでの位置。</summary>
+        /// <summary>Position within a horizontal group.</summary>
         public TweeqBoxPosition InlinePosition
         {
             get => _inlinePosition;
@@ -286,7 +289,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>縦方向グループでの位置。</summary>
+        /// <summary>Position within a vertical group.</summary>
         public TweeqBoxPosition BlockPosition
         {
             get => _blockPosition;
@@ -302,7 +305,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>ChangeEvent を発火せずに値を設定する。</summary>
+        /// <summary>Sets the value without firing a ChangeEvent.</summary>
         public void SetValueWithoutNotify(Vector2 newValue)
         {
             _value = newValue;
@@ -310,8 +313,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 修飾キー相当の状態を差し替える（Shift=粗い / Alt=細かい）。
-        /// ポインタ・キーイベントからも同じ経路で更新されるので、テストからはこれで代用できる。
+        /// Overrides the modifier-key-equivalent state (Shift=coarse / Alt=fine).
+        /// Pointer and key events also update through this same path, so tests can use this in their place.
         /// </summary>
         public void SetTweakModifiers(bool shift, bool alt)
         {
@@ -325,7 +328,7 @@ namespace Tweeq.UIToolkit
             UpdateOverlay();
         }
 
-        /// <summary>X / Y キー相当の軸ロック。押している間だけ有効という契約なので、解除も呼び出し側の責務。</summary>
+        /// <summary>Axis lock equivalent to the X / Y keys. The contract is "active only while held", so releasing it is also the caller's responsibility.</summary>
         public void SetAxisLocks(bool lockHorizontal, bool lockVertical)
         {
             if (_lockX == lockHorizontal && _lockY == lockVertical)
@@ -338,7 +341,7 @@ namespace Tweeq.UIToolkit
             UpdateOverlay();
         }
 
-        /// <summary>ドラッグセッションを開始する（panel 非依存）。</summary>
+        /// <summary>Begins a drag session (panel-independent).</summary>
         public void BeginTranslateDrag()
         {
             if (_disabled || _dragging)
@@ -349,8 +352,8 @@ namespace Tweeq.UIToolkit
             _dragging = true;
             _valueOnDragStart = _value;
 
-            // Vue の raf は常時回っているのでドラッグ開始時点では既に目標値。
-            // ここで合わせておかないと開始直後だけグリッドが伸び縮みして見える
+            // Vue's raf keeps running constantly, so it's already at the target value by the time the drag starts.
+            // Without matching it here, the grid would visibly stretch and shrink right after starting
             _gridScaleAnimated = GridScaleTarget;
 
             HideCursor();
@@ -360,9 +363,9 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// ドラッグ中の移動量（パネル座標 px・下が正）を適用する。
-        /// 値の Y は上向きドラッグで増える（Vue は DOM 準拠で下=+Y だが、Unity の座標感覚に
-        /// 合わせて反転する意図的逸脱。m6-wave2-spec.md「TranslateInput」参照）。
+        /// Applies the movement delta while dragging (panel-space px, positive downward).
+        /// The value's Y increases when dragging upward (Vue follows the DOM convention of down=+Y, but this is a
+        /// deliberate deviation that flips it to match Unity's coordinate sense; see "TranslateInput" in m6-wave2-spec.md).
         /// </summary>
         public void UpdateTranslateDrag(Vector2 pixelDelta)
         {
@@ -374,7 +377,7 @@ namespace Tweeq.UIToolkit
             Vector2 delta = pixelDelta * this.Speed;
             delta.y = -delta.y;
 
-            // 押している間だけのロック。X は「横のみ」＝縦成分を捨てる
+            // A lock that applies only while held. X means "horizontal only" = discard the vertical component
             if (_lockX)
             {
                 delta.y = 0f;
@@ -401,7 +404,7 @@ namespace Tweeq.UIToolkit
             Notify(previous, next);
         }
 
-        /// <summary>ドラッグを確定して終了する。Confirmed が 1 回だけ発火する。</summary>
+        /// <summary>Confirms and ends the drag. Confirmed fires exactly once.</summary>
         public void EndTranslateDrag()
         {
             if (!_dragging)
@@ -413,7 +416,7 @@ namespace Tweeq.UIToolkit
             Confirmed?.Invoke(_value);
         }
 
-        /// <summary>ドラッグを破棄して開始値へ戻す（Escape 相当）。Confirmed は発火しない。</summary>
+        /// <summary>Discards the drag and reverts to the start value (equivalent to Escape). Confirmed does not fire.</summary>
         public void CancelTranslateDrag()
         {
             if (!_dragging)
@@ -424,7 +427,7 @@ namespace Tweeq.UIToolkit
             Vector2 restored = _valueOnDragStart;
             StopDragSession();
 
-            // ドラッグ中に通知した値を巻き戻すので、こちらも通知する
+            // This rolls back a value that was already notified during the drag, so notify here as well
             this.value = restored;
         }
 
@@ -441,12 +444,12 @@ namespace Tweeq.UIToolkit
             this.style.height = DEFAULT_SIZE;
             this.style.flexShrink = 0f;
 
-            // InputGroup.ApplyStretch は flexBasis 未指定の子へ basis 0 を配る。
-            // width より basis が勝つため、明示しないと 24px 正方形がアイコンの内在幅まで潰れる
+            // InputGroup.ApplyStretch hands out basis 0 to children with no flexBasis specified.
+            // Since basis wins over width, without setting this explicitly the 24px square collapses down to the icon's intrinsic width
             this.style.flexGrow = 0f;
             this.style.flexBasis = DEFAULT_SIZE;
 
-            // フォーカスリングを 1px 外に置くので Hidden にしてはいけない
+            // The focus ring sits 1px outside, so this must not be Hidden
             this.style.overflow = Overflow.Visible;
 
             _focusInner = CreateRing(0f);
@@ -468,7 +471,7 @@ namespace Tweeq.UIToolkit
             this.RegisterCallback<FocusOutEvent>(OnFocusOut);
             this.RegisterCallback<DetachFromPanelEvent>(OnDetachFromPanel);
 
-            // scheduled item は 1 個だけ作って Resume/Pause で使い回す（毎ドラッグのクロージャ確保を避ける）
+            // Create just one scheduled item and reuse it via Resume/Pause (avoids allocating a closure on every drag)
             _gridItem = this.schedule.Execute(OnGridTick).Every(GRID_TICK_MS);
             _gridItem.Pause();
 
@@ -503,7 +506,7 @@ namespace Tweeq.UIToolkit
             SetBorderColor(_focusOuter, _theme.Accent);
         }
 
-        // 仕様 §1 の角丸表。両軸の指定は OR で合成する（片方でも「潰す」なら潰す）
+        // Corner-radius table from spec §1. The two axes combine via OR (if either side says to "flatten" a corner, it flattens)
         void ApplyCornerRadius()
         {
             float radius = _theme != null ? _theme.InputRadius : 0f;
@@ -556,7 +559,7 @@ namespace Tweeq.UIToolkit
             SetCornerRadius(this, radius, topLeft, topRight, bottomLeft, bottomRight);
             SetCornerRadius(_focusInner, radius, topLeft, topRight, bottomLeft, bottomRight);
 
-            // 外側リングは 1px 外に居るので、同じ見え方になるよう半径も 1px 太らせる
+            // The outer ring sits 1px further out, so also grow its radius by 1px to keep the same appearance
             SetCornerRadius(
                 _focusOuter,
                 radius + FOCUS_RING_WIDTH,
@@ -582,7 +585,7 @@ namespace Tweeq.UIToolkit
             _shiftHeld = (evt.modifiers & EventModifiers.Shift) != 0;
             _altHeld = (evt.modifiers & EventModifiers.Alt) != 0;
 
-            // X / Y / Escape を受け取るためフォーカスを取る
+            // Take focus so we can receive X / Y / Escape
             this.Focus();
 
             if (this.panel != null)
@@ -590,7 +593,7 @@ namespace Tweeq.UIToolkit
                 this.CapturePointer(_pointerId);
             }
 
-            // Vue の useDrag は dragDelaySeconds 0＝押した瞬間からドラッグ扱い（閾値なし）
+            // Vue's useDrag has dragDelaySeconds 0 = treated as dragging the instant it's pressed (no threshold)
             BeginTranslateDrag();
             evt.StopPropagation();
         }
@@ -623,14 +626,14 @@ namespace Tweeq.UIToolkit
             int pointerId = _pointerId;
             _pointerId = PointerId.invalidPointerId;
 
-            // 先に確定させる。順序を逆にすると ReleasePointer が投げる PointerCaptureOut が
-            // セッションを畳んでしまい、Confirmed が出なくなる
+            // Confirm first. Reversing the order would let the PointerCaptureOut thrown by ReleasePointer
+            // collapse the session, and Confirmed would never fire
             EndTranslateDrag();
             ReleasePointerSafely(pointerId);
             evt.StopPropagation();
         }
 
-        // キャプチャを失った場合でもドラッグ状態（＝隠したカーソル・オーバーレイ）を残さない
+        // Don't leave drag state (i.e. hidden cursor / overlay) behind even if capture is lost
         void OnPointerCaptureOut(PointerCaptureOutEvent evt)
         {
             _pointerId = PointerId.invalidPointerId;
@@ -640,7 +643,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 値は動いたところで確定させる。確定イベントは「離した」ときだけなのでここでは出さない
+            // Confirm the value wherever it ended up moving. The confirm event only fires on "release", so don't emit it here
             StopDragSession();
         }
 
@@ -658,7 +661,7 @@ namespace Tweeq.UIToolkit
 
         void OnDetachFromPanel(DetachFromPanelEvent evt)
         {
-            // パネルから外れてもカーソルとオーバーレイを取り残さない
+            // Don't leave the cursor and overlay behind even when detached from the panel
             _pointerId = PointerId.invalidPointerId;
             _hovered = false;
             _focused = false;
@@ -754,7 +757,7 @@ namespace Tweeq.UIToolkit
         {
             _focused = false;
 
-            // 押しっぱなし扱いのキーはフォーカスを失った時点で解除する（KeyUp が来ないため）
+            // Keys treated as "held down" are released the moment focus is lost (since KeyUp never arrives)
             SetAxisLocks(false, false);
             SetTweakModifiers(false, false);
             Refresh();
@@ -863,7 +866,7 @@ namespace Tweeq.UIToolkit
             TweeqOverlayLayer layer = TweeqOverlayLayer.GetOrCreate(this);
             if (layer == null)
             {
-                // パネル未接続ならガイドは諦める（操作自体は成立させる）
+                // Give up on the guide if not attached to a panel (the operation itself still works)
                 return;
             }
 
@@ -908,7 +911,7 @@ namespace Tweeq.UIToolkit
                 LockY = _lockY,
                 ShowLabel = _showOverlayLabel,
 
-                // Vue: precisionOf(speed)。0.1 のときだけ小数 1 桁になる
+                // Vue: precisionOf(speed). Only becomes 1 decimal place when it's 0.1
                 Precision = TweeqMath.PrecisionOf(this.Speed),
             };
 
@@ -930,7 +933,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 減光した状態でホバー色・フォーカスリング・押しっぱなしキーが残らないようにする
+            // Make sure the hover color, focus ring, and held-down keys don't linger in the dimmed state
             _hovered = false;
             _focused = false;
             SetAxisLocks(false, false);
@@ -952,7 +955,7 @@ namespace Tweeq.UIToolkit
             this.MarkDirtyRepaint();
         }
 
-        // ボタン面の 3×3 ドットアイコン（Vue の mingcute:dot-grid-fill 相当）
+        // The 3x3 dot icon on the button face (equivalent to Vue's mingcute:dot-grid-fill)
         void OnGenerateVisualContent(MeshGenerationContext context)
         {
             if (context == null || _theme == null)
@@ -990,7 +993,7 @@ namespace Tweeq.UIToolkit
 
         #region Helpers
 
-        // オーバーレイはパネル座標で描くので、変換しない生の位置を持つ
+        // The overlay draws in panel coordinates, so keep the raw, untransformed position
         static Vector2 PanelPosition(IPointerEvent evt)
         {
             Vector3 position = evt.position;
@@ -1031,7 +1034,7 @@ namespace Tweeq.UIToolkit
 
         #region Overlay implementation
 
-        /// <summary>ドラッグ中だけ生きるオーバーレイの描画パラメータ。座標はパネル座標。</summary>
+        /// <summary>Drawing parameters for the overlay that only lives during a drag. Coordinates are in panel space.</summary>
         struct TranslateOverlayState
         {
             public TweeqTheme Theme;
@@ -1047,7 +1050,7 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// ドットグリッド・軸ロック線・レンジ枠・現在値ラベルを描く層。
+        /// The layer that draws the dot grid, axis-lock lines, range frame, and current-value label.
         /// </summary>
         sealed class TranslateOverlay : VisualElement
         {
@@ -1062,8 +1065,8 @@ namespace Tweeq.UIToolkit
             ValueLabel _xValue;
             ValueLabel _yValue;
 
-            // 直近にフォントを適用したテーマ。ドラッグ中は毎フレーム Sync が走るので、
-            // managed 値（FontDefinition）の代入はテーマが変わった時だけに絞る
+            // The theme whose font was applied most recently. Sync runs every frame during a drag,
+            // so assignment of the managed value (FontDefinition) is restricted to only when the theme actually changes.
             TweeqTheme _fontTheme;
 
             #endregion
@@ -1099,7 +1102,7 @@ namespace Tweeq.UIToolkit
                 SetBorderWidth(_labelRoot, 1f);
                 SetCornerRadius(_labelRoot, LABEL_RADIUS, true, true, true, true);
 
-                // 中心合わせは実解決サイズが要るので、確定した時点で置き直す
+                // Centering needs the actual resolved size, so it's repositioned once that size is finalized.
                 _labelRoot.RegisterCallback<GeometryChangedEvent>(OnLabelGeometryChanged);
 
                 _xAxis = CreateAxisLabel("X", 0f);
@@ -1156,7 +1159,7 @@ namespace Tweeq.UIToolkit
                 _labelRoot.style.backgroundColor = theme.SurfaceOpaque;
                 SetBorderColor(_labelRoot, theme.Border);
 
-                // 軸名だけ弱い色にする（Vue の :deep(i) と同じ意図）
+                // Only the axis names get the muted color (same intent as Vue's :deep(i)).
                 _xAxis.style.color = theme.TextMuted;
                 _yAxis.style.color = theme.TextMuted;
                 _xValue.Element.style.color = theme.Text;
@@ -1166,7 +1169,7 @@ namespace Tweeq.UIToolkit
                 {
                     _fontTheme = theme;
 
-                    // 値そのものを読む欄なので数値フォント（X / Y の軸名は UI 既定のまま）
+                    // These are fields for reading the raw value, so the numeric font is used (the X / Y axis names stay on the UI default).
                     TweeqFonts.Apply(_xValue.Element, theme.FontNumeric);
                     TweeqFonts.Apply(_yValue.Element, theme.FontNumeric);
                 }
@@ -1248,8 +1251,9 @@ namespace Tweeq.UIToolkit
                 float spacing = Mathf.Max(GRID_UNIT * scale, MIN_DOT_SPACING);
                 Vector2 center = _state.Center;
 
-                // 値の逆方向へグリッドを流す（Vue の background-position、egui の rem_euclid と同じ）。
-                // Y は値空間が上向き正（Unity 合わせの逸脱）でパネルは下向き正なので符号がそのまま
+                // The grid scrolls in the opposite direction of the value (same as Vue's background-position,
+                // and the same as another reference implementation's rem_euclid). For Y, the value space treats
+                // up as positive (a deviation to match Unity) while the panel treats down as positive, so the sign is used as-is.
                 float offsetX = Repeat(-_state.Value.x * scale, spacing);
                 float offsetY = Repeat(_state.Value.y * scale, spacing);
 
@@ -1263,14 +1267,14 @@ namespace Tweeq.UIToolkit
 
                 for (int band = 0; band < ALPHA_BANDS; band++)
                 {
-                    // 濃度 a のとき距離は R*(1 - a/2)。帯の内外半径はその逆算
+                    // At opacity a, distance is R*(1 - a/2). The band's inner/outer radii are the inverse of that.
                     float alphaHigh = 1f - band / (float)ALPHA_BANDS;
                     float alphaLow = 1f - (band + 1) / (float)ALPHA_BANDS;
 
                     float inner = band == 0 ? 0f : OVERLAY_RADIUS * (1f - alphaHigh * 0.5f);
                     float outer = OVERLAY_RADIUS * (1f - alphaLow * 0.5f);
 
-                    // 内周の帯は「マスクが 1 で頭打ちの円」を丸ごと含む
+                    // The innermost band fully includes "the circle where the mask caps out at 1."
                     if (band == 0)
                     {
                         outer = Mathf.Max(outer, solidRadius);
@@ -1297,7 +1301,7 @@ namespace Tweeq.UIToolkit
                                 continue;
                             }
 
-                            // 半径 1px の点は矩形と見分けが付かないので、帯ごとに Fill 1 回へ畳める矩形で描く
+                            // A 1px-radius dot is indistinguishable from a rectangle, so each is drawn as a rectangle that folds into one Fill call per band.
                             painter.MoveTo(new Vector2(x - DOT_RADIUS, y - DOT_RADIUS));
                             painter.LineTo(new Vector2(x + DOT_RADIUS, y - DOT_RADIUS));
                             painter.LineTo(new Vector2(x + DOT_RADIUS, y + DOT_RADIUS));
@@ -1342,7 +1346,7 @@ namespace Tweeq.UIToolkit
                 painter.Stroke();
             }
 
-            // Vue の .zero / egui の range_rect。可動域が有限なときだけ枠で見せる
+            // Vue's .zero / another reference implementation's range_rect. The frame is only shown when the movable range is finite.
             void PaintRange(Painter2D painter, TweeqTheme theme)
             {
                 Vector2 min = _state.Min;
@@ -1357,7 +1361,7 @@ namespace Tweeq.UIToolkit
                 float x0 = center.x + (min.x - _state.Value.x) * scale;
                 float x1 = center.x + (max.x - _state.Value.x) * scale;
 
-                // 値空間は上向き正（Unity 合わせの逸脱）なので、min.y（下端）はパネルでは center より下
+                // The value space treats up as positive (a deviation to match Unity), so min.y (the bottom edge) is below center in panel space.
                 float y0 = center.y + (_state.Value.y - min.y) * scale;
                 float y1 = center.y + (_state.Value.y - max.y) * scale;
 
@@ -1378,7 +1382,7 @@ namespace Tweeq.UIToolkit
                 return !float.IsNaN(value) && !float.IsInfinity(value);
             }
 
-            // 負の値でも [0, length) に収める（Rust の rem_euclid 相当）
+            // Keeps even negative values within [0, length) (equivalent to Rust's rem_euclid).
             static float Repeat(float value, float length)
             {
                 if (length <= 0f)
@@ -1395,8 +1399,8 @@ namespace Tweeq.UIToolkit
             #region Value label
 
             /// <summary>
-            /// 表示が変わったときだけ文字列を作り直す値ラベル。
-            /// ドラッグ中は毎フレーム Sync が走るので、ここでケチらないと GC が回る。
+            /// A value label that only rebuilds its string when the display actually changes.
+            /// Sync runs every frame during a drag, so skimping here is what keeps the GC from kicking in.
             /// </summary>
             sealed class ValueLabel
             {
@@ -1431,13 +1435,13 @@ namespace Tweeq.UIToolkit
 
                     _label.text = TweeqFormat.Format(value, precision, true);
 
-                    // 丸め境界付近や非有限値はキー化できないので、次フレームも作り直させる
+                    // Values near a rounding boundary or non-finite values can't be turned into a key, so force a rebuild on the next frame too.
                     _hasKey = cacheable;
                     _key = key;
                     _precision = precision;
                 }
 
-                // 表示は precision 桁で丸まるので、その粒度で一致していれば文字列は同じになる
+                // Display is rounded to `precision` digits, so the string ends up the same as long as they match at that granularity.
                 static bool TryGetKey(double value, int precision, out double key)
                 {
                     key = 0.0;

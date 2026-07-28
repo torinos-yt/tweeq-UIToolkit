@@ -4,7 +4,7 @@ using UnityEngine.UIElements;
 
 namespace Tweeq.UIToolkit
 {
-    /// <summary>バルーンの矢印が生える辺。<see cref="TweeqArrowSide.None"/> は矢印なしの角丸矩形。</summary>
+    /// <summary>The edge from which the balloon's arrow grows. <see cref="TweeqArrowSide.None"/> is a rounded rectangle with no arrow.</summary>
     public enum TweeqArrowSide
     {
         None,
@@ -15,45 +15,46 @@ namespace Tweeq.UIToolkit
     }
 
     /// <summary>
-    /// 吹き出し型のサーフェス。角丸矩形と矢印を「1本の輪郭」として Painter2D で描くので、
-    /// 矢印の付け根に境界線の継ぎ目が出ない（Vue 版が clip-path + SVG stroke でやっていることの等価）。
-    /// 中身は <see cref="VisualElement.contentContainer"/> 経由で普通に Add する。
+    /// A speech-balloon-shaped surface. The rounded rectangle and the arrow are drawn as "a single outline"
+    /// with Painter2D, so no border seam appears at the arrow's base (equivalent to what the Vue original
+    /// does with clip-path + SVG stroke).
+    /// Content is added normally via <see cref="VisualElement.contentContainer"/>.
     /// </summary>
     [UxmlElement]
     public sealed partial class TweeqBalloon : VisualElement, ITweeqThemed
     {
         #region Constants
 
-        /// <summary>矢印の底辺幅（px）。視覚言語として固定。</summary>
+        /// <summary>The arrow's base width (px). Fixed as part of the visual language.</summary>
         public const float ARROW_WIDTH = 14f;
 
-        /// <summary>矢印の突出量（px）。</summary>
+        /// <summary>The arrow's protrusion amount (px).</summary>
         public const float ARROW_HEIGHT = 7f;
 
-        /// <summary>矢印の先端とアンカーの間に残す隙間（px）。</summary>
+        /// <summary>The gap left between the arrow's tip and the anchor (px).</summary>
         public const float ARROW_GAP = 2f;
 
         const float BORDER_WIDTH = 1f;
 
-        /// <summary>影のぼかし半径の既定値。Vue の drop-shadow(0 2px 12px) 相当。</summary>
+        /// <summary>Default value for the shadow blur radius. Equivalent to Vue's drop-shadow(0 2px 12px).</summary>
         public const float DEFAULT_SHADOW_BLUR = 12f;
 
-        /// <summary>影の下方向オフセットの既定値。</summary>
+        /// <summary>Default value for the shadow's downward offset.</summary>
         public const float DEFAULT_SHADOW_OFFSET_Y = 2f;
 
-        // box-shadow が無いので、太さの違う輪郭ストロークを重ねてぼかしを近似する。
-        // 枚数を増やすほど滑らかになるが描画コストに直結するので 3 枚で打ち止め
+        // There's no box-shadow, so we approximate the blur by stacking outline strokes of varying thickness.
+        // More layers would look smoother, but it directly costs rendering time, so we cap it at 3
         const int SHADOW_LAYERS = 3;
 
-        // 出現時の scale。原点は矢印の先端（＝指している場所から生えて見える）
+        // The scale used when appearing. The origin is the arrow's tip (so it appears to grow from the pointed-at location)
         const float POP_IN_SCALE = 0.96f;
 
         #endregion
 
         #region Fields
 
-        // トランジション定義は不変なので型ごとに 1 個だけ作って全インスタンスで共有する
-        // （style.transition* は毎回 List を要求するため、都度 new すると開くたびにゴミが出る）
+        // The transition definition is immutable, so create just one per type and share it across all instances
+        // (style.transition* requires a List every time, so allocating a new one on every open would produce garbage)
         static readonly StyleList<StylePropertyName> ScaleProperty =
             new StyleList<StylePropertyName>(new List<StylePropertyName> { new StylePropertyName("scale") });
 
@@ -67,7 +68,7 @@ namespace Tweeq.UIToolkit
         TweeqArrowSide _arrowSide = TweeqArrowSide.None;
         float _arrowOffset;
 
-        // NaN = テーマ既定に従う。ツールチップのピル形状のように部分的に上書きしたいケースがある
+        // NaN = follow the theme default. Some cases (like the tooltip's pill shape) want to override this partially
         float _radius = float.NaN;
         float _paddingVertical = float.NaN;
         float _paddingHorizontal = float.NaN;
@@ -77,17 +78,17 @@ namespace Tweeq.UIToolkit
 
         VisualElement _content;
 
-        // テーマ由来の秒数。テーマ差し替え時にだけ作り直す
+        // The duration derived from the theme. Only recreated when the theme is swapped
         StyleList<TimeValue> _popInDuration;
 
-        // 出現アニメの「次フレームで scale を戻す」1件だけを使い回す（毎回 new しない）
+        // Reuse a single scheduled item for the appear animation's "restore scale on the next frame" step (don't new it every time)
         IVisualElementScheduledItem _popInItem;
 
         #endregion
 
         #region Public API
 
-        /// <summary>矢印が生える辺。</summary>
+        /// <summary>The edge from which the arrow grows.</summary>
         [UxmlAttribute("arrow-side")]
         public TweeqArrowSide ArrowSide
         {
@@ -107,11 +108,11 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 矢印の中心位置。矢印が生える辺に沿って、この要素の左上から測った px。
-        /// 角丸に食い込まないよう描画時にクランプされる。
+        /// The arrow's center position. Measured in px from this element's top-left, along the edge the
+        /// arrow grows from. Clamped at draw time so it doesn't bite into the rounded corners.
         /// </summary>
-        // Radius / Padding* は「NaN＝テーマ既定」の番兵を持つため UXML には出さない
-        // （UI Builder が既定値として 0 を書き込むと、テーマ追従が黙って壊れる）
+        // Radius / Padding* hold a "NaN = theme default" sentinel, so they aren't exposed to UXML
+        // (if UI Builder writes 0 as the default value, theme-following silently breaks)
         [UxmlAttribute("arrow-offset")]
         public float ArrowOffset
         {
@@ -129,7 +130,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>角丸半径。NaN でテーマの RadiusPopup に従う。</summary>
+        /// <summary>The corner radius. NaN follows the theme's RadiusPopup.</summary>
         public float Radius
         {
             get => _radius;
@@ -140,7 +141,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>中身の上下パディング。NaN でテーマの PopupPadding に従う。</summary>
+        /// <summary>The content's vertical padding. NaN follows the theme's PopupPadding.</summary>
         public float PaddingVertical
         {
             get => _paddingVertical;
@@ -151,7 +152,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>中身の左右パディング。NaN でテーマの PopupPadding に従う。</summary>
+        /// <summary>The content's horizontal padding. NaN follows the theme's PopupPadding.</summary>
         public float PaddingHorizontal
         {
             get => _paddingHorizontal;
@@ -162,7 +163,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>影のぼかし半径（px）。</summary>
+        /// <summary>The shadow blur radius (px).</summary>
         public float ShadowBlur
         {
             get => _shadowBlur;
@@ -173,7 +174,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>影の下方向オフセット（px）。</summary>
+        /// <summary>The shadow's downward offset (px).</summary>
         public float ShadowOffsetY
         {
             get => _shadowOffsetY;
@@ -184,7 +185,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>配色テーマ。null を渡した場合は Dark() にフォールバックする。</summary>
+        /// <summary>The color theme. Falls back to Dark() if null is passed.</summary>
         public TweeqTheme Theme
         {
             get => _theme;
@@ -195,26 +196,26 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>中身はコンテンツ層へ入れる（矢印ぶんのパディングを持つのは外側）。</summary>
+        /// <summary>Content goes into the content layer (the outer element holds the padding for the arrow).</summary>
         public override VisualElement contentContainer => _content;
 
         /// <summary>
-        /// 出現アニメ（矢印の先端を原点にした scale 0.96→1）を頭から再生する。
-        /// パネルに載せた直後に呼ぶこと。scheduler はデタッチ中の要素では走らない。
+        /// Plays the appear animation (scale 0.96→1 with the arrow's tip as the origin) from the start.
+        /// Call this right after adding to the panel. The scheduler doesn't run for detached elements.
         /// </summary>
         public void PlayIn()
         {
             UpdateTransformOrigin();
 
-            // 使い回しの2回目以降は scale が 1 のまま残っているので、そのまま 0.96 を入れると
-            // 「縮むアニメ」が先に走ってしまう。縮む側だけ duration 0 で当てる
-            // （Vue の @starting-style が担っていた役目）
+            // From the second reuse onward, scale is still left at 1, so setting 0.96 directly
+            // would play a "shrink" animation first. Apply duration 0 only for the shrinking step
+            // (this plays the role that Vue's @starting-style handled)
             this.style.transitionDuration = InstantDuration;
             this.style.scale = new StyleScale(new Scale(new Vector3(POP_IN_SCALE, POP_IN_SCALE, 1f)));
 
             if (this.panel == null)
             {
-                // scheduler が動かないので、縮んだまま固まらないよう即座に戻す
+                // The scheduler doesn't run, so restore immediately to avoid getting stuck shrunk
                 FinishPopIn();
                 return;
             }
@@ -235,7 +236,7 @@ namespace Tweeq.UIToolkit
         {
             this.name = "tweeq-balloon";
 
-            // 影と、矢印なし時に辺へまたがる 1px ストロークが切れないようにする
+            // Prevent the shadow, and the 1px stroke spanning the edge when there's no arrow, from being clipped
             this.style.overflow = Overflow.Visible;
             this.style.alignSelf = Align.FlexStart;
 
@@ -261,7 +262,7 @@ namespace Tweeq.UIToolkit
             this.MarkDirtyRepaint();
         }
 
-        // トランジションは毎フレーム触ると StyleList の確保が積み上がるので、テーマ変更時にだけ設定する
+        // Touching the transition every frame would pile up StyleList allocations, so only set it when the theme changes
         void ApplyPopInTransition()
         {
             float duration = _theme != null ? _theme.ActiveTransitionDuration : 0.064f;
@@ -291,8 +292,8 @@ namespace Tweeq.UIToolkit
             _content.style.paddingRight = horizontal;
         }
 
-        // 矢印は外側のパディングとして場所を確保する。こうすると輪郭パスの座標と
-        // 中身のレイアウトが 1:1 で対応し、描画側でオフセットを二重に持たなくて済む
+        // The arrow reserves its space as outer padding. This makes the outline path's coordinates
+        // map 1:1 to the content's layout, so the drawing side doesn't need to hold a duplicate offset
         void ApplyArrowPadding()
         {
             float depth = ARROW_HEIGHT + ARROW_GAP;
@@ -310,11 +311,11 @@ namespace Tweeq.UIToolkit
 
         void OnGeometryChanged(GeometryChangedEvent evt)
         {
-            // bottom/right の原点は「サイズ - GAP」なので、実サイズが決まってから置き直す
+            // The bottom/right origin is "size - GAP", so it's repositioned once the actual size is known
             UpdateTransformOrigin();
         }
 
-        // 出現の scale 原点を矢印の先端に置く（矢印なしなら中心）
+        // Place the appear animation's scale origin at the arrow's tip (center if there's no arrow)
         void UpdateTransformOrigin()
         {
             float width = this.layout.width;
@@ -379,7 +380,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 本体（角丸矩形）の矩形。矢印ぶんのパディングを外側から差し引く
+            // The main body's (rounded rectangle) rect. Subtract the arrow's padding from the outside
             float originX = _arrowSide == TweeqArrowSide.Left ? ARROW_HEIGHT + ARROW_GAP : 0f;
             float originY = _arrowSide == TweeqArrowSide.Top ? ARROW_HEIGHT + ARROW_GAP : 0f;
             float width = layerWidth - originX
@@ -398,7 +399,7 @@ namespace Tweeq.UIToolkit
             PaintShadow(painter, originX, originY, width, height, radius);
 
             BuildOutline(painter, originX, originY, width, height, radius, 0f);
-            // 半透明 Surface はブラー前提の色（Vue）。ブラー無しでは背面が透けるので不透明合成で描く
+            // The semi-transparent Surface color assumes a blur behind it (Vue). Without blur the background would show through, so we composite it opaque
             painter.fillColor = _theme.SurfaceOpaque;
             painter.Fill();
 
@@ -408,8 +409,8 @@ namespace Tweeq.UIToolkit
             painter.Stroke();
         }
 
-        // drop-shadow の代替。同じ輪郭を「太いストローク＋塗り」で数枚重ね、
-        // 外側ほど薄くなるハローを作る。1枚あたり α を等分するので合計は元の α に収まる
+        // A substitute for drop-shadow. Stack several copies of the same outline as "thick stroke + fill",
+        // creating a halo that gets fainter toward the outside. Alpha is divided equally per layer, so the total stays within the original alpha
         void PaintShadow(Painter2D painter, float originX, float originY, float width, float height, float radius)
         {
             Color shadow = _theme.Shadow;
@@ -427,20 +428,20 @@ namespace Tweeq.UIToolkit
 
             for (int index = 0; index < SHADOW_LAYERS; index++)
             {
-                // 外側の広いストロークから順に描く（内側ほど濃く積み上がる）
+                // Draw from the widest, outermost stroke inward (layers stack darker toward the inside)
                 float spread = _shadowBlur * (SHADOW_LAYERS - index) / SHADOW_LAYERS;
                 BuildOutline(painter, originX, originY, width, height, radius, _shadowOffsetY);
                 painter.lineWidth = spread * 2f;
                 painter.Stroke();
             }
 
-            // ストロークだけだと内側が抜けるので、本体ぶんも 1 枚敷いておく
+            // A stroke alone leaves the inside hollow, so lay down one fill for the body as well
             BuildOutline(painter, originX, originY, width, height, radius, _shadowOffsetY);
             painter.Fill();
         }
 
-        // Vue Balloon.vue の SVG パスと同じ順路（時計回り）を Painter2D で辿る。
-        // 角丸は ArcTo（canvas の arcTo 相当）で、矢印は辺の途中に差し込む折れ線で表す
+        // Traces the same path (clockwise) as the Vue original's Balloon.vue SVG path, using Painter2D.
+        // Rounded corners use ArcTo (equivalent to canvas's arcTo), and the arrow is expressed as a polyline inserted partway along the edge
         void BuildOutline(
             Painter2D painter,
             float originX,
@@ -509,14 +510,14 @@ namespace Tweeq.UIToolkit
 
         #region Helpers
 
-        // 矢印の底辺が角丸に食い込むと輪郭が破綻するので、直線部分の中に押し込む
+        // If the arrow's base bites into the rounded corner the outline breaks, so push it into the straight segment
         static float ClampAlongEdge(float value, float min, float max, float radius, float half)
         {
             float low = min + radius + half;
             float high = max - radius - half;
             if (high < low)
             {
-                // 辺が短すぎて矢印を置く直線が無い場合は中央に寄せる（破綻より歪みを選ぶ）
+                // If the edge is too short to have a straight segment to place the arrow on, center it instead (choosing distortion over breakage)
                 return (min + max) * 0.5f;
             }
 

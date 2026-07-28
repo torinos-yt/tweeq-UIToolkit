@@ -3,32 +3,32 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 
-// セグメントは Label 要素で作る。命名衝突は無いが、他の Input と表記を揃えるため別名にする
+// Segments are built from Label elements. There's no naming collision, but alias it to match the other Inputs' notation
 using UILabel = UnityEngine.UIElements.Label;
 
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// セグメント切替（仕様 §5）。選択中のセグメントの実測 rect へスライドする
-    /// インジケーターを背後に敷く。角丸融合には参加しない。
+    /// A segmented switch (spec §5). Lays an indicator underneath that slides to the measured rect
+    /// of the selected segment. Does not participate in corner-rounding fusion.
     ///
-    /// Vue はジェネリックな options を取るが、Unity 版は string[] + インデックスに固定する
-    /// （Unity 決定事項 2）。アイコン列とレスポンシブ段階（rowIcon/colFull/colIcon）は v1 スコープ外。
+    /// The original takes generic options, but the Unity version is fixed to string[] + index
+    /// (Unity decision 2). The icon column and responsive tiers (rowIcon/colFull/colIcon) are out of v1 scope.
     /// </summary>
     [UxmlElement]
     public partial class RadioInput : VisualElement, INotifyValueChanged<int>, ITweeqThemed
     {
         #region Constants
 
-        // Vue の padding 0 .75em を rem12 換算した実寸
+        // Actual size converting the original's padding: 0 .75em at rem12
         const float SEGMENT_PADDING = 9f;
 
-        // 仕様 §5: セグメント間 gap 1px
+        // spec §5: 1px gap between segments
         const float SEGMENT_GAP = 1f;
 
         const float FOCUS_RING_WIDTH = 1f;
 
-        // 仕様 §5: ユーザー起因の値変更だけスライドさせる。フラグの保持時間（Vue の 250ms）
+        // spec §5: only slide for user-driven value changes. Duration the flag is held (the original's 250ms)
         const long ANIMATING_HOLD_MS = 250;
 
         #endregion
@@ -49,7 +49,7 @@ namespace Tweeq.UIToolkit
         bool _focused;
         int _pointerId = PointerId.invalidPointerId;
 
-        // true の間だけインジケーターに遷移を掛ける。リサイズでのスライドは「バグに見える」ので殺す
+        // Only apply a transition to the indicator while this is true. Sliding on resize "looks like a bug", so kill it
         bool _animating;
         IVisualElementScheduledItem _animatingItem;
 
@@ -57,14 +57,15 @@ namespace Tweeq.UIToolkit
 
         #region Public API
 
-        /// <summary>ドラッグのリリース・矢印キー操作ごとに発火する。</summary>
+        /// <summary>Fires on drag release and on every arrow-key operation.</summary>
         public event Action<int> Confirmed;
 
         /// <summary>
-        /// 選択肢。設定・取得ともにコピーを通す（呼び出し側の配列と内部状態を切り離す）。
-        /// 選択中インデックスが新しい長さから外れた場合は、通知せず範囲内へ畳む。
+        /// The options. Both getter and setter pass through a copy (decoupling the caller's array
+        /// from internal state). If the selected index falls outside the new length, it is folded
+        /// back into range without notifying.
         /// </summary>
-        // UXML では要素数可変の string[]（カンマ区切り）として書ける
+        // In UXML this can be written as a variable-length string[] (comma-separated)
         [UxmlAttribute("options")]
         public string[] Options
         {
@@ -100,9 +101,10 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>選択インデックス。範囲外の代入は無視する（仕様 API 契約）。</summary>
-        // UXML の属性は宣言順に適用されるため、Options より後に置く。
-        // 逆順だと options 未設定＝要素数 0 の状態で範囲外判定に捨てられ、value が効かない
+        /// <summary>The selected index. Out-of-range assignments are ignored (spec API contract).</summary>
+        // UXML attributes are applied in declaration order, so this is placed after Options.
+        // In reverse order, this would be discarded by the out-of-range check while options is
+        // unset (i.e. length 0), and value would have no effect
         [UxmlAttribute]
         public int value
         {
@@ -120,7 +122,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>配色テーマ。null を渡した場合は Dark() にフォールバックする。</summary>
+        /// <summary>Color theme. Falls back to Dark() if null is passed.</summary>
         public TweeqTheme Theme
         {
             get => _theme;
@@ -132,7 +134,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>ChangeEvent を発火せずに値を設定する。範囲外は無視する。</summary>
+        /// <summary>Sets the value without firing a ChangeEvent. Out-of-range values are ignored.</summary>
         public void SetValueWithoutNotify(int newValue)
         {
             if (!IsValidIndex(newValue))
@@ -145,8 +147,9 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 矢印キー移動用のラップアラウンド計算（仕様 §5。egui 由来の意図的補完）。
-        /// count が 0 以下なら 0 を返す。
+        /// Wrap-around calculation for arrow-key movement (spec §5; a deliberate addition carried
+        /// over from a reference implementation).
+        /// Returns 0 if count is 0 or less.
         /// </summary>
         public static int WrapIndex(int index, int count)
         {
@@ -167,13 +170,13 @@ namespace Tweeq.UIToolkit
         {
             this.AddToClassList("tweeq-radio-input");
 
-            // 矢印キーを受け取るためルート自身がフォーカスを持つ（セグメントは非フォーカス）
+            // The root itself holds focus so it can receive arrow keys (segments are non-focusable)
             this.focusable = true;
             this.style.flexDirection = FlexDirection.Row;
             this.style.alignItems = Align.Stretch;
             this.style.flexShrink = 0f;
 
-            // 仕様 §5: インジケーターが角からはみ出さないようクリップする
+            // spec §5: clip so the indicator doesn't overflow past the corners
             this.style.overflow = Overflow.Hidden;
 
             _indicator = new VisualElement
@@ -188,7 +191,7 @@ namespace Tweeq.UIToolkit
             _indicator.style.height = 0f;
             _indicator.style.display = DisplayStyle.None;
 
-            // セグメントより先に追加する＝描画順が下になる（UI Toolkit に z-index は無い）
+            // Added before the segments, meaning it draws underneath them (UI Toolkit has no z-index)
             this.hierarchy.Add(_indicator);
 
             _focusRing = new VisualElement
@@ -204,7 +207,7 @@ namespace Tweeq.UIToolkit
             _focusRing.style.display = DisplayStyle.None;
             SetBorderWidth(_focusRing, FOCUS_RING_WIDTH);
 
-            // 常に最前面。セグメントを組み直すたびに RebuildSegments が末尾へ付け直す
+            // Always on top. RebuildSegments re-appends this at the end each time segments are rebuilt
             this.hierarchy.Add(_focusRing);
 
             ApplyStaticStyles();
@@ -217,8 +220,8 @@ namespace Tweeq.UIToolkit
             this.RegisterCallback<PointerLeaveEvent>(OnPointerLeave);
             this.RegisterCallback<KeyDownEvent>(OnKeyDown);
 
-            // 矢印キーは KeyDown と別に NavigationMoveEvent も飛ばし、そちらがフォーカスを
-            // 動かしてしまう（feedback-fixes-01.md A-5）
+            // Arrow keys also fire a NavigationMoveEvent separately from KeyDown, and that one ends up
+            // moving focus (feedback-fixes-01.md A-5)
             this.RegisterCallback<NavigationMoveEvent>(OnNavigationMove);
             this.RegisterCallback<FocusInEvent>(OnFocusIn);
             this.RegisterCallback<FocusOutEvent>(OnFocusOut);
@@ -268,7 +271,7 @@ namespace Tweeq.UIToolkit
                 {
                     name = "tweeq-radio-segment",
 
-                    // ヒットテストはルート側で layout 矩形を見て行う（キャプチャ中も同じ経路にしたい）
+                    // Hit-testing is done on the root side by looking at layout rects (we want the same path even while capturing)
                     pickingMode = PickingMode.Ignore,
                 };
                 ApplySegmentStyles(segment, i);
@@ -276,7 +279,7 @@ namespace Tweeq.UIToolkit
                 _segments.Add(segment);
             }
 
-            // フォーカスリングは常に最前面。セグメントを足し直したら付け直す
+            // The focus ring is always on top. Re-append it whenever segments are re-added
             if (_focusRing.parent == this)
             {
                 this.hierarchy.Remove(_focusRing);
@@ -298,7 +301,7 @@ namespace Tweeq.UIToolkit
             segment.style.marginBottom = 0f;
             segment.style.marginRight = 0f;
 
-            // UI Toolkit のインラインスタイルに flex gap が無いので、先頭以外のマージンで作る
+            // UI Toolkit's inline styles have no flex gap, so build it from margins on everything but the first
             segment.style.marginLeft = index == 0 ? 0f : SEGMENT_GAP;
 
             segment.style.unityTextAlign = TextAnchor.MiddleCenter;
@@ -315,8 +318,8 @@ namespace Tweeq.UIToolkit
                 "color");
         }
 
-        // インジケーターだけは plain ease（仕様 §5 の明示された例外）。
-        // animating が降りている間は遷移時間 0 にして、リサイズでのスライドを殺す
+        // Only the indicator uses plain ease (an explicit exception in spec §5).
+        // While animating is off, the transition duration is 0, killing sliding on resize
         void ApplyIndicatorTransition(bool animate)
         {
             float duration = animate ? _theme.HoverTransitionDuration : 0f;
@@ -335,7 +338,7 @@ namespace Tweeq.UIToolkit
                 new TimeValue(duration, TimeUnit.Second),
                 new TimeValue(duration, TimeUnit.Second),
 
-                // 色だけはユーザー起因かどうかに関係なく hover 系の 0.15s で追従させる
+                // Color alone always follows the hover-family 0.15s, regardless of whether it's user-driven
                 new TimeValue(_theme.HoverTransitionDuration, TimeUnit.Second),
             };
 
@@ -373,7 +376,7 @@ namespace Tweeq.UIToolkit
 
                 segment.style.color = active ? activeText : _theme.Text;
 
-                // 非アクティブだけ hover 面色を出す。アクティブ側はインジケーターの色で表現する
+                // Only show the hover fill color for inactive segments. The active one is represented by the indicator's color instead
                 segment.style.backgroundColor = !active && hovered
                     ? _theme.InputHover
                     : Color.clear;
@@ -396,20 +399,20 @@ namespace Tweeq.UIToolkit
             if (float.IsNaN(rect.width) || float.IsNaN(rect.height)
                 || rect.width <= 0f || rect.height <= 0f)
             {
-                // レイアウト未確定。GeometryChangedEvent で改めて呼ばれる
+                // Layout not yet resolved. Called again by GeometryChangedEvent
                 return;
             }
 
             _indicator.style.display = DisplayStyle.Flex;
 
-            // 遷移設定は幾何を書く前に確定させる（同フレームで duration が効くように）
+            // Finalize the transition settings before writing geometry (so duration takes effect in the same frame)
             ApplyIndicatorTransition(_animating);
 
             _indicator.style.translate = new Translate(rect.x, rect.y);
             _indicator.style.width = rect.width;
             _indicator.style.height = rect.height;
 
-            // ドラッグ中／アクティブ hover 中は「掴んでいる」表現として hover 側の色にする
+            // While dragging / actively hovered, use the hover-side color to represent "being held"
             bool held = _dragging || _hoveredIndex == _value;
             _indicator.style.backgroundColor = held ? _theme.AccentHover : _theme.Accent;
         }
@@ -432,7 +435,7 @@ namespace Tweeq.UIToolkit
 
         #region Interaction
 
-        // ユーザー起因の値変更。スライド遷移を許可したうえで通常の value 経路へ流す
+        // A user-driven value change. Allows the slide transition, then routes through the normal value path
         bool SetValueFromUser(int next)
         {
             if (!IsValidIndex(next) || _value == next)
@@ -452,7 +455,7 @@ namespace Tweeq.UIToolkit
 
             if (this.panel == null)
             {
-                // スケジューラが回らない＝フラグを降ろせない。立てっぱなしを避けて何もしない
+                // The scheduler doesn't run, meaning the flag can never be cleared. Avoid leaving it stuck on, and do nothing instead
                 _animating = false;
                 return;
             }
@@ -465,7 +468,7 @@ namespace Tweeq.UIToolkit
             }).StartingIn(ANIMATING_HOLD_MS);
         }
 
-        // 主軸（X）でのヒットテスト。セグメントの実測 rect を左から見て最初に収まったものを返す
+        // Hit-testing along the main axis (X). Returns the first segment whose measured rect contains it, scanning from the left
         int IndexAt(float x)
         {
             if (_segments.Count == 0)
@@ -541,7 +544,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // ドラッグ中は「離した時に決める」のではなく、跨いだ時点で即選択を移す（仕様 §5）
+            // While dragging, selection moves the instant a boundary is crossed rather than being decided on release (spec §5)
             _hoveredIndex = IndexAt(local.x);
             SetValueFromUser(_hoveredIndex);
             Refresh();
@@ -567,7 +570,7 @@ namespace Tweeq.UIToolkit
 
         void OnPointerCaptureOut(PointerCaptureOutEvent evt)
         {
-            // キャプチャを奪われた場合は確定させずにドラッグだけ畳む
+            // If capture is taken away, fold up the drag without confirming
             _dragging = false;
             _pointerId = PointerId.invalidPointerId;
             Refresh();
@@ -580,7 +583,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 入った瞬間に動かさない使い方でも hover 面色が出るよう、ここでも当たりを取る
+            // Take the hit here too, so the hover fill color shows even for usage that doesn't move right after entering
             _hoveredIndex = IndexAt(LocalPosition(evt).x);
             Refresh();
         }
@@ -629,8 +632,8 @@ namespace Tweeq.UIToolkit
             evt.StopPropagation();
         }
 
-        // feedback-fixes-01.md A-5: ←→↑↓ は選択変更だけ。フォーカスは動かさない。
-        // Next/Previous（Tab）は通常のフォーカス送りとして残す
+        // feedback-fixes-01.md A-5: <-> up/down only change the selection. Focus is not moved.
+        // Next/Previous (Tab) is left as normal focus traversal
         void OnNavigationMove(NavigationMoveEvent evt)
         {
             if (evt == null)
@@ -652,7 +655,7 @@ namespace Tweeq.UIToolkit
 
             evt.StopPropagation();
 
-            // Unity 6 で「フォーカス移動そのもの」を止められるのはこちら（PreventDefault は非推奨）
+            // In Unity 6, this is the way to stop "the focus move itself" (PreventDefault is deprecated)
             this.focusController?.IgnoreEvent(evt);
         }
 
@@ -670,8 +673,8 @@ namespace Tweeq.UIToolkit
 
         void OnGeometryChanged(GeometryChangedEvent evt)
         {
-            // ルート／セグメントどちらの変化でもインジケーターの追従先が変わる。
-            // ユーザー起因でなければ _animating が降りているので、遷移せず貼り直すだけになる
+            // A change in either the root or a segment changes what the indicator needs to follow.
+            // If it isn't user-driven, _animating is off, so this just repositions without transitioning
             UpdateIndicator();
         }
 
@@ -699,7 +702,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        // キャプチャ中も座標系がぶれないよう、パネル座標からローカルへ変換する
+        // Convert from panel coordinates to local, so the coordinate system doesn't drift even while capturing
         Vector2 LocalPosition(IPointerEvent evt)
         {
             Vector3 position = evt.position;

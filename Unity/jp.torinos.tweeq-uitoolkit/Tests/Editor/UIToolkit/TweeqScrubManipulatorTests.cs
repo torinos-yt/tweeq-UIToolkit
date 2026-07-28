@@ -7,11 +7,11 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// TweeqScrubManipulator の契約（ext-custom-widgets-spec.md EXT-01-B「テスト契約」）を
-    /// 合成イベントで検証する。
+    /// Verifies TweeqScrubManipulator's contract (ext-custom-widgets-spec.md EXT-01-B "Test Contract")
+    /// using synthesized events.
     ///
-    /// 実機のカーソル非表示（HideCursorWhileScrubbing=true）は OS 状態を触るので
-    /// Play Mode 側の担当。ここでは既定が false であることだけ固定する。
+    /// Actual cursor hiding (HideCursorWhileScrubbing=true) touches OS state, so it's the
+    /// Play Mode side's responsibility. This only pins down that the default is false.
     /// </summary>
     public class TweeqScrubManipulatorTests
     {
@@ -55,8 +55,8 @@ namespace Tweeq.UIToolkit.Tests
             _target.AddManipulator(_manipulator);
             _panel.Root.Add(_target);
 
-            // EditMode のパネルは「ポインタ下の要素」を持たないので、PointerDown は
-            // capture 経由でしか target へ届かない。押下前に 1 度だけ掴んでおく
+            // EditMode's panel has no concept of "the element under the pointer", so PointerDown
+            // can only reach target via capture. Grab it once, up front, before the press
             _target.CapturePointer(PointerId.mousePointerId);
         }
 
@@ -190,7 +190,7 @@ namespace Tweeq.UIToolkit.Tests
             Down(10f, 10f);
             Move(20f, 10f);
 
-            // 閾値を越えた地点が原点。ここまでの 10px は値に乗せない
+            // The point where it crosses the threshold becomes the origin; the 10px leading up to it isn't applied to the value
             Assert.AreEqual(new[] { "began" }, _log.ToArray());
             Assert.IsTrue(_manipulator.IsScrubbing);
         }
@@ -336,8 +336,8 @@ namespace Tweeq.UIToolkit.Tests
             Move(40f, 10f);
             Up(40f, 10f);
 
-            // PointerUp 内の ReleasePointer が PointerCaptureOut を呼び戻すので、
-            // 状態を畳む順序を誤ると ended と cancelled が二重に飛ぶ
+            // ReleasePointer inside PointerUp calls PointerCaptureOut back, so getting the
+            // state-teardown order wrong would fire both ended and cancelled
             Assert.AreEqual(new[] { "began", "ended" }, _log.ToArray());
         }
 

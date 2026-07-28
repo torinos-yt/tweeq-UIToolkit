@@ -4,8 +4,8 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// InputGroup の位置割り当てと、その結果 NumberInput 側に出る角丸（仕様 §1 の表）の検証。
-    /// VisualElement は panel が無くても生成・スタイル設定できるので EditMode で完結する。
+    /// Verifies InputGroup's position assignment and the resulting corner rounding on the NumberInput side (the table in spec §1).
+    /// A VisualElement can be created and styled without a panel, so this is fully covered in EditMode.
     /// </summary>
     public class InputGroupTests
     {
@@ -43,7 +43,7 @@ namespace Tweeq.UIToolkit.Tests
             Assert.AreEqual(TweeqBoxPosition.Middle, AxisAt(group, 1).InlinePosition);
             Assert.AreEqual(TweeqBoxPosition.End, AxisAt(group, 2).InlinePosition);
 
-            // もう一方の軸は触らない
+            // Does not touch the other axis
             Assert.AreEqual(TweeqBoxPosition.None, AxisAt(group, 0).BlockPosition);
             Assert.AreEqual(TweeqBoxPosition.None, AxisAt(group, 1).BlockPosition);
             Assert.AreEqual(TweeqBoxPosition.None, AxisAt(group, 2).BlockPosition);
@@ -88,7 +88,7 @@ namespace Tweeq.UIToolkit.Tests
             group.Add(first);
             group.Add(second);
 
-            // ラベルは数に入らないので、NumberInput 2 個は Start / End になる
+            // The label does not count, so the two NumberInputs become Start / End
             Assert.AreEqual(TweeqBoxPosition.Start, first.InlinePosition);
             Assert.AreEqual(TweeqBoxPosition.End, second.InlinePosition);
         }
@@ -196,7 +196,7 @@ namespace Tweeq.UIToolkit.Tests
         {
             RotaryInput rotary = new RotaryInput { InlinePosition = TweeqBoxPosition.Middle };
 
-            // 円形なので角丸は触らない。値の保持だけ確認する
+            // Being circular, it doesn't touch corner rounding. Only verifies the value is retained
             Assert.AreEqual(TweeqBoxPosition.Middle, rotary.InlinePosition);
             Assert.AreEqual(TweeqBoxPosition.None, rotary.BlockPosition);
         }

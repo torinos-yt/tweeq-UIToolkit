@@ -1,33 +1,34 @@
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// グループ内での位置。隣とくっつく側の角を潰すために使う（仕様 §1）。
+    /// Position within a group. Used to flatten the corner that touches a neighbor (spec §1).
     /// </summary>
     public enum TweeqBoxPosition
     {
-        /// <summary>単独。角丸は全周そのまま。</summary>
+        /// <summary>Standalone. All corners keep their full rounding.</summary>
         None,
 
-        /// <summary>先頭。進行方向側の 2 角を潰す。</summary>
+        /// <summary>First. Flattens the 2 corners on the leading side.</summary>
         Start,
 
-        /// <summary>中間。4 角すべて潰す。</summary>
+        /// <summary>Middle. Flattens all 4 corners.</summary>
         Middle,
 
-        /// <summary>末尾。進行方向と逆側の 2 角を潰す。</summary>
+        /// <summary>Last. Flattens the 2 corners on the trailing side.</summary>
         End,
     }
 
     /// <summary>
-    /// InputGroup が位置を割り当てられる入力ボックス。
-    /// 角丸の適用は各ボックス側の責務（グループは仕切り線もボーダー結合も持たない）。
+    /// An input box that InputGroup can assign a position to.
+    /// Applying corner rounding is each box's own responsibility (the group holds neither divider
+    /// lines nor merged borders).
     /// </summary>
     public interface ITweeqInputBox
     {
-        /// <summary>横方向（FlexDirection.Row）グループでの位置。</summary>
+        /// <summary>Position within a horizontal (FlexDirection.Row) group.</summary>
         TweeqBoxPosition InlinePosition { get; set; }
 
-        /// <summary>縦方向（FlexDirection.Column）グループでの位置。</summary>
+        /// <summary>Position within a vertical (FlexDirection.Column) group.</summary>
         TweeqBoxPosition BlockPosition { get; set; }
     }
 }

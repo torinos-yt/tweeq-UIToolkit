@@ -4,8 +4,8 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// TweeqTheme のフォントトークン既定値。どの生成経路でも同梱 Geist が乗ること、
-    /// FontUi だけは「指定しない（＝パネル既定）」であることを固定する。
+    /// Default values for TweeqTheme's font tokens. Pins down that the bundled Geist is applied
+    /// regardless of the construction path, and that FontUi alone is left "unspecified (i.e. panel default)".
     /// </summary>
     public class TweeqThemeFontTests
     {
@@ -46,7 +46,7 @@ namespace Tweeq.UIToolkit.Tests
         [Test]
         public void PlainConstructor_HasBundledFontDefaults()
         {
-            // 既存コードが素の new TweeqTheme() を使う箇所があるので、そこでも欠けないこと
+            // Existing code has spots that use a plain new TweeqTheme(), so nothing should be missing there either
             AssertBundledDefaults(new TweeqTheme(), "new TweeqTheme()");
         }
 
@@ -62,7 +62,7 @@ namespace Tweeq.UIToolkit.Tests
 
             TweeqTheme copy = theme.Copy();
 
-            // FontUi は上書きした値ごと引き継ぐ（＝既定の空へ戻らない）
+            // FontUi carries over including the overridden value (i.e. it does not revert to the default empty)
             Assert.AreEqual(TweeqFonts.GeistRegular.font, copy.FontUi.font);
             Assert.AreEqual(TweeqFonts.NumericFont.font, copy.FontNumeric.font);
             Assert.AreEqual(TweeqFonts.HeadingFont.font, copy.FontHeading.font);

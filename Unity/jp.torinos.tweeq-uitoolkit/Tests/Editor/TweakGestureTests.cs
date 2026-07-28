@@ -88,7 +88,7 @@ namespace Tweeq.Core.Tests
             var weakGesture = new TweakGesture();
 
             Assert.That(Drag(fastGesture, 10.0, 0.0, fast: true).Delta, Is.EqualTo(100.0).Within(TOLERANCE));
-            // fastMultiplier < 1 は減速に使わせない
+            // Don't let fastMultiplier < 1 be used to slow things down
             Assert.That(Drag(weakGesture, 10.0, 0.0, fast: true, fastMultiplier: 0.25).Delta,
                 Is.EqualTo(10.0).Within(TOLERANCE));
         }
@@ -114,7 +114,7 @@ namespace Tweeq.Core.Tests
             Assert.That(update.Delta, Is.EqualTo(0.0).Within(TOLERANCE));
             Assert.That(update.Speed, Is.LessThan(1.0));
             Assert.That(gesture.HorizontalWeight, Is.LessThan(0.1));
-            // 縦成分が支配的なので speed はほぼ 0.98^dy まで落ちる
+            // Since the vertical component dominates, speed drops to nearly 0.98^dy
             Assert.That(update.Speed, Is.EqualTo(Math.Pow(0.98, 20.0)).Within(0.01));
         }
 
@@ -138,7 +138,7 @@ namespace Tweeq.Core.Tests
                 Assert.That(gesture.Speed, Is.EqualTo(afterVertical).Within(TOLERANCE));
             }
 
-            // 横方向が続けば重みは 1 に戻り、値変更だけが起きる
+            // If horizontal movement continues, the weight returns to 1 and only value changes occur
             Assert.That(gesture.HorizontalWeight, Is.GreaterThan(0.9));
         }
 
@@ -172,7 +172,7 @@ namespace Tweeq.Core.Tests
             Drag(gesture, 0.0, 20.0);
             double speed = gesture.Speed;
 
-            // 縦ドラッグ後は重みが小さいので、重み込みの期待値と一致することを確認する
+            // After a vertical drag the weight is small, so verify the result matches the expected value including that weight
             GestureUpdate update = Drag(gesture, 4.0, 0.0, 0.5);
             Assert.That(update.Delta,
                 Is.EqualTo(4.0 * 0.5 * speed * gesture.HorizontalWeight).Within(TOLERANCE));
@@ -195,7 +195,7 @@ namespace Tweeq.Core.Tests
             Assert.That(gesture.AccumulatedDelta, Is.EqualTo(0.0).Within(TOLERANCE));
             Assert.That(gesture.HorizontalWeight, Is.EqualTo(1.0).Within(TOLERANCE));
 
-            // direction が (1,0) に戻っていれば、純横ドラッグは重み 1 で dx*baseSpeed になる
+            // If direction has returned to (1,0), a purely horizontal drag has weight 1 and becomes dx*baseSpeed
             GestureUpdate update = Drag(gesture, 2.0, 0.0, 0.5);
             Assert.That(update.Delta, Is.EqualTo(1.0).Within(TOLERANCE));
             Assert.That(update.AccumulatedDelta, Is.EqualTo(1.0).Within(TOLERANCE));

@@ -74,7 +74,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void QuantizeIsRelativeToOrigin()
         {
-            // origin 基準でないと 0.3 になってしまうケース
+            // A case that would become 0.3 if it were not relative to origin
             Assert.That(TweeqMath.Quantize(0.26, 0.1, 0.05), Is.EqualTo(0.25).Within(TOLERANCE));
             Assert.That(TweeqMath.Quantize(0.26, 0.1), Is.EqualTo(0.3).Within(TOLERANCE));
         }
@@ -102,7 +102,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void QuantizeNormalizesNegativeZero()
         {
-            // リテラルの -0.0 が定数畳み込みで +0 になる処理系差を避けるため実行時に作る
+            // Created at runtime to avoid platform differences where the -0.0 literal becomes +0 via constant folding
             double negativeZero = 0.0 * -1.0;
             Assume.That(double.IsNegative(negativeZero), Is.True);
 

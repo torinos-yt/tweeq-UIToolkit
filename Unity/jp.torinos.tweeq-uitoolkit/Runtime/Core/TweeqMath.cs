@@ -3,27 +3,27 @@ using System;
 namespace Tweeq.Core
 {
     /// <summary>
-    /// tweeq のインタラクションで共有する数式。UnityEngine 非依存・すべて double。
+    /// Math shared across tweeq interactions. No UnityEngine dependency; everything is double.
     /// </summary>
     public static class TweeqMath
     {
         #region Constants
 
-        // C# の double.Epsilon は最小非正規化数であって Rust の f64::EPSILON（機械イプシロン）ではない。
-        // 参照実装と同じ閾値を使うため自前で定義する。
+        // C#'s double.Epsilon is the smallest denormalized number, not the machine epsilon (2^-52) that the term usually refers to.
+        // Defined explicitly here to match the same threshold used by the reference implementation.
         public const double MACHINE_EPSILON = 2.220446049250313e-16;
 
         #endregion
 
         #region Interpolation
 
-        /// <summary>線形補間。</summary>
+        /// <summary>Linear interpolation.</summary>
         public static double Lerp(double from, double to, double amount)
         {
             return from + (to - from) * amount;
         }
 
-        /// <summary>edge0〜edge1 を 0〜1 に写す滑らかな重み。</summary>
+        /// <summary>A smooth weight that maps edge0-edge1 to 0-1.</summary>
         public static double Smoothstep(double edge0, double edge1, double value)
         {
             double amount = Clamp01((value - edge0) / (edge1 - edge0));
@@ -34,14 +34,14 @@ namespace Tweeq.Core
 
         #region Angles
 
-        /// <summary>常に modulo と同符号の剰余を返す。</summary>
+        /// <summary>Always returns a remainder with the same sign as modulo.</summary>
         public static double UnsignedMod(double value, double modulo)
         {
             return (value % modulo + modulo) % modulo;
         }
 
         /// <summary>
-        /// source から target への最短の符号付き角度差（度）。戻り値は [-180, 180)。
+        /// The shortest signed angular difference (in degrees) from source to target. The return value is in [-180, 180).
         /// </summary>
         public static double SignedAngleBetween(double target, double source)
         {
@@ -53,8 +53,8 @@ namespace Tweeq.Core
         #region Quantization
 
         /// <summary>
-        /// origin を基準に step 間隔へスナップする。
-        /// step&lt;=0 や非有限値は「ホスト側の方針に委ねる」ため値をそのまま返す。
+        /// Snaps to step intervals relative to origin.
+        /// step&lt;=0 or non-finite values are left up to the host's policy, so the value is returned unchanged.
         /// </summary>
         public static double Quantize(double value, double step, double origin = 0.0)
         {
@@ -63,12 +63,12 @@ namespace Tweeq.Core
                 return value;
             }
 
-            // Rust の f64::round は「0 から遠い方へ」丸める。C# の既定は銀行家丸めなので明示指定が必須。
+            // The rounding rule here is round-half-away-from-zero, matching the reference implementation; C#'s default is banker's rounding, so it must be specified explicitly.
             double steps = Math.Round((value - origin) / step, MidpointRounding.AwayFromZero);
             return NormalizeZero(steps * step + origin);
         }
 
-        /// <summary>step の小数桁数。max(0, ceil(-log10(step)))。</summary>
+        /// <summary>The number of decimal digits in step. max(0, ceil(-log10(step))).</summary>
         public static int PrecisionOf(double step)
         {
             if (step == 0.0 || !IsFinite(step))
@@ -76,7 +76,7 @@ namespace Tweeq.Core
                 return 0;
             }
 
-            // 負の step は log10 が NaN になるため絶対値で扱う（TS 版は NaN を返してしまう）。
+            // A negative step makes log10 NaN, so this uses the absolute value (the Vue original ends up returning NaN).
             double precision = Math.Ceiling(-Math.Log10(Math.Abs(step)));
             if (double.IsNaN(precision) || precision <= 0.0)
             {
@@ -90,19 +90,19 @@ namespace Tweeq.Core
 
         #region Helpers
 
-        /// <summary>NaN・無限大でないこと。</summary>
+        /// <summary>Not NaN and not infinite.</summary>
         public static bool IsFinite(double value)
         {
             return !double.IsNaN(value) && !double.IsInfinity(value);
         }
 
-        /// <summary>-0 を +0 に正規化する。表示・比較のブレを避けるため。</summary>
+        /// <summary>Normalizes -0 to +0, to avoid inconsistencies in display and comparison.</summary>
         public static double NormalizeZero(double value)
         {
             return value == 0.0 ? 0.0 : value;
         }
 
-        /// <summary>Math.Clamp と違い min&gt;max でも例外を投げない。</summary>
+        /// <summary>Unlike Math.Clamp, does not throw even when min&gt;max.</summary>
         public static double Clamp(double value, double min, double max)
         {
             if (value < min)

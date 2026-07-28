@@ -4,8 +4,9 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// VecInput のうち panel 非依存の部分（値のコピー意味論・軸ごとの min/max/step 解決・
-    /// 長さガード）を検証する。ドラッグ由来の ValueChanged / Confirmed は panel が要るので対象外。
+    /// Verifies the panel-independent parts of VecInput (value copy semantics, per-axis
+    /// min/max/step resolution, length guards). Drag-driven ValueChanged / Confirmed are out of
+    /// scope since they require a panel.
     /// </summary>
     public class VecInputTests
     {
@@ -262,7 +263,7 @@ namespace Tweeq.UIToolkit.Tests
         [Test]
         public void Disabled_BlocksAxisPicking()
         {
-            // 軸側の視覚・遮断は NumberInput の実装に任せる契約なので、伝播の結果だけを見る
+            // The contract leaves the axis's visuals and blocking to NumberInput's implementation, so this only checks the propagation result
             VecInput vec = new VecInput(2);
 
             vec.Disabled = true;
@@ -274,7 +275,7 @@ namespace Tweeq.UIToolkit.Tests
         [Test]
         public void DefaultConstructor_UsesTwoAxesForUxml()
         {
-            // UXML / UI Builder は引数なしで生成するので、既定は最小軸数
+            // UXML / UI Builder construct this with no arguments, so the default is the minimum axis count
             Assert.AreEqual(2, new VecInput().Dimensions);
         }
     }

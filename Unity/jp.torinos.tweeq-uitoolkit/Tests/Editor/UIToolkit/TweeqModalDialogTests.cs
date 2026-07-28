@@ -5,13 +5,13 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// TweeqModalDialog の契約（m8-modal-tabs-spec.md §B「テスト契約」）を検証する。
+    /// Verifies TweeqModalDialog's contract (m8-modal-tabs-spec.md §B "Test Contract").
     ///
-    /// キー配線は「パネル root のバブル段階 → <see cref="TweeqModalDialog.PerformKey"/>」という
-    /// 二段構えで、判断は後段に閉じている。EditMode ではポインタ／キーイベントを合成できないので
-    /// 後段を直接叩いて確かめる。以下は Play Mode 側の担当:
-    /// - 実際の KeyDownEvent が root のバブル段階まで上がってくること
-    /// - 内側の部品（TextField 編集・ドラッグ中の Escape）が先に StopPropagation する優先順
+    /// Key wiring is a two-stage setup: "the panel root's bubble phase → <see cref="TweeqModalDialog.PerformKey"/>",
+    /// with the decision confined to the latter stage. EditMode cannot synthesize pointer/key events,
+    /// so this verifies by hitting the latter stage directly. The following are the Play Mode side's responsibility:
+    /// - That an actual KeyDownEvent bubbles up through the root's bubble phase
+    /// - The priority order by which inner components (TextField editing, Escape while dragging) call StopPropagation first
     /// </summary>
     public class TweeqModalDialogTests
     {
@@ -39,7 +39,7 @@ namespace Tweeq.UIToolkit.Tests
             return new TweeqModalDialog();
         }
 
-        #region 構造
+        #region Structure
 
         [Test]
         public void Content_GoesIntoTheBodyScrollView()
@@ -59,7 +59,7 @@ namespace Tweeq.UIToolkit.Tests
             TweeqModalDialog dialog = Create();
             VisualElement content = dialog.Pane.contentContainer;
 
-            // タイトル → 本文 → フッターの順（縦積み）
+            // Title → body → footer order (stacked vertically)
             Assert.AreEqual(3, content.hierarchy.childCount);
             Assert.AreSame(dialog.Body, content.hierarchy.ElementAt(1));
         }
@@ -112,7 +112,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region フッター
+        #region Footer
 
         [Test]
         public void Footer_UsesTheDefaultLabels()
@@ -122,7 +122,7 @@ namespace Tweeq.UIToolkit.Tests
             Assert.AreEqual(TweeqModalDialog.DEFAULT_CANCEL_LABEL, dialog.CancelLabel);
             Assert.AreEqual(TweeqModalDialog.DEFAULT_CONFIRM_LABEL, dialog.ConfirmLabel);
 
-            // Cancel は控えめな塗り（Vue の subtle）
+            // Cancel uses a subdued fill (the Vue original's subtle)
             Assert.IsTrue(dialog.CancelButton.Subtle);
             Assert.IsFalse(dialog.ConfirmButton.Subtle);
         }
@@ -187,7 +187,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region キー
+        #region Key
 
         [Test]
         public void Key_EscapeCancelsAndCloses()
@@ -242,7 +242,7 @@ namespace Tweeq.UIToolkit.Tests
             dialog.Add(field);
             dialog.Open = true;
 
-            // 実フォーカスは TextField 内部の入力要素に載るので、子から遡って持ち主を見つける
+            // Actual focus lands on TextField's internal input element, so walk back from the child to find its owner
             VisualElement inner = field.hierarchy.childCount > 0
                 ? field.hierarchy.ElementAt(0)
                 : field;
@@ -302,7 +302,7 @@ namespace Tweeq.UIToolkit.Tests
             dialog.Open = true;
             dialog.PerformKey(KeyCode.Escape, null);
 
-            // 閉じた時にハンドラを外し損ねていると、2 周目で 2 回発火する
+            // If the handler isn't removed on close, it fires twice on the second round
             dialog.Open = true;
             dialog.PerformKey(KeyCode.Escape, null);
 
@@ -332,7 +332,7 @@ namespace Tweeq.UIToolkit.Tests
             bool escapeHandled = dialog.PerformKey(KeyCode.Escape, null);
             bool enterHandled = dialog.PerformKey(KeyCode.Return, null);
 
-            // ネストしたドロップダウン等が開いている間はそちらがキーの持ち主
+            // While a nested dropdown or similar is open, it owns the key instead
             Assert.IsFalse(escapeHandled);
             Assert.IsFalse(enterHandled);
             Assert.AreEqual(0, cancelled);
@@ -347,7 +347,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region テーマ
+        #region Theme
 
         [Test]
         public void Theme_ReachesTheFooterButtonsAndTheContent()

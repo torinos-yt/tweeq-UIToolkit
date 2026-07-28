@@ -5,22 +5,22 @@ namespace Tweeq.Core
     #region Data
 
     /// <summary>
-    /// OKLCH 色。<see cref="H"/> は無彩色のとき NaN。
+    /// An OKLCH color. <see cref="H"/> is NaN when achromatic.
     /// </summary>
     /// <remarks>
-    /// NaN 色相は原典（colorjs.io）の表現をそのまま引き継いでいる。単なる「未定義」の印ではなく、
-    /// radix.ts の getButtonHoverColor が `!isNaN(H)` で彩度を落とすかどうかを分岐させる
-    /// 判定材料になっているので、0 に潰すとスケールの生成結果が変わる。
+    /// The NaN hue carries over the original's (colorjs.io's) representation as-is. It isn't
+    /// merely a marker for "undefined" — radix.ts's getButtonHoverColor uses `!isNaN(H)` as the
+    /// deciding factor for whether to reduce chroma, so collapsing it to 0 would change the scale-generation result.
     /// </remarks>
     public struct Oklch
     {
-        /// <summary>明度。[0, 1]。</summary>
+        /// <summary>Lightness. [0, 1].</summary>
         public double L;
 
-        /// <summary>彩度。0〜0.4 程度。</summary>
+        /// <summary>Chroma. Roughly 0-0.4.</summary>
         public double C;
 
-        /// <summary>色相（度）。無彩色は NaN。</summary>
+        /// <summary>Hue (degrees). NaN when achromatic.</summary>
         public double H;
 
         public Oklch(double l, double c, double h)
@@ -31,7 +31,7 @@ namespace Tweeq.Core
         }
     }
 
-    /// <summary>OKLab 色（直交座標）。</summary>
+    /// <summary>An OKLab color (rectangular coordinates).</summary>
     public struct Oklab
     {
         public double L;
@@ -48,7 +48,7 @@ namespace Tweeq.Core
         }
     }
 
-    /// <summary>0〜255 に量子化された RGBA。Radix スケールの出力単位。</summary>
+    /// <summary>RGBA quantized to 0-255. The output unit of the Radix scale.</summary>
     public struct Rgba32
     {
         public int R;
@@ -67,7 +67,7 @@ namespace Tweeq.Core
             A = a;
         }
 
-        /// <summary>Core 共通の [0, 1] 表現へ。値は 1/255 の整数倍なので誤差は入らない。</summary>
+        /// <summary>To Core's shared [0, 1] representation. Values are integer multiples of 1/255, so no error is introduced.</summary>
         public Rgba ToRgba()
         {
             return new Rgba(R / 255.0, G / 255.0, B / 255.0, A / 255.0);
@@ -77,12 +77,14 @@ namespace Tweeq.Core
     #endregion
 
     /// <summary>
-    /// sRGB / Display P3 ↔ OKLab ↔ OKLCH ↔ CIE Lab(D50) の変換と、Radix テーマ生成に必要な
-    /// 付随計算（deltaEOK・APCA コントラスト・三次ベジェイージング）。純関数のみ・すべて double。
+    /// Conversions between sRGB / Display P3, OKLab, OKLCH, and CIE Lab(D50), plus the auxiliary
+    /// calculations Radix theme generation needs (deltaEOK, APCA contrast, cubic Bezier easing).
+    /// Pure functions only, all double.
     /// </summary>
     /// <remarks>
-    /// 行列・定数・分岐は colorjs.io 0.5.2 の実装に合わせてある（移植元 radix.ts が依存している版）。
-    /// 「数学的に等価な別の式」に書き換えると最終出力が 1/255 単位でずれるので、式の形も維持する。
+    /// The matrices, constants, and branches are matched to colorjs.io 0.5.2's implementation
+    /// (the version the ported radix.ts depends on). Rewriting a formula into a "mathematically
+    /// equivalent" alternative would shift the final output by 1/255-unit amounts, so the formula's shape is preserved too.
     /// </remarks>
     public static class TweeqOklch
     {
@@ -140,7 +142,7 @@ namespace Tweeq.Core
             1.0, -0.0894841775298119, -1.2914855480194092,
         };
 
-        // Bradford CAT。colorjs.io がハードコードしている D65↔D50 の既製行列と同値
+        // Bradford CAT. Matches the ready-made D65<->D50 matrix colorjs.io hardcodes
         static readonly double[] D65_TO_D50 =
         {
             1.0479297925449969, 0.022946870601609652, -0.05019226628920524,
@@ -164,16 +166,16 @@ namespace Tweeq.Core
         const double LAB_E3 = 24.0 / 116.0;
         const double LAB_K = 24389.0 / 27.0;
 
-        // colorjs.io の oklch.fromBase が「無彩色」と見なす a/b の閾値
+        // The a/b threshold below which colorjs.io's oklch.fromBase treats a color as "achromatic"
         const double ACHROMATIC_EPSILON = 0.0002;
 
         const double DEGREES_PER_RADIAN = 180.0 / Math.PI;
         const double RADIANS_PER_DEGREE = Math.PI / 180.0;
 
-        // colorjs.io の inGamut 既定イプシロン。serialize が「はみ出しているか」を判定する幅
+        // colorjs.io's default inGamut epsilon. The margin serialize uses to judge whether a value is "out of range"
         const double GAMUT_EPSILON = 75e-6;
 
-        // CSS Color 4 Gamut Mapping Algorithm のパラメータ
+        // Parameters for the CSS Color 4 Gamut Mapping Algorithm
         const double GAMUT_JND = 0.02;
         const double GAMUT_PRECISION = 0.0001;
 
@@ -181,30 +183,30 @@ namespace Tweeq.Core
 
         #region Conversion
 
-        /// <summary>Display P3（[0, 1] のガンマ付き）→ OKLCH。</summary>
+        /// <summary>Display P3 (gamma-encoded, [0, 1]) -> OKLCH.</summary>
         public static Oklch P3ToOklch(double r, double g, double b)
         {
             return OklabToOklch(XyzToOklab(Transform(P3_TO_XYZ, ToLinear(r), ToLinear(g), ToLinear(b))));
         }
 
-        /// <summary>sRGB（[0, 1] のガンマ付き）→ OKLCH。</summary>
+        /// <summary>sRGB (gamma-encoded, [0, 1]) -> OKLCH.</summary>
         public static Oklch SrgbToOklch(double r, double g, double b)
         {
             return OklabToOklch(SrgbToOklab(r, g, b));
         }
 
-        /// <summary>sRGB → OKLab。</summary>
+        /// <summary>sRGB -> OKLab.</summary>
         public static Oklab SrgbToOklab(double r, double g, double b)
         {
             return XyzToOklab(Transform(SRGB_TO_XYZ, ToLinear(r), ToLinear(g), ToLinear(b)));
         }
 
         /// <summary>
-        /// OKLCH → sRGB。範囲外（負・1 超）もそのまま返す。
+        /// OKLCH -> sRGB. Out-of-range values (negative, over 1) are returned as-is.
         /// </summary>
         /// <remarks>
-        /// クランプしないのは、原典が APCA 判定や deltaEOK をガモット外の値のまま行っているため。
-        /// 表示用の値が必要なときは <see cref="OklchToBytes"/> を使う。
+        /// This isn't clamped because the original performs its APCA judgment and deltaEOK
+        /// calculations on out-of-gamut values as-is. When a display-ready value is needed, use <see cref="OklchToBytes"/>.
         /// </remarks>
         public static void OklchToSrgb(Oklch color, out double r, out double g, out double b)
         {
@@ -217,12 +219,12 @@ namespace Tweeq.Core
         }
 
         /// <summary>
-        /// OKLCH → OKLab。NaN 成分は 0 に置き換える。
+        /// OKLCH -> OKLab. NaN components are replaced with 0.
         /// </summary>
         /// <remarks>
-        /// colorjs.io の ColorSpace.to() が変換前に NaN 座標を 0 で埋めるため、無彩色（H = NaN）は
-        /// 「a = b = 0」ではなく「色相 0 度」として扱われる。C がわずかでも残っていると赤側へ寄る
-        /// ので、この差は最終バイト値に出る。
+        /// Because colorjs.io's ColorSpace.to() fills NaN coordinates with 0 before converting,
+        /// an achromatic color (H = NaN) is treated as "hue 0 degrees" rather than "a = b = 0".
+        /// If even a small amount of C remains, it leans toward red, so this difference shows up in the final byte value.
         /// </remarks>
         public static Oklab OklchToOklab(Oklch color)
         {
@@ -232,7 +234,7 @@ namespace Tweeq.Core
             return new Oklab(l, c * Math.Cos(h * RADIANS_PER_DEGREE), c * Math.Sin(h * RADIANS_PER_DEGREE));
         }
 
-        /// <summary>OKLab → OKLCH。a/b がともに微小なら色相を NaN にする。</summary>
+        /// <summary>OKLab -> OKLCH. If both a/b are minuscule, the hue is set to NaN.</summary>
         public static Oklch OklabToOklch(Oklab color)
         {
             double hue;
@@ -250,7 +252,7 @@ namespace Tweeq.Core
         }
 
         /// <summary>
-        /// OKLab → CIE Lab(D50)。colorjs.io の既定補間空間なので、スケール混合はここで行う。
+        /// OKLab -> CIE Lab(D50). Since this is colorjs.io's default interpolation space, scale mixing happens here.
         /// </summary>
         public static Oklab OklabToLabD50(Oklab color)
         {
@@ -264,7 +266,7 @@ namespace Tweeq.Core
             return new Oklab(116.0 * f1 - 16.0, 500.0 * (f0 - f1), 200.0 * (f1 - f2));
         }
 
-        /// <summary>CIE Lab(D50) → OKLab。</summary>
+        /// <summary>CIE Lab(D50) -> OKLab.</summary>
         public static Oklab LabD50ToOklab(Oklab cielab)
         {
             double f1 = (cielab.L + 16.0) / 116.0;
@@ -284,12 +286,12 @@ namespace Tweeq.Core
         #region Gamut
 
         /// <summary>
-        /// OKLCH → 0〜255 の sRGB バイト。ガモット外は CSS Color 4 の Gamut Mapping で写す。
+        /// OKLCH -> sRGB bytes in 0-255. Out-of-gamut colors are mapped via CSS Color 4's Gamut Mapping.
         /// </summary>
         /// <remarks>
-        /// 原典の `color.to('srgb').toString({format:'hex'})` と同じ経路。colorjs.io の serialize は
-        /// 既定でガモットマップを掛けるため、単純なクリップに置き換えると彩度の高いアクセントで
-        /// 色相が転ぶ。
+        /// The same path as the original's `color.to('srgb').toString({format:'hex'})`. Because
+        /// colorjs.io's serialize applies gamut mapping by default, replacing this with a simple
+        /// clip would shift the hue for high-chroma accents.
         /// </remarks>
         public static Rgba32 OklchToBytes(Oklch color)
         {
@@ -297,7 +299,7 @@ namespace Tweeq.Core
             return new Rgba32(ToByte(r), ToByte(g), ToByte(b), 255);
         }
 
-        /// <summary>OKLCH → sRGB。ガモット外なら CSS Color 4 Gamut Mapping Algorithm を適用する。</summary>
+        /// <summary>OKLCH -> sRGB. Applies the CSS Color 4 Gamut Mapping Algorithm if out of gamut.</summary>
         public static void OklchToSrgbGamutMapped(Oklch color, out double r, out double g, out double b)
         {
             OklchToSrgb(color, out r, out g, out b);
@@ -402,7 +404,7 @@ namespace Tweeq.Core
 
         #region Metrics
 
-        /// <summary>OKLab 上のユークリッド距離（deltaEOK）。</summary>
+        /// <summary>Euclidean distance in OKLab (deltaEOK).</summary>
         public static double DeltaEOKLab(Oklab left, Oklab right)
         {
             double dl = left.L - right.L;
@@ -411,19 +413,20 @@ namespace Tweeq.Core
             return Math.Sqrt(dl * dl + da * da + db * db);
         }
 
-        /// <summary>OKLCH 同士の deltaEOK。無彩色は色相 0 度として扱う（原典と同じ）。</summary>
+        /// <summary>deltaEOK between two OKLCH colors. Achromatic colors are treated as hue 0 degrees (same as the original).</summary>
         public static double DeltaEOK(Oklch left, Oklch right)
         {
             return DeltaEOKLab(OklchToOklab(left), OklchToOklab(right));
         }
 
         /// <summary>
-        /// APCA-W3 (0.0.98G) のコントラスト。引数順は colorjs.io の contrastAPCA に合わせて
-        /// 「背景・前景」。返り値は Lc（符号付き）。
+        /// APCA-W3 (0.0.98G) contrast. Argument order follows colorjs.io's contrastAPCA —
+        /// "background, foreground". The return value is Lc (signed).
         /// </summary>
         /// <remarks>
-        /// ガモット外の入力をクランプしないのも原典どおり。負の輝度は累乗で NaN になり、
-        /// radix.ts の getTextColor では「白では読めない」判定に落ちる。
+        /// Not clamping out-of-gamut input also matches the original. Negative luminance becomes
+        /// NaN when raised to a power, which radix.ts's getTextColor resolves to the "not legible
+        /// on white" branch.
         /// </remarks>
         public static double ContrastApca(
             double backgroundR, double backgroundG, double backgroundB,
@@ -484,7 +487,7 @@ namespace Tweeq.Core
 
         #region Channels
 
-        /// <summary>[0, 1] のチャンネルを 0〜255 へ。JS の Math.round と同じ「上寄せ」丸め。</summary>
+        /// <summary>A [0, 1] channel into 0-255. Rounds "up" the same way as JS's Math.round.</summary>
         public static int ToByte(double channel)
         {
             if (double.IsNaN(channel))
@@ -501,7 +504,7 @@ namespace Tweeq.Core
             return value < 0.0 ? 0.0 : value > 1.0 ? 1.0 : value;
         }
 
-        // sRGB / Display P3 共通の伝達関数。負値は符号を保って折り返す（colorjs.io と同じ）
+        // The transfer function shared by sRGB / Display P3. Negative values fold over while preserving their sign (same as colorjs.io)
         static double ToLinear(double value)
         {
             double sign = value < 0.0 ? -1.0 : 1.0;
@@ -549,7 +552,7 @@ namespace Tweeq.Core
             return value * value * value;
         }
 
-        // 行優先 3x3 × ベクトル。要素順を JS の multiplyMatrices と一致させて誤差の出方を揃える
+        // Row-major 3x3 x vector. Element order matches JS's multiplyMatrices so error behaves identically
         static double[] Transform(double[] matrix, double x, double y, double z)
         {
             return new[]
@@ -564,12 +567,12 @@ namespace Tweeq.Core
     }
 
     /// <summary>
-    /// CSS の cubic-bezier と同じ三次ベジェイージング。gre/bezier-easing 互換。
+    /// The same cubic Bezier easing as CSS's cubic-bezier. Compatible with gre/bezier-easing.
     /// </summary>
     /// <remarks>
-    /// サンプル表を float で持つのは原典が Float32Array を使っているため。double にすると
-    /// ニュートン法の初期値がわずかに変わり、Radix スケールの明度が最下位ビットで揺れる。
-    /// y は [0, 1] 外でもよい（Radix の lightModeEasing は y = 2 を使う）。
+    /// The sample table is kept as float because the original uses a Float32Array. Switching to
+    /// double would shift Newton's-method's initial guess slightly, causing the Radix scale's
+    /// lightness to wobble at the least significant bit. y may fall outside [0, 1] (Radix's lightModeEasing uses y = 2).
     /// </remarks>
     public sealed class CubicBezierEasing
     {
@@ -617,7 +620,7 @@ namespace Tweeq.Core
             }
         }
 
-        /// <summary>x（[0, 1]）に対する y。</summary>
+        /// <summary>y for a given x ([0, 1]).</summary>
         public double Evaluate(double x)
         {
             if (_isLinear)

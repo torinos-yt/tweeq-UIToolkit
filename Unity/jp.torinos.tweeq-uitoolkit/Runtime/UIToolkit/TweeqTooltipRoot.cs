@@ -6,30 +6,30 @@ using CorePlacement = Tweeq.Core.PopoverPlacement;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// パネルごとに1つだけ存在するツールチップの実体。アンカーを差し替えて使い回すので、
-    /// 要素の数だけポップオーバーが増えることはない（Vue 版 TooltipRoot と同じ構成）。
-    /// 通常は <see cref="TweeqTooltip"/> 経由で使い、直接触るのはテーマ差し替えの時くらい。
+    /// The single tooltip instance that exists per panel. It swaps and reuses its anchor, so the number
+    /// of popovers doesn't grow with the number of elements (the same structure as the Vue original's
+    /// TooltipRoot). Normally used via <see cref="TweeqTooltip"/>; touched directly only for theme swaps.
     /// </summary>
     public sealed class TweeqTooltipRoot
     {
         #region Constants
 
-        /// <summary>表示までの遅延（ms）。</summary>
+        /// <summary>The delay before showing (ms).</summary>
         public const long SHOW_DELAY_MS = 200L;
 
         /// <summary>
-        /// 非表示までの遅延（ms）。0 でも「次のフレーム」まで待つのが肝で、
-        /// leave → enter が連続する乗り移りの時に閉じずに済む。
+        /// The delay before hiding (ms). The key point is that even at 0 it still waits for "the next frame",
+        /// which avoids closing when a leave → enter transfer happens back-to-back.
         /// </summary>
         public const long HIDE_DELAY_MS = 0L;
 
-        // ピル形状（Tooltip.vue の .TqTooltip）
+        // Pill shape (Tooltip.vue's .TqTooltip)
         const float PILL_PADDING_VERTICAL = 2f;
         const float PILL_PADDING_HORIZONTAL = 6f;
         const float PILL_RADIUS = 9999f;
         const float FONT_SIZE = 11f;
 
-        // .plain の max-width 18em を 0.9em（=11px）基準で px 化したもの
+        // .plain's max-width of 18em converted to px based on 0.9em (=11px)
         const float MAX_WIDTH = 198f;
 
         #endregion
@@ -47,13 +47,13 @@ namespace Tweeq.UIToolkit
         IPanel _panel;
         TweeqOverlayLayer _layer;
 
-        // 表示中のアンカー。遅延中はまだ null のまま
+        // The anchor currently shown. Still null while the delay is pending
         VisualElement _reference;
         VisualElement _pendingShow;
         string _pendingText;
         VisualElement _pendingHide;
 
-        // 遅延は 2 件のスケジュール項目を使い回す（毎回 new するとホバーのたびにゴミが出る）
+        // The delays reuse 2 scheduled items (allocating new ones every hover would produce garbage)
         IVisualElementScheduledItem _showTimer;
         IVisualElementScheduledItem _hideTimer;
 
@@ -62,8 +62,8 @@ namespace Tweeq.UIToolkit
         #region Public API
 
         /// <summary>
-        /// context のパネルに紐づくインスタンスを取得する。無ければ作る。
-        /// パネル未接続なら null を返すので、呼び出し側で必ず判定すること。
+        /// Gets the instance tied to context's panel, creating one if none exists.
+        /// Returns null if not attached to a panel, so the caller must always check.
         /// </summary>
         public static TweeqTooltipRoot GetOrCreate(VisualElement context)
         {
@@ -91,8 +91,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// パネルが分からない状態（要素がデタッチ済みなど）でも、その要素のツールチップを確実に消す。
-        /// 生存しているルートは通常 1 個なので走査コストは無視できる。
+        /// Reliably closes the tooltip for an element even when its panel is unknown (e.g. already detached).
+        /// The number of live roots is normally 1, so the scan cost is negligible.
         /// </summary>
         public static void CloseAnyFor(VisualElement reference)
         {
@@ -107,7 +107,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>配色テーマ。null を渡した場合は Dark() にフォールバックする。</summary>
+        /// <summary>The color theme. Falls back to Dark() if null is passed.</summary>
         public TweeqTheme Theme
         {
             get => _theme;
@@ -120,8 +120,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// reference にツールチップを表示する。既に開いていれば遅延なしで乗り移り、
-        /// 閉じていれば <see cref="SHOW_DELAY_MS"/> だけ待つ。
+        /// Shows the tooltip at reference. If already open, transfers with no delay;
+        /// if closed, waits for <see cref="SHOW_DELAY_MS"/> first.
         /// </summary>
         public void Show(VisualElement reference, string text)
         {
@@ -147,7 +147,7 @@ namespace Tweeq.UIToolkit
             _showTimer?.ExecuteLater(SHOW_DELAY_MS);
         }
 
-        /// <summary>reference のツールチップを引っ込める（次フレームまで猶予を持つ）。</summary>
+        /// <summary>Retracts reference's tooltip (with a grace period until the next frame).</summary>
         public void Hide(VisualElement reference)
         {
             _showTimer?.Pause();
@@ -167,7 +167,7 @@ namespace Tweeq.UIToolkit
             EnsureTimers();
             if (_hideTimer == null)
             {
-                // scheduler が使えないなら猶予を諦めて即閉じる
+                // If the scheduler isn't available, give up the grace period and close immediately
                 HideNow();
                 return;
             }
@@ -175,7 +175,7 @@ namespace Tweeq.UIToolkit
             _hideTimer.ExecuteLater(HIDE_DELAY_MS);
         }
 
-        /// <summary>表示中の文言を差し替える（表示中でなければ何もしない）。</summary>
+        /// <summary>Replaces the displayed text (does nothing if not currently shown).</summary>
         public void SetText(VisualElement reference, string text)
         {
             if (reference == null || string.IsNullOrEmpty(text))
@@ -194,7 +194,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>reference が持っているツールチップを猶予なく閉じる（要素の破棄時など）。</summary>
+        /// <summary>Closes reference's tooltip with no grace period (e.g. when the element is destroyed).</summary>
         public void CloseNow(VisualElement reference)
         {
             if (_pendingShow == reference)
@@ -226,12 +226,12 @@ namespace Tweeq.UIToolkit
             {
                 name = "tweeq-tooltip",
 
-                // Escape や外側クリックで消えるとフォーカス操作の邪魔になるだけなので切る
+                // Dismissing on Escape or an outside click would only get in the way of focus operations, so turn it off
                 LightDismiss = false,
                 Placement = CorePlacement.Top,
                 Theme = _theme,
 
-                // ツールチップがポインタを奪うと、その下の要素が leave 扱いになって明滅する
+                // If the tooltip steals the pointer, the element beneath it gets treated as "leave" and flickers
                 pickingMode = PickingMode.Ignore,
             };
             _popover.Balloon.pickingMode = PickingMode.Ignore;
@@ -270,14 +270,14 @@ namespace Tweeq.UIToolkit
             _layer?.UnregisterCallback(_onLayerDetached);
             _layer = layer;
 
-            // 層が入れ替わったらスケジュール項目も無効になるので、次回に作り直させる
+            // When the layer is swapped, the scheduled items become invalid too, so let them be recreated next time
             _showTimer = null;
             _hideTimer = null;
 
             _layer?.RegisterCallback(_onLayerDetached);
         }
 
-        // 層が消えていたら取り直す。UI 側で root を組み替えた時に黙って死なないようにするため
+        // Reacquire the layer if it's gone, so this doesn't silently die when the UI side rewires its root
         void EnsureLayer(VisualElement context)
         {
             if (_layer != null && _layer.panel != null)
@@ -345,7 +345,7 @@ namespace Tweeq.UIToolkit
             SetLabelText(_pendingText);
             _reference = reference;
 
-            // 既に開いていれば Open はアンカーの差し替えとして働き、フェードはやり直さない
+            // If already open, Open acts as an anchor swap and doesn't redo the fade
             _popover.Open(reference);
         }
 
@@ -353,7 +353,7 @@ namespace Tweeq.UIToolkit
         {
             _hideTimer?.Pause();
 
-            // 猶予の間に別の要素へ乗り移っていたら、そちらのツールチップを巻き添えにしない
+            // If a transfer to a different element happened during the grace period, don't take that one's tooltip down with it
             if (_pendingHide != null && _reference != _pendingHide)
             {
                 _pendingHide = null;
@@ -365,7 +365,7 @@ namespace Tweeq.UIToolkit
             _popover.Close();
         }
 
-        // 同じ文字列なら Label 側のテキスト再生成を避ける
+        // Avoid regenerating the Label's text when the string is unchanged
         void SetLabelText(string text)
         {
             if (_label.text == text)

@@ -5,9 +5,11 @@ using UnityEngine;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// SizeInput の契約（m6-wave2-spec.md §C「SizeInput（比率ロック付き Vec2）」）。
-    /// 比率追従の基準点・自動解除・鎖トグルとの連動を見る。
-    /// 比率計算そのものは <c>SizeLogicTests</c>、描画とポインタ操作は Play Mode 側の担当。
+    /// The contract of SizeInput (m6-wave2-spec.md §C "SizeInput (Vec2 with ratio lock)").
+    /// Covers the baseline point for ratio following, automatic release, and coordination with
+    /// the chain toggle.
+    /// The ratio calculation itself is covered by <c>SizeLogicTests</c>; rendering and pointer
+    /// operation are the responsibility of the Play Mode side.
     /// </summary>
     public class SizeInputTests
     {
@@ -26,7 +28,7 @@ namespace Tweeq.UIToolkit.Tests
             Assert.AreEqual(expected.y, actual.y, EPSILON, "y");
         }
 
-        #region 既定
+        #region Defaults
 
         [Test]
         public void KeepRatio_DefaultsToOn()
@@ -48,7 +50,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region 比率追従
+        #region Ratio following
 
         [Test]
         public void Locked_WidthChangeScalesHeight()
@@ -74,7 +76,8 @@ namespace Tweeq.UIToolkit.Tests
         [Test]
         public void Locked_BaselineIsHeldForTheWholeGesture()
         {
-            // 1 ジェスチャの間は開始値が基準。直前値を基準にすると倍率が積み上がって比率がずれる
+            // The start value is the baseline for the duration of one gesture. Using the previous
+            // value as the baseline would stack up the multiplier and throw off the ratio
             SizeInput input = Create(new Vector2(100f, 50f));
 
             input.Field.value = new Vector2(200f, 100f);
@@ -92,7 +95,7 @@ namespace Tweeq.UIToolkit.Tests
             input.Field.value = new Vector2(200f, 50f);
             input.PerformFieldConfirm();
 
-            // 200x100 が新しい基準。ここから幅を倍にすれば高さも倍になる
+            // 200x100 is now the new baseline. Doubling the width from here also doubles the height
             input.Field.value = new Vector2(400f, 100f);
 
             AssertVector(new Vector2(400f, 200f), input.value);
@@ -122,7 +125,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region 自動解除
+        #region Automatic release
 
         [Test]
         public void Locked_BothAxesChangedWithNewRatioReleasesTheLock()
@@ -152,7 +155,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region 鎖トグル
+        #region Chain toggle
 
         [Test]
         public void Chain_ClickTogglesKeepRatio()
@@ -204,7 +207,7 @@ namespace Tweeq.UIToolkit.Tests
             input.Field.value = new Vector2(300f, 50f);
             input.KeepRatio = true;
 
-            // 300x50 が新しい基準。幅を倍にすれば高さも倍になる
+            // 300x50 is now the new baseline. Doubling the width also doubles the height
             input.Field.value = new Vector2(600f, 50f);
 
             AssertVector(new Vector2(600f, 100f), input.value);
@@ -212,7 +215,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region 通知
+        #region Notification
 
         [Test]
         public void Value_SetterNotifiesOnce()
@@ -231,7 +234,7 @@ namespace Tweeq.UIToolkit.Tests
         [Test]
         public void Value_SetterIsNotFilteredByKeepRatio()
         {
-            // プログラムからの代入は「ユーザーの片軸編集」ではないので比率追従に通さない
+            // A programmatic assignment is not a "user editing a single axis", so it does not go through ratio following
             SizeInput input = Create(new Vector2(100f, 50f));
 
             input.value = new Vector2(300f, 50f);
@@ -280,7 +283,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region グループ融合
+        #region Group fusion
 
         [Test]
         public void BoxFusion_JoinsBothAxesAndTheChain()

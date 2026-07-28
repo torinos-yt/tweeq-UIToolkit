@@ -3,15 +3,15 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 
-// クラス側に string Label プロパティがあるため、Label 型は別名で参照する
+// Because the class has a string Label property, the Label type is referenced under an alias here
 using UILabel = UnityEngine.UIElements.Label;
 
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// オン／オフを持つボタン（仕様 §4）。見た目は <see cref="ButtonInput"/> と同じだが値を持つ。
-    /// スワイプもキーショートカットも無く、クリック／Enter／Space のトグルだけ。
-    /// アイコンスロットは v1 スコープ外。
+    /// A button with an on/off value (spec §4). Looks the same as <see cref="ButtonInput"/> but holds a value.
+    /// No swipe or keyboard shortcuts — just click / Enter / Space toggling.
+    /// Icon slot is out of scope for v1.
     /// </summary>
     [UxmlElement]
     public partial class ButtonToggleInput
@@ -19,7 +19,7 @@ namespace Tweeq.UIToolkit
     {
         #region Constants
 
-        // Vue の padding 0 .7em を rem12 換算した実寸
+        // Actual size converting the Vue original's padding of 0 .7em using rem12
         const float LABEL_PADDING = 8.4f;
 
         const float DISABLED_OPACITY = 0.4f;
@@ -50,10 +50,10 @@ namespace Tweeq.UIToolkit
 
         #region Public API
 
-        /// <summary>クリック（Enter / Space 含む）ごとに ChangeEvent と対で発火する（仕様 §4）。</summary>
+        /// <summary>Fires alongside a ChangeEvent on every click (including Enter / Space) (spec §4).</summary>
         public event Action<bool> Confirmed;
 
-        /// <summary>オン／オフ。</summary>
+        /// <summary>On/off state.</summary>
         [UxmlAttribute]
         public bool value
         {
@@ -71,8 +71,8 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>ボタン内に表示する文字列。</summary>
-        // UXML 側は Vue の prop 名（text）に合わせる（ButtonInput と同じ判断）
+        /// <summary>Text displayed inside the button.</summary>
+        // On the UXML side, match the Vue original's prop name (text) — same decision as ButtonInput
         [UxmlAttribute("text")]
         public string Label
         {
@@ -90,7 +90,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>操作不能状態。</summary>
+        /// <summary>Disabled (non-interactive) state.</summary>
         [UxmlAttribute("disabled")]
         public bool Disabled
         {
@@ -109,7 +109,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>配色テーマ。null を渡した場合は Dark() にフォールバックする。</summary>
+        /// <summary>Color theme. Falls back to Dark() if null is passed.</summary>
         public TweeqTheme Theme
         {
             get => _theme;
@@ -121,7 +121,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>横方向グループでの位置。</summary>
+        /// <summary>Position within a horizontal group.</summary>
         public TweeqBoxPosition InlinePosition
         {
             get => _inlinePosition;
@@ -137,7 +137,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>縦方向グループでの位置。</summary>
+        /// <summary>Position within a vertical group.</summary>
         public TweeqBoxPosition BlockPosition
         {
             get => _blockPosition;
@@ -153,7 +153,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>ChangeEvent を発火せずに値を設定する。</summary>
+        /// <summary>Sets the value without firing a ChangeEvent.</summary>
         public void SetValueWithoutNotify(bool newValue)
         {
             _value = newValue;
@@ -161,8 +161,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// プログラムからのクリック。値を反転し ChangeEvent と Confirmed を対で出す。
-        /// Disabled のときは何もしない。パネル非依存なのでテストからの発火にも使える。
+        /// Programmatic click. Inverts the value and emits ChangeEvent and Confirmed together.
+        /// Does nothing when Disabled. Panel-independent, so it can also be invoked from tests.
         /// </summary>
         public void PerformClick()
         {
@@ -190,7 +190,7 @@ namespace Tweeq.UIToolkit
             this.style.justifyContent = Justify.Center;
             this.style.flexShrink = 0f;
 
-            // 外周フォーカスリングを 1px 外に置くので、ここを Hidden にしてはいけない
+            // The outer focus ring sits 1px outside, so this must not be set to Hidden
             this.style.overflow = Overflow.Visible;
 
             _label = new UILabel(string.Empty) { pickingMode = PickingMode.Ignore };
@@ -259,8 +259,8 @@ namespace Tweeq.UIToolkit
             this.style.minWidth = _theme.InputHeight;
             ApplyCornerRadius();
 
-            // 仕様 §4: Checkbox の 64ms ではなく hover 系 0.15s（Vue 準拠）。
-            // cubic-bezier(0.4,0,0.2,1) は UI Toolkit に無いので EaseInOutCubic で近似する
+            // Spec §4: unlike Checkbox's 64ms, this uses the hover-family 0.15s (matching the Vue original).
+            // UI Toolkit has no cubic-bezier(0.4,0,0.2,1), so EaseInOutCubic is used as an approximation
             ApplyTransition(
                 this,
                 _theme.HoverTransitionDuration,
@@ -297,7 +297,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        // 仕様 §1 の角丸表。両軸の指定は OR で合成する（片方でも「潰す」なら潰す）
+        // Corner-radius table from spec §1. The two axes' settings are combined with OR (if either says "flatten," it flattens)
         void ApplyCornerRadius()
         {
             float radius = _theme != null ? _theme.InputRadius : 0f;
@@ -350,7 +350,7 @@ namespace Tweeq.UIToolkit
             SetCornerRadius(this, radius, topLeft, topRight, bottomLeft, bottomRight);
             SetCornerRadius(_focusInner, radius, topLeft, topRight, bottomLeft, bottomRight);
 
-            // 外側リングは 1px 外に居るので、同じ見え方になるよう半径も 1px 太らせる
+            // The outer ring sits 1px outside, so its radius is also widened by 1px to keep the same appearance
             SetCornerRadius(
                 _focusOuter,
                 radius + FOCUS_RING_WIDTH,
@@ -385,7 +385,7 @@ namespace Tweeq.UIToolkit
             {
                 background = hovered ? _theme.InputHover : _theme.Input;
 
-                // 未チェックは面色が淡いので、Vue どおり通常の Text 色を使う
+                // Unchecked fill color is pale, so use the normal Text color, matching the Vue original
                 text = _theme.Text;
             }
 
@@ -394,7 +394,7 @@ namespace Tweeq.UIToolkit
 
             bool ringVisible = _focused && !_disabled;
 
-            // 仕様 §4: 未チェック=外周のみ / チェック=内側 Input + 外周 Accent
+            // Spec §4: unchecked = outer ring only / checked = inner Input + outer Accent
             _focusInner.style.display = ringVisible && _value
                 ? DisplayStyle.Flex
                 : DisplayStyle.None;
@@ -456,7 +456,7 @@ namespace Tweeq.UIToolkit
             Vector3 position = evt.position;
             bool inside = this.ContainsPoint(this.WorldToLocal(new Vector2(position.x, position.y)));
 
-            // ポインタで得たフォーカスは離した時点で返す（Vue の @mousedown.prevent と同じ意図）
+            // Focus gained via pointer is released the moment the pointer is released (same intent as the Vue original's @mousedown.prevent)
             if (_focused)
             {
                 this.Blur();

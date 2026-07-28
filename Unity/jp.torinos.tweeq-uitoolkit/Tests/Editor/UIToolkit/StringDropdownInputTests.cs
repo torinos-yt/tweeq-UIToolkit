@@ -3,9 +3,10 @@ using NUnit.Framework;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// StringDropdownInput（UXML 用の string 特化ラッパ）の契約。
-    /// 開閉やフィルタは基底 DropdownInput 側のテストが見るので、ここでは
-    /// UXML 属性の土台になるカンマ区切りの分解・合成と、基底との接続だけを見る。
+    /// The contract of StringDropdownInput (a string-specialized wrapper for UXML use).
+    /// Opening/closing and filtering are covered by the base DropdownInput's own tests, so here
+    /// we only cover the comma-separated split/join that underlies the UXML attribute, and the
+    /// connection to the base class.
     /// </summary>
     public class StringDropdownInputTests
     {
@@ -19,7 +20,7 @@ namespace Tweeq.UIToolkit.Tests
             Assert.AreEqual(3, options.Length);
             Assert.AreEqual("Linear", options[0]);
 
-            // 要素内の空白は残す（"Ease In" は 1 つの選択肢）
+            // Whitespace inside an element is preserved ("Ease In" is a single option)
             Assert.AreEqual("Ease In", options[1]);
             Assert.AreEqual("Ease Out", options[2]);
         }
@@ -58,7 +59,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region 基底との接続
+        #region Connection to the base class
 
         [Test]
         public void Base_OptionsConstructorFillsTheDropdown()

@@ -5,14 +5,15 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// DropdownInput の開閉状態機械（popover-spec.md「テスト契約」の DropdownInput 項目）を検証する。
+    /// Verifies DropdownInput's open/close state machine (the DropdownInput entry of popover-spec.md's "test contract").
     ///
-    /// DropdownInput は Open/Close/Commit/Cancel/MoveSelection/PerformPointerUp を panel 非依存の
-    /// 論理層として持ち、ポップアップの表示だけを panel 付きで乗せる。したがってキーボードと
-    /// 500ms ルールはここで完結する。以下は panel と描画が要るので Play Mode 側の担当:
-    /// - フィールド押下 → 開く / option ホバーで値がプレビューされる
-    /// - macOS 風配置（選択中 option がフィールドに重なる）とスクロール矢印・オートスクロール
-    /// - 外側クリックで「valueAtStart へロールバックして閉じる」（Cancel と同じ経路）
+    /// DropdownInput holds Open/Close/Commit/Cancel/MoveSelection/PerformPointerUp as a panel-independent
+    /// logical layer, and only overlays the popup display with a panel. So the keyboard and
+    /// 500ms rule are fully covered here. The following need a panel and rendering, so they are
+    /// handled on the Play Mode side:
+    /// - Pressing the field opens it / hovering an option previews the value
+    /// - macOS-style placement (the currently selected option overlaps the field) and scroll arrows / auto-scroll
+    /// - Clicking outside "rolls back to valueAtStart and closes" (the same path as Cancel)
     /// </summary>
     public class DropdownInputTests
     {
@@ -240,7 +241,7 @@ namespace Tweeq.UIToolkit.Tests
             dropdown.MoveSelection(1);
             dropdown.Cancel();
 
-            // 進めた分と戻した分の 2 回。途中で通知した値を巻き戻すので戻しも通知する
+            // Two notifications: the advance and the rollback. The value notified midway is rolled back, so the rollback is notified too
             Assert.AreEqual(new[] { "Ease In", "Linear" }, changed.ToArray());
             Assert.AreEqual(0, confirmed);
         }
@@ -287,7 +288,7 @@ namespace Tweeq.UIToolkit.Tests
             now += 400;
             dropdown.PerformPointerUp();
 
-            // 押しっぱなしドラッグ選択の途中なので開いたまま
+            // Still open because this is mid press-and-hold drag selection
             Assert.IsTrue(dropdown.IsOpen);
             Assert.AreEqual(0, confirmed);
         }
@@ -412,13 +413,13 @@ namespace Tweeq.UIToolkit.Tests
                 },
             };
 
-            // options 外の値（初期値 0）の表示フォールバックも labelizer を通るため、
-            // 絶対回数ではなく「options 内の値移動でキャッシュヒットすること」を検証する
+            // The display fallback for a value outside options (the initial value 0) also goes through the labelizer,
+            // so this verifies "moving among values within options hits the cache", not the absolute call count
             dropdown.Options = new[] { 1, 2, 3 };
             dropdown.SetValueWithoutNotify(1);
             int afterBuild = calls;
 
-            // 値を動かしてもラベルは作り直さない（キャッシュ参照のみ）
+            // Moving the value does not rebuild the label (cache reference only)
             dropdown.SetValueWithoutNotify(2);
             dropdown.SetValueWithoutNotify(3);
 
@@ -504,7 +505,7 @@ namespace Tweeq.UIToolkit.Tests
 
             dropdown.Options = new[] { "Ease In" };
 
-            // 勝手に値を動かして通知しない（消えた値の扱いは呼び出し側の責務）
+            // Does not move the value on its own and notify (handling a disappeared value is the caller's responsibility)
             Assert.AreEqual("Linear", dropdown.value);
             Assert.AreEqual(0, changed);
         }
@@ -566,7 +567,7 @@ namespace Tweeq.UIToolkit.Tests
             Assert.IsTrue(dropdown.IsFiltering);
             Assert.AreEqual("ease", dropdown.FilterQuery);
 
-            // "Linear" は "ease" のサブシーケンスを含まない
+            // "Linear" does not contain "ease" as a subsequence
             Assert.AreEqual(2, dropdown.VisibleCount);
         }
 
@@ -601,7 +602,7 @@ namespace Tweeq.UIToolkit.Tests
 
             dropdown.BeginFilter("out");
 
-            // 絞り込みが値を動かしても Escape の戻り先は打鍵前のまま
+            // Even if filtering moves the value, Escape still rolls back to before the keystrokes
             Assert.AreEqual("Linear", dropdown.ValueAtStart);
         }
 
@@ -616,7 +617,7 @@ namespace Tweeq.UIToolkit.Tests
             dropdown.MoveSelection(1);
             Assert.AreEqual("Ease Out", dropdown.value);
 
-            // 絞り込みの外にある "Linear" を踏まずに先頭へ戻る
+            // Wraps back to the first item without touching "Linear", which is outside the filtered results
             dropdown.MoveSelection(1);
             Assert.AreEqual("Ease In", dropdown.value);
 
@@ -687,7 +688,7 @@ namespace Tweeq.UIToolkit.Tests
             dropdown.BeginFilter("ease");
             dropdown.SetFilterQuery(string.Empty);
 
-            // 空文字はフィルタ解除ではなく「絞り込み無し」。モードは続く
+            // An empty string is "no filter applied", not clearing the filter. Filtering mode continues
             Assert.IsTrue(dropdown.IsFiltering);
             Assert.AreEqual(3, dropdown.VisibleCount);
             Assert.AreEqual(0, dropdown.OptionIndexAt(0));
@@ -734,7 +735,7 @@ namespace Tweeq.UIToolkit.Tests
             Assert.AreEqual("Linear", dropdown.value);
             Assert.AreEqual(0, changed);
 
-            // 候補が無い状態の ↑↓ は何も起こさない
+            // Up/down with no candidates does nothing
             Assert.DoesNotThrow(() => dropdown.MoveSelection(1));
             Assert.AreEqual("Linear", dropdown.value);
         }
@@ -782,7 +783,7 @@ namespace Tweeq.UIToolkit.Tests
 
             dropdown.EndFilter();
 
-            // 解除と開閉は別責務（閉じるのは Close / Commit / Cancel）
+            // Clearing the filter and opening/closing are separate responsibilities (closing is done by Close / Commit / Cancel)
             Assert.IsTrue(dropdown.IsOpen);
             Assert.IsFalse(dropdown.IsFiltering);
             Assert.AreEqual(3, dropdown.VisibleCount);
@@ -797,7 +798,7 @@ namespace Tweeq.UIToolkit.Tests
 
             dropdown.BeginFilter("out");
 
-            // 既に開いているので valueAtStart は Open のときのまま
+            // Already open, so valueAtStart stays as it was when Open ran
             Assert.AreEqual("Linear", dropdown.ValueAtStart);
             Assert.AreEqual("Ease Out", dropdown.value);
         }
@@ -950,8 +951,8 @@ namespace Tweeq.UIToolkit.Tests
 
         #region Invalid
 
-        // Vue は表示を内部 InputString へ委譲しているので invalid も持つ（m7-disabled-invalid-spec.md）。
-        // こちらは委譲先が無いため、StringInput.ShowInvalid と同じ「文字色だけ Error」を自前で掛ける
+        // The Vue original delegates its display to an internal InputString, so it also has invalid (m7-disabled-invalid-spec.md).
+        // This port has no such delegate, so it applies the same "text color only turns Error" as StringInput.ShowInvalid on its own
         [Test]
         public void Invalid_TurnsTheFieldLabelIntoErrorColor()
         {
@@ -982,7 +983,7 @@ namespace Tweeq.UIToolkit.Tests
             DropdownInput<string> dropdown = Create();
             dropdown.Invalid = true;
 
-            // フィルタ用 TextField は初回の絞り込みで初めて作られるので、後追いでも色が乗ること
+            // The filter's TextField is only created on the first filtering pass, so the color must still apply after the fact
             dropdown.BeginFilter("ea");
 
             TextField filter = dropdown.Q<TextField>("tweeq-dropdown-filter");
@@ -999,7 +1000,7 @@ namespace Tweeq.UIToolkit.Tests
             dropdown.Invalid = true;
             dropdown.Disabled = true;
 
-            // 無効なフィールドの赤字は「操作できる不正値」と読み違えられるので dim を優先する
+            // Red text on a disabled field could be misread as "an invalid value you can still act on", so dim takes priority
             Assert.AreEqual(dropdown.Theme.TextSubtle, label.style.color.value);
         }
 

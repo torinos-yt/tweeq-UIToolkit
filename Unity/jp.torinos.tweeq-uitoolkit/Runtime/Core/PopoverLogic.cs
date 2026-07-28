@@ -2,7 +2,7 @@ namespace Tweeq.Core
 {
     #region Data
 
-    /// <summary>アンカーに対する希望配置。`Start`/`End` はクロス軸の寄せ、無印はセンタリング。</summary>
+    /// <summary>Desired placement relative to the anchor. `Start`/`End` align along the cross axis; no suffix means centering.</summary>
     public enum PopoverPlacement
     {
         Top, TopStart, TopEnd,
@@ -12,7 +12,7 @@ namespace Tweeq.Core
     }
 
     /// <summary>
-    /// Core は noEngineReferences なので UnityEngine.Vector2 が使えない。描画境界で float 化する前提の double 版。
+    /// Core is noEngineReferences, so UnityEngine.Vector2 isn't available. A double version, with the assumption that it becomes float at the rendering boundary.
     /// </summary>
     public readonly struct TweeqVec2
     {
@@ -27,7 +27,7 @@ namespace Tweeq.Core
     }
 
     /// <summary>
-    /// UnityEngine.Rect の double 版。UI Toolkit と同じく「左上原点・Y 下向き」で扱う。
+    /// A double version of UnityEngine.Rect. Handled as "top-left origin, Y pointing down", same as UI Toolkit.
     /// </summary>
     public readonly struct TweeqRect
     {
@@ -56,29 +56,29 @@ namespace Tweeq.Core
 
         public double CenterY => Y + Height * 0.5;
 
-        /// <summary>worldBound のような「4 辺」表現からの変換用。</summary>
+        /// <summary>For converting from a "four edges" representation like worldBound.</summary>
         public static TweeqRect FromEdges(double left, double top, double right, double bottom)
         {
             return new TweeqRect(left, top, right - left, bottom - top);
         }
     }
 
-    /// <summary>配置計算の結果。座標はすべて panel（ルート）座標系。</summary>
+    /// <summary>Result of the placement computation. All coordinates are in panel (root) space.</summary>
     public readonly struct PopoverResult
     {
-        /// <summary>popover 左上の X。</summary>
+        /// <summary>X of the popover's top-left corner.</summary>
         public readonly double X;
 
-        /// <summary>popover 左上の Y。</summary>
+        /// <summary>Y of the popover's top-left corner.</summary>
         public readonly double Y;
 
-        /// <summary>flip 後の実効 placement。</summary>
+        /// <summary>Effective placement after flipping.</summary>
         public readonly PopoverPlacement Effective;
 
-        /// <summary>矢印が付く辺。0=Top 1=Bottom 2=Left 3=Right（<see cref="PopoverLogic.ARROW_SIDE_TOP"/> 等）。</summary>
+        /// <summary>The edge the arrow is attached to. 0=Top 1=Bottom 2=Left 3=Right (see <see cref="PopoverLogic.ARROW_SIDE_TOP"/> etc.).</summary>
         public readonly int ArrowSide;
 
-        /// <summary>辺に沿った矢印中心位置（popover 左上からの距離）。</summary>
+        /// <summary>Arrow's center position along the edge (distance from the popover's top-left corner).</summary>
         public readonly double ArrowOffset;
 
         public PopoverResult(double x, double y, PopoverPlacement effective, int arrowSide, double arrowOffset)
@@ -94,14 +94,14 @@ namespace Tweeq.Core
     #endregion
 
     /// <summary>
-    /// アンカー配置 + 画面端回避（flip / shift）+ 矢印方向の純関数。UnityEngine 非依存・すべて double。
-    /// Vue 原典が CSS Anchor Positioning に任せている部分を手計算で再現する。
+    /// Pure function for anchor placement + edge-of-screen avoidance (flip / shift) + arrow direction. No UnityEngine dependency; all double.
+    /// Reproduces by hand what the Vue original leaves to CSS Anchor Positioning.
     /// </summary>
     public static class PopoverLogic
     {
         #region Constants
 
-        /// <summary>viewport 端に確保する余白（Popover.vue の VIEWPORT_MARGIN）。</summary>
+        /// <summary>Margin reserved at the viewport edge (Popover.vue's VIEWPORT_MARGIN).</summary>
         public const double DEFAULT_VIEWPORT_MARGIN = 8.0;
 
         public const int ARROW_SIDE_TOP = 0;
@@ -109,15 +109,15 @@ namespace Tweeq.Core
         public const int ARROW_SIDE_LEFT = 2;
         public const int ARROW_SIDE_RIGHT = 3;
 
-        // ArrowOffset のクランプ域を決めるためだけに Core にも持つ。TweeqBalloon 側と必ず同じ値にすること
-        // （ズレると矢印が角丸に食い込む）。
+        // Kept in Core purely to determine ArrowOffset's clamp range. Must always match the value on the TweeqBalloon side
+        // (a mismatch would make the arrow dig into the rounded corner).
         public const double ARROW_WIDTH = 14.0;
         public const double CORNER_RADIUS = 13.0;
 
-        // 「ちょうど端に接する」候補を丸め誤差で不合格にしないための許容差。
+        // Tolerance so that a candidate that "exactly touches the edge" isn't rejected due to rounding error.
         const double FIT_EPSILON = 1e-6;
 
-        // 内部の side 表現は ARROW_SIDE_* と同じ番号を使い回す（対辺の導出が引き算 1 本で済む）。
+        // The internal side representation reuses the same numbers as ARROW_SIDE_* (deriving the opposite edge is then a single subtraction).
         const int SIDE_TOP = 0;
         const int SIDE_BOTTOM = 1;
         const int SIDE_LEFT = 2;
@@ -132,8 +132,8 @@ namespace Tweeq.Core
         #region Public API
 
         /// <summary>
-        /// 希望 placement から popover 左上座標・実効 placement・矢印を求める。
-        /// 手順は 1) 基本配置 2) flip（CSS position-try-fallbacks 相当）3) shift + クランプ 4) 矢印。
+        /// Computes the popover's top-left coordinate, effective placement, and arrow from the desired placement.
+        /// Steps: 1) base placement 2) flip (equivalent to CSS position-try-fallbacks) 3) shift + clamp 4) arrow.
         /// </summary>
         public static PopoverResult Resolve(
             TweeqRect anchor, TweeqVec2 size, TweeqVec2 viewport,
@@ -146,8 +146,8 @@ namespace Tweeq.Core
 
             if (!Fits(position, size, viewport, viewportMargin))
             {
-                // CSS の position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline と同じ順序・
-                // 「最初に収まった候補を採る」規則。どれも収まらなければ元の placement のまま次段のクランプに委ねる。
+                // Same order as CSS's position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline, and the
+                // "take the first candidate that fits" rule. If none fit, the original placement is kept and left to the next-stage clamp.
                 PopoverPlacement blockFlipped = FlipBlock(placement);
                 PopoverPlacement inlineFlipped = FlipInline(placement);
                 PopoverPlacement bothFlipped = FlipInline(blockFlipped);
@@ -172,8 +172,9 @@ namespace Tweeq.Core
                 }
             }
 
-            // Vue 原典はクロス軸だけを shift するが、flip が全滅した時にメイン軸が画面外に残るので両軸に同じ式を適用する。
-            // 端が両方はみ出す（popover が viewport より大きい）場合は開始側の端を優先するのも原典と同じ。
+            // The Vue original shifts only the cross axis, but when every flip fails the main axis is left off-screen,
+            // so the same formula is applied to both axes. Preferring the start-side edge when both edges overflow
+            // (the popover is bigger than the viewport) also matches the original.
             double x = ShiftIntoViewport(position.X, size.X, viewport.X, viewportMargin);
             double y = ShiftIntoViewport(position.Y, size.Y, viewport.Y, viewportMargin);
 
@@ -195,7 +196,7 @@ namespace Tweeq.Core
             return Fits(position, size, viewport, viewportMargin);
         }
 
-        /// <summary>flip 前の素の配置。メイン軸は anchor の対辺 + offsetMain、クロス軸は align に従う。</summary>
+        /// <summary>Raw placement before flipping. The main axis is the anchor's opposite edge + offsetMain; the cross axis follows align.</summary>
         static TweeqVec2 Place(
             TweeqRect anchor, TweeqVec2 size, PopoverPlacement placement, double offsetMain, double offsetCross)
         {
@@ -232,7 +233,7 @@ namespace Tweeq.Core
 
             if (align == ALIGN_END)
             {
-                // CSS では end 側の辺を anchor の end 辺に留めるので、offsetCross は内側（開始方向）へ効く。
+                // In CSS the end-side edge is pinned to the anchor's end edge, so offsetCross acts inward (toward the start direction).
                 return anchorMax - size - offsetCross;
             }
 
@@ -240,8 +241,8 @@ namespace Tweeq.Core
         }
 
         /// <summary>
-        /// 「収まる」は viewportMargin 込みで判定する。margin ぶんの shift が要らない候補だけを合格にしないと、
-        /// flip 直後にさらに shift が走って矢印が anchor から離れてしまう。
+        /// "Fits" is judged inclusive of viewportMargin. Unless only candidates that need no margin-worth of shift are allowed to pass,
+        /// a further shift would run right after the flip and pull the arrow away from the anchor.
         /// </summary>
         static bool Fits(TweeqVec2 position, TweeqVec2 size, TweeqVec2 viewport, double viewportMargin)
         {
@@ -265,7 +266,7 @@ namespace Tweeq.Core
 
         #region Flip
 
-        /// <summary>ブロック軸（縦書きでない前提で上下）の反転。左右配置ではクロス軸なので start/end が入れ替わる。</summary>
+        /// <summary>Flips the block axis (top/bottom, assuming non-vertical writing mode). For left/right placements this is the cross axis, so start/end swap.</summary>
         static PopoverPlacement FlipBlock(PopoverPlacement placement)
         {
             switch (placement)
@@ -280,12 +281,12 @@ namespace Tweeq.Core
                 case PopoverPlacement.LeftEnd: return PopoverPlacement.LeftStart;
                 case PopoverPlacement.RightStart: return PopoverPlacement.RightEnd;
                 case PopoverPlacement.RightEnd: return PopoverPlacement.RightStart;
-                // Left / Right（センタリング）はブロック軸に非対称性が無いので不変。
+                // Left / Right (centered) have no asymmetry along the block axis, so they're unchanged.
                 default: return placement;
             }
         }
 
-        /// <summary>インライン軸（左右）の反転。上下配置ではクロス軸なので start/end が入れ替わる。</summary>
+        /// <summary>Flips the inline axis (left/right). For top/bottom placements this is the cross axis, so start/end swap.</summary>
         static PopoverPlacement FlipInline(PopoverPlacement placement)
         {
             switch (placement)
@@ -309,12 +310,12 @@ namespace Tweeq.Core
         #region Arrow
 
         /// <summary>
-        /// 矢印は「実際に landed した位置」から導く（flip に自動追従させるため）。
-        /// anchor と重なっていてどの辺とも判定できない時だけ、希望 placement の対辺へフォールバックする。
+        /// The arrow is derived from the actually landed position (so it automatically follows flips).
+        /// Falls back to the opposite side of the requested placement only when it overlaps the anchor and no edge can be determined.
         /// </summary>
         static int ResolveArrowSide(TweeqRect anchor, double x, double y, TweeqVec2 size, PopoverPlacement requested)
         {
-            // ±1px は「辺がぴったり接する」ケースを取りこぼさないための許容（React core と同値）。
+            // ±1px tolerance so a side that exactly touches isn't missed (matches the value used by another reference implementation).
             if (y >= anchor.Bottom - 1.0)
             {
                 return ARROW_SIDE_TOP;
@@ -330,14 +331,15 @@ namespace Tweeq.Core
                 return ARROW_SIDE_LEFT;
             }
 
-            // React core にはこの分岐が無く「anchor の左側」も暗黙にフォールバックへ落ちるが、
-            // それだと Left 配置で矢印が逆側に付く。網羅性のため明示する。
+            // Another reference implementation lacks this branch and implicitly falls through to the fallback
+            // for "the anchor's left side" too, but that would attach the arrow to the wrong side for a Left placement.
+            // Made explicit here for completeness.
             if (x + size.X <= anchor.Left + 1.0)
             {
                 return ARROW_SIDE_RIGHT;
             }
 
-            // Vue 原典の `else arrow = 'right'` は網羅性を欠くので不採用（porting-notes の逸脱記録どおり）。
+            // The Vue original's `else arrow = 'right'` lacks completeness, so it's not adopted here (as recorded in the porting-notes deviation log).
             switch (SideOf(requested))
             {
                 case SIDE_BOTTOM: return ARROW_SIDE_TOP;
@@ -353,11 +355,11 @@ namespace Tweeq.Core
             double center = horizontal ? anchor.CenterX - x : anchor.CenterY - y;
             double edge = horizontal ? size.X : size.Y;
 
-            // 角丸に食い込むと輪郭が破綻するので、矢印の底辺半分ぶんだけ内側に寄せた範囲へ収める。
+            // Digging into the rounded corner would break the outline, so the range is kept inset by half the arrow's base width.
             double limit = CORNER_RADIUS + ARROW_WIDTH * 0.5;
             if (edge <= limit * 2.0)
             {
-                // 辺が短すぎてクランプ域が反転する場合は中央固定（Balloon 側の r = min(radius, w/2, h/2) と同じ発想）。
+                // When the edge is too short and the clamp range would invert, fix it to the center (same idea as the Balloon side's r = min(radius, w/2, h/2)).
                 return edge * 0.5;
             }
 

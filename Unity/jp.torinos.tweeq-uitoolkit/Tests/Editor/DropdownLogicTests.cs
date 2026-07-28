@@ -7,7 +7,7 @@ namespace Tweeq.Core.Tests
     {
         const double TOLERANCE = 1e-9;
 
-        // theme.inputHeight = 24 / SELECT_CHROME = 2 / options 5 件
+        // theme.inputHeight = 24 / SELECT_CHROME = 2 / 5 options
         const double ITEM_HEIGHT = 24.0;
         const double LIST_HEIGHT = 5.0 * ITEM_HEIGHT + 2.0 * 2.0;
         const double VIEWPORT_HEIGHT = 800.0;
@@ -40,7 +40,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void NegativeIndexIsTreatedAsFirstOption()
         {
-            // 現在値が options に無い（indexOf = -1）ケース
+            // The case where the current value isn't in options (indexOf = -1)
             Assert.That(Top(300.0, -1), Is.EqualTo(Top(300.0, 0)).Within(TOLERANCE));
         }
 
@@ -64,10 +64,10 @@ namespace Tweeq.Core.Tests
         {
             const double tallList = 2000.0;
 
-            // 収まらないリストは下端まで伸びる前提なので、maxTop は「1 行ぶん」まで下げてよい
+            // Since a list that doesn't fit is assumed to extend to the bottom edge, maxTop may be lowered as far as "one row's worth"
             Assert.That(Top(780.0, 0, tallList),
                 Is.EqualTo(VIEWPORT_HEIGHT - MARGIN - ITEM_HEIGHT).Within(TOLERANCE));
-            // 選択が下の方なら理想値どおり上へ抜け、margin で止まる
+            // If the selection is further down, it goes up as far as the ideal value and stops at margin
             Assert.That(Top(400.0, 30, tallList), Is.EqualTo(MARGIN).Within(TOLERANCE));
             Assert.That(Top(400.0, 0, tallList), Is.EqualTo(396.0).Within(TOLERANCE));
         }
@@ -75,17 +75,17 @@ namespace Tweeq.Core.Tests
         [Test]
         public void UnmeasuredListIsTreatedAsOversized()
         {
-            // 実測前は下端クランプを厳しい側（1 行ぶん）に倒す
+            // Before measurement, the bottom-edge clamp is tilted toward the stricter side (one row's worth)
             Assert.That(Top(780.0, 0, 0.0),
                 Is.EqualTo(VIEWPORT_HEIGHT - MARGIN - ITEM_HEIGHT).Within(TOLERANCE));
-            // 理想値が十分に上ならそのまま
+            // If the ideal value is sufficiently high, it's used as-is
             Assert.That(Top(300.0, 2, 0.0), Is.EqualTo(248.0).Within(TOLERANCE));
         }
 
         [Test]
         public void MarginWinsWhenTheViewportIsShorterThanTheList()
         {
-            // maxTop が margin を下回る極端なケースでも上端の余白を守る（負の top を返さない）
+            // Preserves the top margin even in the extreme case where maxTop falls below margin (never returns a negative top)
             Assert.That(Top(10.0, 0, LIST_HEIGHT, 20.0), Is.EqualTo(MARGIN).Within(TOLERANCE));
         }
 
@@ -98,7 +98,7 @@ namespace Tweeq.Core.Tests
                     .Within(TOLERANCE));
             Assert.That(DropdownLogic.DEFAULT_VIEWPORT_MARGIN, Is.EqualTo(6.0));
             Assert.That(DropdownLogic.DEFAULT_SELECT_CHROME, Is.EqualTo(2.0));
-            // chrome を厚くすると理想値がその分だけ上がる
+            // Making chrome thicker raises the ideal value by that same amount
             Assert.That(
                 DropdownLogic.GetDropdownTop(300.0, 2, ITEM_HEIGHT, VIEWPORT_HEIGHT, MARGIN, 10.0, LIST_HEIGHT),
                 Is.EqualTo(240.0).Within(TOLERANCE));
@@ -126,7 +126,7 @@ namespace Tweeq.Core.Tests
             double top = Top(400.0, 30, tallList);
             double maxHeight = DropdownLogic.GetDropdownMaxHeight(top, tallList, VIEWPORT_HEIGHT);
 
-            // 上下 margin 6px を除いた全高まで伸び、残りは内部スクロールで見せる
+            // Extends to the full height minus the top/bottom 6px margin; the rest is shown via internal scrolling
             Assert.That(maxHeight, Is.EqualTo(788.0).Within(TOLERANCE));
             Assert.That(tallList - maxHeight, Is.EqualTo(1212.0).Within(TOLERANCE));
         }

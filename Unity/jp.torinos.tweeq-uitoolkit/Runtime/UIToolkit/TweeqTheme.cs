@@ -4,53 +4,55 @@ using UnityEngine.UIElements;
 
 namespace Tweeq.UIToolkit
 {
-    /// <summary>外観モード。</summary>
+    /// <summary>Appearance mode.</summary>
     public enum ColorMode
     {
-        /// <summary>明るい面 + 暗い文字。</summary>
+        /// <summary>Light surfaces + dark text.</summary>
         Light,
 
-        /// <summary>暗い面 + 明るい文字。</summary>
+        /// <summary>Dark surfaces + light text.</summary>
         Dark,
     }
 
     /// <summary>
-    /// Tweeq ウィジェット共通のセマンティックカラー／メトリクス。
+    /// Semantic colors / metrics shared across Tweeq widgets.
     /// </summary>
     /// <remarks>
-    /// 色トークンは「外観・背景・アクセント・グレー」の 4 入力から <see cref="RadixThemeEngine"/>
-    /// で生成する（Vue 版 stores/theme.ts と同じ写像）。個々のトークンを直接書き換えることもできるが、
-    /// <see cref="WithAccent"/> などを通すと 4 入力から一括で作り直される。
-    /// 数値メトリクス（余白・角丸・時間）は生成対象ではないので、複製しても保たれる。
+    /// Color tokens are generated from 4 inputs — appearance, background, accent, and gray — via
+    /// <see cref="RadixThemeEngine"/> (the same mapping as the Vue original's stores/theme.ts).
+    /// Individual tokens can also be overwritten directly, but going through <see cref="WithAccent"/>
+    /// and similar methods regenerates all of them from the 4 inputs at once.
+    /// Numeric metrics (padding, radius, duration) are not part of that generation, so they are
+    /// preserved across copies.
     /// </remarks>
     public class TweeqTheme
     {
         #region Constants
 
-        /// <summary>Vue 版ストアと同じ既定アクセント。</summary>
+        /// <summary>Same default accent as the Vue original's store.</summary>
         public static readonly Color DEFAULT_ACCENT = Rgb(0x00, 0x00, 0xFF);
 
-        /// <summary>Vue 版ストアと同じ既定グレー（Radix slate 寄りのニュートラル）。</summary>
+        /// <summary>Same default gray as the Vue original's store (a neutral leaning toward Radix slate).</summary>
         public static readonly Color DEFAULT_GRAY = Rgb(0x8B, 0x8D, 0x98);
 
-        /// <summary>ライトの既定背景。</summary>
+        /// <summary>Default light background.</summary>
         public static readonly Color DEFAULT_LIGHT_BACKGROUND = Rgb(0xFF, 0xFF, 0xFF);
 
-        /// <summary>ダークの既定背景。</summary>
+        /// <summary>Default dark background.</summary>
         public static readonly Color DEFAULT_DARK_BACKGROUND = Rgb(0x11, 0x11, 0x11);
 
-        // Vue: colorSurface は grayScale[0] を 80% 不透明で敷いたもの（背景が透けるパネル面）
+        // Vue: colorSurface is grayScale[0] laid down at 80% opacity (a panel surface that lets the background show through)
         const float SURFACE_ALPHA = 0.8f;
 
-        // Vue: ライトの colorShadow は grayScale[11] の 20%。ダークは #000000aa 固定
+        // Vue: light's colorShadow is grayScale[11] at 20%. Dark is fixed at #000000aa
         const float LIGHT_SHADOW_ALPHA = 0.2f;
 
         #endregion
 
         #region Seeds
 
-        // 色トークンの生成元。Radix スケールは 4 入力すべてに依存するので、
-        // With* で 1 つ差し替えたら必ず全トークンを作り直す
+        // The generation source for the color tokens. The Radix scale depends on all 4 inputs, so
+        // swapping just one via a With* method always regenerates every token
         ColorMode _mode = ColorMode.Dark;
 
         Color _backgroundSeed = DEFAULT_DARK_BACKGROUND;
@@ -59,19 +61,19 @@ namespace Tweeq.UIToolkit
 
         Color _graySeed = DEFAULT_GRAY;
 
-        /// <summary>アクセントのシード色（生成元。<see cref="Accent"/> は Radix step9 の結果）。</summary>
+        /// <summary>The accent seed color (the generation source; <see cref="Accent"/> is the resulting Radix step9).</summary>
         public Color AccentSeed
         {
             get { return _accentSeed; }
         }
 
-        /// <summary>グレーのシード色。</summary>
+        /// <summary>The gray seed color.</summary>
         public Color GraySeed
         {
             get { return _graySeed; }
         }
 
-        /// <summary>背景のシード色。</summary>
+        /// <summary>The background seed color.</summary>
         public Color BackgroundSeed
         {
             get { return _backgroundSeed; }
@@ -81,24 +83,24 @@ namespace Tweeq.UIToolkit
 
         #region Tokens
 
-        /// <summary>明暗どちらの外観か。</summary>
+        /// <summary>Which appearance — light or dark.</summary>
         public ColorMode Mode
         {
             get { return _mode; }
             set { _mode = value; }
         }
 
-        /// <summary>アプリケーション背景。</summary>
+        /// <summary>The application background.</summary>
         public Color Background { get; set; }
 
-        /// <summary>浮いた面（パネル・ポップアップ）の背景。</summary>
+        /// <summary>The background for elevated surfaces (panels, popups).</summary>
         public Color Surface { get; set; }
 
         /// <summary>
-        /// <see cref="Surface"/> を <see cref="Background"/> に合成した不透明色。
-        /// Vue の半透明 Surface は backdrop-filter のブラー前提で成立しているが、
-        /// UI Toolkit にブラーが無く背面がそのまま透けて読めてしまうため、
-        /// ポップアップ・モーダル等の浮いた外装はこちらを使う（意図的逸脱・m8-modal-tabs-spec.md）。
+        /// An opaque color made by compositing <see cref="Surface"/> onto <see cref="Background"/>.
+        /// The Vue original's translucent Surface relies on a backdrop-filter blur to work, but
+        /// since UI Toolkit has no blur and the background would show through legibly as-is,
+        /// elevated shells like popups and modals use this instead (deliberate deviation; see m8-modal-tabs-spec.md).
         /// </summary>
         public Color SurfaceOpaque
         {
@@ -114,106 +116,109 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>主要テキスト。</summary>
+        /// <summary>Primary text.</summary>
         public Color Text { get; set; }
 
-        /// <summary>副次テキスト。</summary>
+        /// <summary>Secondary text.</summary>
         public Color TextMuted { get; set; }
 
-        /// <summary>アクセント。</summary>
+        /// <summary>Accent.</summary>
         public Color Accent { get; set; }
 
-        /// <summary>ホバー時のアクセント。</summary>
+        /// <summary>Accent on hover.</summary>
         public Color AccentHover { get; set; }
 
-        /// <summary>淡いアクセント面（Radix accentScale[4] 相当）。</summary>
+        /// <summary>A soft accent surface (equivalent to Radix accentScale[4]).</summary>
         public Color AccentSoft { get; set; }
 
-        /// <summary>淡いアクセント面のホバー（Radix accentScale[5] 相当）。</summary>
+        /// <summary>Hover for the soft accent surface (equivalent to Radix accentScale[5]).</summary>
         public Color AccentSoftHover { get; set; }
 
         /// <summary>
-        /// アクセント塗りの上に載せる文字色（Radix accentContrast 相当）。
-        /// APCA で「白が読めるか」を判定した結果なので、輝度だけを見る
-        /// <see cref="ContrastText"/> より原典に忠実。
+        /// Text color to place on an accent-filled surface (equivalent to Radix accentContrast).
+        /// This is the result of judging "is white legible" via APCA, so it is more faithful to
+        /// the original than <see cref="ContrastText"/>, which only looks at luminance.
         /// </summary>
         public Color OnAccent { get; set; }
 
         /// <summary>
-        /// アクセントを借りない塗りボタンの面色（Radix grayScale[4] 相当）。
-        /// Input より一段前に出るので「押せる面」として読める。
+        /// The fill color for a button that doesn't borrow the accent (equivalent to Radix
+        /// grayScale[4]). It sits one step forward of Input, so it reads as a "pressable surface".
         /// </summary>
         public Color Neutral { get; set; }
 
-        /// <summary>Neutral のホバー（Radix grayScale[5] 相当）。</summary>
+        /// <summary>Hover for Neutral (equivalent to Radix grayScale[5]).</summary>
         public Color NeutralHover { get; set; }
 
-        /// <summary>入力欄の背景。</summary>
+        /// <summary>The input field background.</summary>
         public Color Input { get; set; }
 
-        /// <summary>ホバー時の入力欄背景。</summary>
+        /// <summary>Input field background on hover.</summary>
         public Color InputHover { get; set; }
 
-        /// <summary>控えめな境界線。</summary>
+        /// <summary>A subdued border.</summary>
         public Color Border { get; set; }
 
-        /// <summary>さらに控えめな境界線（目盛りグリッド用。Radix grayScaleAlpha[2] 相当）。</summary>
+        /// <summary>An even more subdued border (for tick/grid lines; equivalent to Radix grayScaleAlpha[2]).</summary>
         public Color BorderSubtle { get; set; }
 
-        /// <summary>TextMuted より弱い文字色（Radix grayScale[9] 相当）。</summary>
+        /// <summary>A text color weaker than TextMuted (equivalent to Radix grayScale[9]).</summary>
         public Color TextSubtle { get; set; }
 
         /// <summary>
-        /// エラー表示（不正な入力値）。Vue 版と同じく、赤のシード色相をアクセントへ寄せた代表色。
+        /// Error display (invalid input values). As in the Vue original, a representative color
+        /// that pulls a red seed hue toward the accent.
         /// </summary>
         public Color Error { get; set; } = Rgb(0xEE, 0x4F, 0x57);
 
         /// <summary>
-        /// ポップアップの影色（`--tq-color-shadow`）。UI Toolkit に box-shadow が無いため、
-        /// Painter2D で半透明の輪郭を重ねて近似する側が参照する。
+        /// The popup shadow color (`--tq-color-shadow`). Since UI Toolkit has no box-shadow, this
+        /// is referenced by the side that approximates one by layering a translucent outline via Painter2D.
         /// </summary>
         public Color Shadow { get; set; } = RgbaBytes(0x00, 0x00, 0x00, 0xAA);
 
-        /// <summary>標準的な入力欄の高さ（px）。</summary>
+        /// <summary>Standard input field height (px).</summary>
         public float InputHeight { get; set; } = 24f;
 
-        /// <summary>標準的な入力欄の角丸半径（px）。</summary>
+        /// <summary>Standard input field corner radius (px).</summary>
         public float InputRadius { get; set; } = 4f;
 
         /// <summary>
-        /// ポップアップ（ポップオーバー／バルーン）の角丸半径（px）。`--tq-radius-popup`。
-        /// InputRadius(4) + PopupPadding(9) の同心円設計なので、どちらかを変えたら追随させる。
+        /// Corner radius of a popup (popover / balloon) (px). `--tq-radius-popup`.
+        /// Designed as concentric circles with InputRadius(4) + PopupPadding(9), so changing either one should keep the other in sync.
         /// </summary>
         public float RadiusPopup { get; set; } = 13f;
 
-        /// <summary>ポップアップ内側の余白（px）。`--tq-popup-padding`。</summary>
+        /// <summary>Inner padding of a popup (px). `--tq-popup-padding`.</summary>
         public float PopupPadding { get; set; } = 9f;
 
         /// <summary>
-        /// 固定幅ポップアップの外形幅（px）。`--tq-popup-width`。
-        /// ColorInput のピッカーのように「中身の都合ではなく画面上の見た目で幅を決める」パネルが使う。
-        /// PopupPadding を含んだ外側の寸法なので、中身の幅は PopupWidth - PopupPadding*2 になる。
+        /// Outer width of a fixed-width popup (px). `--tq-popup-width`.
+        /// Used by panels like ColorInput's picker, where the width is decided by on-screen
+        /// appearance rather than by the content's needs.
+        /// This is the outer dimension including PopupPadding, so the content width becomes PopupWidth - PopupPadding*2.
         /// </summary>
         public float PopupWidth { get; set; } = 240f;
 
-        /// <summary>グループ内で隣接する入力ボックス間の隙間（px）。仕様 §4 gapGroup。</summary>
+        /// <summary>Gap between adjacent input boxes within a group (px). Spec §4 gapGroup.</summary>
         public float GapGroup { get; set; } = 2f;
 
-        /// <summary>関連要素間の隙間（px）。仕様 §4 gapRelated。</summary>
+        /// <summary>Gap between related elements (px). Spec §4 gapRelated.</summary>
         public float RelatedGap { get; set; } = 6f;
 
-        /// <summary>コントロール（行・列）間の隙間（px）。仕様 §4 gapControl。</summary>
+        /// <summary>Gap between controls (rows/columns) (px). Spec §4 gapControl.</summary>
         public float GapControl { get; set; } = 9f;
 
-        /// <summary>セクション間の隙間（px）。仕様 §4 gapSection。</summary>
+        /// <summary>Gap between sections (px). Spec §4 gapSection.</summary>
         public float GapSection { get; set; } = 18f;
 
-        /// <summary>ホバー系トランジションの時間（秒）。</summary>
+        /// <summary>Duration of hover-related transitions (seconds).</summary>
         public float HoverTransitionDuration { get; set; } = 0.15f;
 
         /// <summary>
-        /// 押下・出現など「操作に直結する」トランジションの時間（秒）。`--tq-active-transition-duration`。
-        /// ホバーより短いのは、操作の結果が遅れて見えないようにするため。
+        /// Duration of transitions directly tied to an operation, such as press or appearance
+        /// (seconds). `--tq-active-transition-duration`.
+        /// Shorter than hover so the result of an operation doesn't appear delayed.
         /// </summary>
         public float ActiveTransitionDuration { get; set; } = 0.064f;
 
@@ -221,48 +226,49 @@ namespace Tweeq.UIToolkit
 
         #region Font tokens
 
-        // 本家 tweeq のフォントトークン（fontUi / fontNumeric / fontHeading / fontCode）に対応。
-        // 色トークンと違いプロパティではなくフィールドなのは、適用側が
-        // TweeqFonts.Apply(element, in theme.FontNumeric) と in 付きで渡せるようにするため
-        // （プロパティは in 引数に直接渡せない）。
-        // 初期化子で持たせているのは FromSeeds / Dark / Light に限らず素の new TweeqTheme() でも
-        // 同梱 Geist が乗るようにするため。TweeqFonts 側がロード結果をキャッシュし、
-        // 失敗しても空を返すので、ここでの Resources 参照は安い
+        // Corresponds to the Vue original tweeq's font tokens (fontUi / fontNumeric / fontHeading / fontCode).
+        // Unlike the color tokens, these are fields rather than properties so the applying side
+        // can pass them with in, as in TweeqFonts.Apply(element, in theme.FontNumeric)
+        // (a property can't be passed directly as an in argument).
+        // They are given field initializers so the bundled Geist is applied even for a bare
+        // new TweeqTheme(), not just FromSeeds / Dark / Light. TweeqFonts caches its load
+        // results and returns empty on failure, so the Resources reference here is cheap
 
         /// <summary>
-        /// UI 一般のフォント。本家 fontUi=system-ui に相当するので既定は空（＝指定しない）。
-        /// 適用コードは持たない、将来の一括上書き用の予約トークン。
+        /// The general UI font. Corresponds to the Vue original's fontUi=system-ui, so the
+        /// default is empty (i.e. unspecified). Has no applying code yet — a token reserved for a
+        /// future bulk override.
         /// </summary>
         public FontDefinition FontUi = default;
 
-        /// <summary>数値表示のフォント（本家 fontNumeric=Geist）。</summary>
+        /// <summary>Font for numeric display (the Vue original's fontNumeric=Geist).</summary>
         public FontDefinition FontNumeric = TweeqFonts.NumericFont;
 
-        /// <summary>見出しのフォント（本家 fontHeading=Geist の bold 相当＝SemiBold 実ウェイト）。</summary>
+        /// <summary>Font for headings (the Vue original's fontHeading=Geist bold, actually weighted SemiBold).</summary>
         public FontDefinition FontHeading = TweeqFonts.HeadingFont;
 
-        /// <summary>等幅が要る箇所（HEX 欄など）のフォント（本家 fontCode=Geist Mono）。</summary>
+        /// <summary>Font for places that need monospace (e.g. HEX fields) (the Vue original's fontCode=Geist Mono).</summary>
         public FontDefinition FontCode = TweeqFonts.CodeFont;
 
         #endregion
 
         #region Presets
 
-        /// <summary>既定入力（accent #0000ff / gray #8B8D98 / 背景 #ffffff）のライトテーマ。</summary>
+        /// <summary>Light theme with the default inputs (accent #0000ff / gray #8B8D98 / background #ffffff).</summary>
         public static TweeqTheme Light()
         {
             return FromSeeds(ColorMode.Light, DEFAULT_LIGHT_BACKGROUND, DEFAULT_ACCENT, DEFAULT_GRAY);
         }
 
-        /// <summary>既定入力（accent #0000ff / gray #8B8D98 / 背景 #111111）のダークテーマ。</summary>
+        /// <summary>Dark theme with the default inputs (accent #0000ff / gray #8B8D98 / background #111111).</summary>
         public static TweeqTheme Dark()
         {
             return FromSeeds(ColorMode.Dark, DEFAULT_DARK_BACKGROUND, DEFAULT_ACCENT, DEFAULT_GRAY);
         }
 
         /// <summary>
-        /// 4 つの入力（外観・背景・アクセント・グレー）から色トークンを生成する。
-        /// Vue 版 theme ストアが持つ設定項目と 1 対 1 に対応する唯一の入口。
+        /// Generates color tokens from the 4 inputs (appearance, background, accent, gray).
+        /// The single entry point that corresponds 1:1 to the settings the Vue original's theme store holds.
         /// </summary>
         public static TweeqTheme FromSeeds(ColorMode mode, Color background, Color accent, Color gray)
         {
@@ -281,13 +287,13 @@ namespace Tweeq.UIToolkit
 
         #region Helpers
 
-        /// <summary>このテーマの複製を返す。</summary>
+        /// <summary>Returns a copy of this theme.</summary>
         public TweeqTheme Copy()
         {
             return (TweeqTheme)this.MemberwiseClone();
         }
 
-        /// <summary>アクセント色だけを差し替えた複製を返す。色トークンは Radix で作り直す。</summary>
+        /// <summary>Returns a copy with only the accent color swapped. Color tokens are regenerated via Radix.</summary>
         public TweeqTheme WithAccent(Color accent)
         {
             TweeqTheme copy = this.Copy();
@@ -296,7 +302,7 @@ namespace Tweeq.UIToolkit
             return copy;
         }
 
-        /// <summary>グレー色だけを差し替えた複製を返す。</summary>
+        /// <summary>Returns a copy with only the gray color swapped.</summary>
         public TweeqTheme WithGray(Color gray)
         {
             TweeqTheme copy = this.Copy();
@@ -305,7 +311,7 @@ namespace Tweeq.UIToolkit
             return copy;
         }
 
-        /// <summary>背景色だけを差し替えた複製を返す。</summary>
+        /// <summary>Returns a copy with only the background color swapped.</summary>
         public TweeqTheme WithBackground(Color background)
         {
             TweeqTheme copy = this.Copy();
@@ -315,8 +321,9 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 外観モードだけを差し替えた複製を返す。背景は明示的に指定されていない前提で
-        /// そのモードの既定へスナップする（Vue 版ストアの watch と同じ振る舞い）。
+        /// Returns a copy with only the appearance mode swapped. Assuming the background hasn't
+        /// been explicitly specified, it snaps to that mode's default (the same behavior as the
+        /// watch in the Vue original's store).
         /// </summary>
         public TweeqTheme WithColorMode(ColorMode mode)
         {
@@ -329,10 +336,11 @@ namespace Tweeq.UIToolkit
             return copy;
         }
 
-        /// <summary>背景色の輝度から読みやすい文字色（黒 or 白）を返す。</summary>
+        /// <summary>Returns a legible text color (black or white) based on the background color's luminance.</summary>
         /// <remarks>
-        /// アクセント塗りの上の文字は <see cref="OnAccent"/>（Radix の APCA 判定結果）を使うのが
-        /// 原典に忠実。この簡易判定は「任意の面色の上に文字を置く」その場限りの用途向け。
+        /// For text on an accent-filled surface, using <see cref="OnAccent"/> (Radix's APCA
+        /// judgment result) is faithful to the original. This simple check is meant for the ad
+        /// hoc case of placing text on an arbitrary surface color.
         /// </remarks>
         public static Color ContrastText(Color background)
         {
@@ -341,7 +349,7 @@ namespace Tweeq.UIToolkit
             return luminance > 150f ? Color.black : Color.white;
         }
 
-        // 4 つのシードから色トークン一式を作り直す。数値メトリクスには触らない
+        // Regenerates the full set of color tokens from the 4 seeds. Doesn't touch numeric metrics
         void ApplyRadixColors()
         {
             RadixAppearance appearance = _mode == ColorMode.Light
@@ -378,7 +386,7 @@ namespace Tweeq.UIToolkit
             Neutral = ToColor(radix.GrayScale[4]);
             NeutralHover = ToColor(radix.GrayScale[5]);
 
-            // ダークは真っ黒の影で沈ませ、ライトは最も濃い文字色を薄めて使う（Vue と同じ）
+            // Dark uses a pure black shadow to recede; light thins out the darkest text color instead (same as the Vue original)
             Shadow = _mode == ColorMode.Dark
                 ? RgbaBytes(0x00, 0x00, 0x00, 0xAA)
                 : WithAlpha(ToColor(radix.GrayScale[11]), LIGHT_SHADOW_ALPHA);

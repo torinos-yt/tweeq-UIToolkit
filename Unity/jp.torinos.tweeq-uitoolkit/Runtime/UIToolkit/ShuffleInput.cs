@@ -6,33 +6,33 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// 押すたびに <see cref="Generate"/> で次の値を作るボタン（Vue InputShuffle 相当）。
+    /// A button that produces the next value via <see cref="Generate"/> each time it's pressed (equivalent to Vue's InputShuffle).
     /// </summary>
     /// <remarks>
     /// <para>
-    /// 自分では値の意味を知らず「現在値を種にして次を作らせる」だけなので、
-    /// <c>INotifyValueChanged</c> は実装しない（ChangeEvent の相手になる型が定まらない）。
+    /// This doesn't know the meaning of the value itself and only "seeds the next value with the current
+    /// one," so <c>INotifyValueChanged</c> is not implemented (there's no fixed type to be ChangeEvent's counterpart).
     /// </para>
     /// <para>
-    /// サイコロの目は Vue のコメントどおり演出専用（"the die face is just flair"）で、
-    /// 値とは一切対応しない。クリックのたびに 90° 回して目を振り直す。
+    /// The die face, per Vue's own comment, is purely decorative ("the die face is just flair") and never
+    /// corresponds to the value at all. It rotates 90 degrees and re-rolls the face on every click.
     /// </para>
     /// </remarks>
-    // ジェネリックは [UxmlElement] にできないため UXML 化しない（string 特化ラッパー側で対応する）
+    // Generics can't be made [UxmlElement], so this isn't exposed to UXML directly (handled by the string-specialized wrapper instead).
     public class ShuffleInput<T> : VisualElement, ITweeqInputBox, ITweeqThemed
     {
         #region Constants
 
-        // Vue の SvgIcon は viewBox 32 / stroke-width 2。座標をそのまま持ち、描画時に縮める
+        // Vue's SvgIcon uses viewBox 32 / stroke-width 2. The coordinates are kept as-is and shrunk at draw time.
         const float VIEWBOX_SIZE = 32f;
         const float STROKE_WIDTH = 2f;
 
-        // 本体の角丸正方形（Vue のパス "M24,29H8c-2.8,0..." の外形）
+        // The body's rounded square (the outline of Vue's path "M24,29H8c-2.8,0...").
         const float BODY_MIN = 3f;
         const float BODY_MAX = 29f;
         const float BODY_RADIUS = 5f;
 
-        // 目は r=1 の円を stroke-width 2 で描いた見え方＝半径 2 の塗り
+        // A pip looks like an r=1 circle drawn with stroke-width 2, i.e. a filled circle of radius 2.
         const float DOT_RADIUS = 2f;
 
         const int MIN_FACE = 1;
@@ -44,7 +44,7 @@ namespace Tweeq.UIToolkit
         const float DISABLED_OPACITY = 0.4f;
         const float FOCUS_RING_WIDTH = 1f;
 
-        // 1〜6 の目の座標（viewBox 32 基準）。Vue の SvgIcon の circle をそのまま写した
+        // Coordinates for pips 1-6 (based on viewBox 32). Copied directly from Vue's SvgIcon circles.
         static readonly Vector2[][] FACE_DOTS =
         {
             new[] { new Vector2(16f, 16f) },
@@ -85,7 +85,7 @@ namespace Tweeq.UIToolkit
 
         float _iconRotation;
 
-        // Vue の iconNum = ref(3)
+        // Vue's iconNum = ref(3)
         int _iconFace = 3;
 
         bool _hovered;
@@ -97,18 +97,18 @@ namespace Tweeq.UIToolkit
         #region Public API
 
         /// <summary>
-        /// 現在値から次の値を作る。null の間はクリックしても何も起きない
-        /// （Vue では必須 prop なので、未設定は「まだ配線されていない」状態と見なす）。
+        /// Produces the next value from the current one. While null, clicking does nothing
+        /// (Vue treats this as a required prop, so being unset is treated here as "not wired up yet").
         /// </summary>
         public Func<T, T> Generate { get; set; }
 
-        /// <summary>値が変わったときに発火する。</summary>
+        /// <summary>Fires when the value changes.</summary>
         public event Action<T> ValueChanged;
 
-        /// <summary>1 クリック 1 回、<see cref="ValueChanged"/> と対で発火する。</summary>
+        /// <summary>Fires once per click, paired with <see cref="ValueChanged"/>.</summary>
         public event Action<T> Confirmed;
 
-        /// <summary>現在値。次の <see cref="Generate"/> に渡る種でもある。</summary>
+        /// <summary>The current value. Also the seed passed into the next <see cref="Generate"/> call.</summary>
         public T value
         {
             get => _value;
@@ -124,7 +124,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>操作不能状態。クリックもキー操作も通らない。</summary>
+        /// <summary>Non-interactive state. Neither clicks nor key operations go through.</summary>
         public bool Disabled
         {
             get => _disabled;
@@ -142,7 +142,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>配色テーマ。null を渡した場合は Dark() にフォールバックする。</summary>
+        /// <summary>The color theme. Falls back to Dark() when null is passed.</summary>
         public TweeqTheme Theme
         {
             get => _theme;
@@ -154,13 +154,13 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>サイコロの現在の回転角（度数）。演出専用。</summary>
+        /// <summary>The die's current rotation angle (degrees). Purely decorative.</summary>
         public float IconRotation => _iconRotation;
 
-        /// <summary>サイコロの現在の出目（1〜6）。値とは無関係の演出。</summary>
+        /// <summary>The die's current face (1-6). A decoration unrelated to the value.</summary>
         public int IconFace => _iconFace;
 
-        /// <summary>横方向グループでの位置。</summary>
+        /// <summary>Position within a horizontal group.</summary>
         public TweeqBoxPosition InlinePosition
         {
             get => _inlinePosition;
@@ -176,7 +176,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>縦方向グループでの位置。</summary>
+        /// <summary>Position within a vertical group.</summary>
         public TweeqBoxPosition BlockPosition
         {
             get => _blockPosition;
@@ -193,8 +193,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// プログラムからのクリック。Disabled か <see cref="Generate"/> 未設定なら何もしない。
-        /// パネル非依存なのでテストからの発火にも使える。
+        /// A programmatic click. Does nothing if Disabled or if <see cref="Generate"/> is unset.
+        /// Panel-independent, so this can also be used to fire from tests.
         /// </summary>
         public void PerformClick()
         {
@@ -218,7 +218,7 @@ namespace Tweeq.UIToolkit
             Confirmed?.Invoke(next);
         }
 
-        /// <summary>通知を出さずに値を設定する。演出も動かさない。</summary>
+        /// <summary>Sets the value without firing a notification. The decoration is left untouched too.</summary>
         public void SetValueWithoutNotify(T newValue)
         {
             _value = newValue;
@@ -235,7 +235,7 @@ namespace Tweeq.UIToolkit
             this.focusable = true;
             this.style.flexShrink = 0f;
 
-            // フォーカスリングを 1px 外へ置くので Hidden にしてはいけない
+            // Must not be Hidden, since the focus ring is placed 1px outside.
             this.style.overflow = Overflow.Visible;
 
             _icon = new VisualElement
@@ -251,7 +251,7 @@ namespace Tweeq.UIToolkit
             _icon.generateVisualContent += OnGenerateIcon;
             this.hierarchy.Add(_icon);
 
-            // 塗りが淡い（Subtle 系）ので、フォーカスは外周リング 1 本だけにする（ButtonInput と同じ判断）
+            // The fill is faint (a Subtle-family color), so focus is expressed with just a single outer ring (same judgment as ButtonInput).
             _focusRing = new VisualElement
             {
                 name = "tweeq-shuffle-focus-ring",
@@ -294,8 +294,8 @@ namespace Tweeq.UIToolkit
             this.style.width = size;
             this.style.height = size;
 
-            // InputGroup.ApplyStretch は flexBasis 未指定の子へ basis 0 を配る。
-            // width より basis が勝つため、明示しないと 24px 正方形がゼロ幅まで潰れる
+            // InputGroup.ApplyStretch assigns basis 0 to children with no explicit flexBasis.
+            // basis wins over width, so without setting this explicitly, the 24px square would collapse to zero width.
             this.style.flexGrow = 0f;
             this.style.flexBasis = size;
 
@@ -307,8 +307,8 @@ namespace Tweeq.UIToolkit
                 EasingMode.EaseInOutCubic,
                 "background-color");
 
-            // Vue: transition transform .3s cubic-bezier(0.19, 1.6, 0.42, 1)。
-            // 跳ね返りのある曲線は EaseOutBack が最も近い。長さはテーマの hover 遷移に合わせる
+            // Vue: transition transform .3s cubic-bezier(0.19, 1.6, 0.42, 1).
+            // EaseOutBack is the closest match among curves with overshoot. The duration matches the theme's hover transition.
             ApplyTransition(
                 _icon,
                 _theme != null ? _theme.HoverTransitionDuration : 0f,
@@ -333,7 +333,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        // 仕様 §1 の角丸表。両軸の指定は OR で合成する（片方でも「潰す」なら潰す）
+        // Corner-radius table from spec §1. The settings for both axes are combined via OR (collapsed if either axis says to collapse).
         void ApplyCornerRadius()
         {
             float radius = _theme != null ? _theme.InputRadius : 0f;
@@ -385,7 +385,7 @@ namespace Tweeq.UIToolkit
 
             SetCornerRadius(this, radius, topLeft, topRight, bottomLeft, bottomRight);
 
-            // 外側リングは 1px 外に居るので、同じ見え方になるよう半径も 1px 太らせる
+            // The outer ring sits 1px outside, so its radius is also grown by 1px to keep the same visual appearance.
             SetCornerRadius(
                 _focusRing,
                 radius + FOCUS_RING_WIDTH,
@@ -399,8 +399,8 @@ namespace Tweeq.UIToolkit
 
         #region Presentation
 
-        // Vue は rest の背景を持たないが、こちらは InputGroup で隣と融合させる前提なので
-        // ButtonInput の Subtle と同じ「Input 面 + Accent のアイコン」を rest にする
+        // Vue's rest state has no background, but this is designed to blend in with a neighbor via
+        // InputGroup, so the rest state here uses the same "Input surface + Accent icon" as ButtonInput's Subtle.
         Color CurrentBackground => _hovered && !_disabled
             ? (_theme != null ? _theme.AccentHover : Color.clear)
             : (_theme != null ? _theme.Input : Color.clear);
@@ -439,7 +439,7 @@ namespace Tweeq.UIToolkit
         {
             _iconRotation += ROTATION_STEP;
 
-            // Vue: random(1, 6)（上限含む）
+            // Vue: random(1, 6) (upper bound inclusive).
             _iconFace = UnityEngine.Random.Range(MIN_FACE, MAX_FACE + 1);
 
             ApplyIconTransform();
@@ -489,11 +489,11 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 押した指を外へ逃がして離した場合はクリック不成立
+            // Releasing after dragging the pressed finger outside doesn't count as a click.
             Vector3 position = evt.position;
             bool inside = this.ContainsPoint(this.WorldToLocal(new Vector2(position.x, position.y)));
 
-            // ポインタで得たフォーカスは離した時点で返す（ButtonInput と同じ判断）
+            // Focus gained via pointer is released as soon as the pointer is released (same judgment as ButtonInput).
             if (_focused)
             {
                 this.Blur();
@@ -600,7 +600,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // アイコンフォント非依存（Unity 決定事項 1）。viewBox 32 の SVG を等倍で写す
+            // No icon-font dependency (Unity decision 1). The viewBox-32 SVG is copied at uniform scale.
             float scale = Mathf.Min(rect.width, rect.height) / VIEWBOX_SIZE;
             float originX = (rect.width - VIEWBOX_SIZE * scale) * 0.5f;
             float originY = (rect.height - VIEWBOX_SIZE * scale) * 0.5f;
@@ -642,7 +642,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        // Painter2D に角丸矩形のプリミティブが無いので ArcTo で辿る
+        // Painter2D has no rounded-rectangle primitive, so it's traced using ArcTo.
         static void TraceRoundedRect(Painter2D painter, Rect rect, float radius)
         {
             if (rect.width <= 0f || rect.height <= 0f)

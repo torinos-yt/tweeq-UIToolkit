@@ -5,12 +5,12 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// USS カスタムプロパティから <see cref="TweeqTheme"/> を作り、配下の
-    /// <see cref="ITweeqThemed"/> へ配るコンテナ。UXML だけで組んだ UI に
-    /// テーマを行き渡らせるための唯一の入口。
+    /// Builds a <see cref="TweeqTheme"/> from USS custom properties and distributes it to
+    /// descendant <see cref="ITweeqThemed"/> elements. The single entry point for propagating
+    /// a theme through UI assembled purely from UXML.
     /// </summary>
     /// <remarks>
-    /// <para>読み取る USS カスタムプロパティ（すべて任意）:</para>
+    /// <para>USS custom properties read (all optional):</para>
     /// <code>
     /// .my-panel {
     ///     --tq-accent: #0000ff;
@@ -20,18 +20,20 @@ namespace Tweeq.UIToolkit
     /// }
     /// </code>
     /// <para>
-    /// 指定が無いトークンは <see cref="TweeqTheme"/> の既定シードを使うので、USS を一切書かなければ
-    /// <see cref="TweeqTheme.Dark"/> と同じテーマになる。C# から <see cref="Theme"/> を代入した場合は
-    /// そちらが優先され、以降 USS の解決結果は無視する（コードの意図を USS が上書きしないため）。
+    /// Tokens with no value specified fall back to <see cref="TweeqTheme"/>'s default seeds, so
+    /// writing no USS at all produces the same theme as <see cref="TweeqTheme.Dark"/>. If
+    /// <see cref="Theme"/> is assigned from C#, that assignment takes priority and subsequent
+    /// USS resolution results are ignored (so USS never overrides intent expressed in code).
     /// </para>
     /// <para>
-    /// 配布のタイミングはパネル接続時・USS 解決時・<see cref="Theme"/> 代入時のみ。
-    /// あとから子を足した場合は <see cref="Redistribute"/> を呼ぶ。
+    /// Distribution happens only when attached to a panel, when USS is resolved, or when
+    /// <see cref="Theme"/> is assigned. Call <see cref="Redistribute"/> if children are added afterward.
     /// </para>
     /// <para>
-    /// 探索は 2 か所で打ち切る: <see cref="ITweeqThemed"/> に当たったらその配下（複合部品の内部は
-    /// 部品自身が転送する責務）、入れ子の <see cref="TweeqRoot"/> に当たったらその配下
-    /// （入れ子はテーマ境界として自分の USS で決めたテーマを保つ）。
+    /// Traversal stops at two points: when it hits an <see cref="ITweeqThemed"/>, it stops below it
+    /// (forwarding within a composite part is that part's own responsibility); when it hits a nested
+    /// <see cref="TweeqRoot"/>, it stops below it (a nested root is a theme boundary that keeps the
+    /// theme determined by its own USS).
     /// </para>
     /// </remarks>
     [UxmlElement]
@@ -39,25 +41,25 @@ namespace Tweeq.UIToolkit
     {
         #region Constants
 
-        /// <summary>ルート自身に付く USS クラス。</summary>
+        /// <summary>USS class applied to the root itself.</summary>
         public const string USS_CLASS_NAME = "tweeq-root";
 
-        /// <summary>アクセントのシード色を渡すカスタムプロパティ名。</summary>
+        /// <summary>Custom property name that supplies the accent seed color.</summary>
         public const string ACCENT_PROPERTY_NAME = "--tq-accent";
 
-        /// <summary>グレーのシード色を渡すカスタムプロパティ名。</summary>
+        /// <summary>Custom property name that supplies the gray seed color.</summary>
         public const string GRAY_PROPERTY_NAME = "--tq-gray";
 
-        /// <summary>背景のシード色を渡すカスタムプロパティ名。</summary>
+        /// <summary>Custom property name that supplies the background seed color.</summary>
         public const string BACKGROUND_PROPERTY_NAME = "--tq-background";
 
-        /// <summary>外観モード（"dark" / "light"）を渡すカスタムプロパティ名。</summary>
+        /// <summary>Custom property name that supplies the appearance mode ("dark" / "light").</summary>
         public const string COLOR_MODE_PROPERTY_NAME = "--tq-color-mode";
 
-        /// <summary><see cref="COLOR_MODE_PROPERTY_NAME"/> に指定するダークの値。</summary>
+        /// <summary>The dark value to specify for <see cref="COLOR_MODE_PROPERTY_NAME"/>.</summary>
         public const string COLOR_MODE_DARK = "dark";
 
-        /// <summary><see cref="COLOR_MODE_PROPERTY_NAME"/> に指定するライトの値。</summary>
+        /// <summary>The light value to specify for <see cref="COLOR_MODE_PROPERTY_NAME"/>.</summary>
         public const string COLOR_MODE_LIGHT = "light";
 
         #endregion
@@ -82,13 +84,13 @@ namespace Tweeq.UIToolkit
 
         TweeqTheme _theme = TweeqTheme.Dark();
 
-        // C# 代入を USS より優先させるためのラッチ。一度立てたら下げない
+        // Latch that lets a C# assignment take priority over USS. Once set, it is never cleared
         bool _themeAssignedFromCode;
 
         bool _paintBackground = true;
 
-        // CustomStyleResolvedEvent はレイアウト・スタイル更新の度に飛んでくるので、
-        // シードが変わっていない限りテーマ生成と配布をやり直さない
+        // CustomStyleResolvedEvent fires on every layout/style update, so theme
+        // generation and distribution are skipped unless the seeds have actually changed
         bool _seedsResolved;
         ColorMode _resolvedMode;
         Color _resolvedBackground;
@@ -100,8 +102,8 @@ namespace Tweeq.UIToolkit
         #region Public API
 
         /// <summary>
-        /// 配下へ配るテーマ。代入すると即座に再配布し、以降 USS 側の指定は無視する。
-        /// null を渡した場合は <see cref="TweeqTheme.Dark"/> にフォールバックする。
+        /// The theme distributed to descendants. Assigning it redistributes immediately, and
+        /// USS-side settings are ignored from then on. Passing null falls back to <see cref="TweeqTheme.Dark"/>.
         /// </summary>
         public TweeqTheme Theme
         {
@@ -115,8 +117,9 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// テーマの <see cref="TweeqTheme.Background"/> を自分の背景色として塗るか（既定 true）。
-        /// 生成された背景色は USS からは書けないので、ここで面倒を見ないとパネルが素のままになる。
+        /// Whether to paint the theme's <see cref="TweeqTheme.Background"/> as this element's own
+        /// background color (default true). The generated background color cannot be written from
+        /// USS, so without this the panel would be left unstyled.
         /// </summary>
         [UxmlAttribute]
         public bool PaintBackground
@@ -130,8 +133,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 現在のテーマを配下へ配り直す。子を動的に足した後に呼ぶ。
-        /// 配布はセットアップ時の操作なので、毎フレーム呼ぶ想定はしていない。
+        /// Redistributes the current theme to descendants. Call after dynamically adding children.
+        /// Distribution is a setup-time operation and is not intended to be called every frame.
         /// </summary>
         public void Redistribute()
         {
@@ -147,8 +150,8 @@ namespace Tweeq.UIToolkit
         {
             this.AddToClassList(USS_CLASS_NAME);
 
-            // UXML から組まれた木は「子が揃ってからパネルに載る」ので、
-            // 一括配布のフックはここが最も取りこぼしが少ない
+            // A tree built from UXML gets its children in place before it is attached to the panel,
+            // so this is the hook that misses the fewest elements for the bulk distribution
             this.RegisterCallback<AttachToPanelEvent>(OnAttachToPanel);
             this.RegisterCallback<CustomStyleResolvedEvent>(OnCustomStyleResolved);
 
@@ -166,7 +169,7 @@ namespace Tweeq.UIToolkit
 
         void OnCustomStyleResolved(CustomStyleResolvedEvent evt)
         {
-            // C# 代入が勝つ契約。USS 由来のテーマで踏み潰さない
+            // Contract: a C# assignment wins. Don't let a USS-derived theme overwrite it
             if (_themeAssignedFromCode)
             {
                 return;
@@ -180,8 +183,8 @@ namespace Tweeq.UIToolkit
 
             ColorMode mode = ResolveColorMode(style);
 
-            // 背景は「モードの既定」を土台にする。--tq-color-mode だけ指定した場合に
-            // ライトが黒背景のまま残るのを防ぐため（TweeqTheme.WithColorMode と同じ考え方）
+            // The background is based on the mode's default. This prevents light mode from being
+            // left with a black background when only --tq-color-mode is specified (same idea as TweeqTheme.WithColorMode)
             Color background = mode == ColorMode.Light
                 ? TweeqTheme.DEFAULT_LIGHT_BACKGROUND
                 : TweeqTheme.DEFAULT_DARK_BACKGROUND;
@@ -239,7 +242,7 @@ namespace Tweeq.UIToolkit
                 return ColorMode.Dark;
             }
 
-            // 綴り間違いは黙って dark になると原因が分からないので警告だけ出す（例外は投げない）
+            // A misspelling would silently fall back to dark and be hard to diagnose, so just log a warning (don't throw)
             Debug.LogWarning(
                 $"[TweeqRoot] unknown {COLOR_MODE_PROPERTY_NAME} value '{trimmed}'. "
                 + $"use \"{COLOR_MODE_DARK}\" or \"{COLOR_MODE_LIGHT}\".");
@@ -259,8 +262,8 @@ namespace Tweeq.UIToolkit
                 : new StyleColor(StyleKeyword.Null);
         }
 
-        // UQuery は T : VisualElement 制約でインターフェースを取れないので、hierarchy を自前で辿る。
-        // hierarchy 側なのは contentContainer を差し替えている複合部品を取りこぼさないため
+        // UQuery can't target an interface due to its T : VisualElement constraint, so hierarchy is walked manually.
+        // hierarchy is used (rather than the logical tree) so composite parts that swap out contentContainer aren't missed
         void Distribute(VisualElement parent)
         {
             if (parent == null)
@@ -277,7 +280,7 @@ namespace Tweeq.UIToolkit
                     continue;
                 }
 
-                // 入れ子ルートは独自のテーマ境界。配下ごと相手に任せる
+                // A nested root is its own theme boundary. Leave everything below it to that root
                 if (child is TweeqRoot)
                 {
                     continue;

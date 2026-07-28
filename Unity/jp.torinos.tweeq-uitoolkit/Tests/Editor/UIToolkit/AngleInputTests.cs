@@ -4,19 +4,21 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// AngleInput の契約（Vue InputAngle 相当）。ノブと数値欄の双方向同期・通知の一本化・
-    /// 幅による数値欄の畳み込み・角丸の融合を見る。
+    /// The contract of AngleInput (equivalent to the Vue original's InputAngle). Covers two-way
+    /// sync between the knob and the number field, unifying notifications, collapsing the number
+    /// field based on width, and corner-radius fusion.
     /// </summary>
     /// <remarks>
-    /// RotaryInput / NumberInput の値変更は ChangeEvent でしか出てこず、panel が無いと配送
-    /// されないので、子由来の通知は AngleInput 側の口（PerformRotaryEdit / PerformNumberEdit /
-    /// PerformConfirm）で代用する。実際のポインタ操作と実レイアウトは Play Mode 側の担当。
+    /// Value changes on RotaryInput / NumberInput only surface via ChangeEvent, which isn't
+    /// delivered without a panel, so notifications originating from the children are substituted
+    /// via AngleInput's own entry points (PerformRotaryEdit / PerformNumberEdit / PerformConfirm).
+    /// Actual pointer interaction and real layout are covered on the Play Mode side.
     /// </remarks>
     public class AngleInputTests
     {
         const float EPSILON = 1e-4f;
 
-        // 既定テーマの InputHeight は 24px なので、数値欄が出る境界は 96px
+        // The default theme's InputHeight is 24px, so the threshold at which the number field appears is 96px
         const float THRESHOLD = 96f;
 
         static AngleInput Create(float initial)
@@ -26,7 +28,7 @@ namespace Tweeq.UIToolkit.Tests
             return input;
         }
 
-        #region 同期
+        #region Synchronization
 
         [Test]
         public void SetValueWithoutNotify_WritesBothChildren()
@@ -111,7 +113,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region 確定
+        #region Confirmation
 
         [Test]
         public void Confirm_RaisesConfirmedOnceWithTheFinalValue()
@@ -125,7 +127,7 @@ namespace Tweeq.UIToolkit.Tests
                 received = value;
             };
 
-            // 1 ジェスチャ = 何フレームか動かして離す
+            // One gesture = move over several frames, then release
             input.PerformRotaryEdit(10f);
             input.PerformRotaryEdit(20f);
             input.PerformConfirm();
@@ -149,7 +151,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region 幅による畳み込み
+        #region Collapsing by width
 
         [Test]
         public void Number_IsHiddenBeforeTheFirstLayout()
@@ -196,7 +198,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region グループ融合
+        #region Group fusion
 
         [Test]
         public void BoxFusion_JoinsRotaryAndNumberWhenBothAreVisible()
@@ -227,7 +229,7 @@ namespace Tweeq.UIToolkit.Tests
 
             input.InlinePosition = TweeqBoxPosition.Start;
 
-            // 自分が先頭 = 左だけ丸い。右端は隣が続くので数値欄は Middle まで潰す
+            // Being first = only the left is rounded. The right edge continues into a neighbor, so the number field flattens down to Middle
             Assert.AreEqual(TweeqBoxPosition.Start, input.Rotary.InlinePosition);
             Assert.AreEqual(TweeqBoxPosition.Middle, input.Number.InlinePosition);
         }
@@ -246,7 +248,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region 転送プロパティ
+        #region Forwarded properties
 
         [Test]
         public void Snap_GoesToTheRotaryOnly()
@@ -343,7 +345,7 @@ namespace Tweeq.UIToolkit.Tests
         [Test]
         public void Invalid_GoesToTheNumberOnly()
         {
-            // ノブには Vue にも invalid 表現が無いので、数値側だけに配る
+            // The knob has no invalid representation in the Vue original either, so this is only routed to the number side
             AngleInput input = Create(0f);
 
             input.Invalid = true;

@@ -3,41 +3,45 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// <see cref="TweeqTheme"/> を外から差し込める要素。<see cref="TweeqRoot"/> が
-    /// 配下を辿ってテーマを配るための目印。
+    /// An element into which <see cref="TweeqTheme"/> can be injected from outside. A marker that
+    /// <see cref="TweeqRoot"/> uses when walking its descendants to distribute the theme.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// 既に <c>public TweeqTheme Theme { get; set; }</c> を持つコンポーネントは、宣言に
-    /// <c>, ITweeqThemed</c> を足すだけで実装を満たす（M7 第2波の共通契約）。
+    /// A component that already has <c>public TweeqTheme Theme { get; set; }</c> satisfies the
+    /// implementation just by adding <c>, ITweeqThemed</c> to its declaration (M7 second-wave
+    /// common contract).
     /// </para>
     /// <para>
-    /// 配布は「自分より上の階層から降ってくる」片方向で、実装側は受け取ったテーマを
-    /// <b>自分の子へ自分で配る責務を持つ</b>。TweeqRoot は ITweeqThemed を見つけたら
-    /// そこで探索を打ち切るので、複合コンポーネント（AngleInput 等）が内部の子へ
-    /// 転送していないと配下まで届かない。
+    /// Distribution flows one way, "downward from a level above yourself"; the implementer
+    /// <b>bears the responsibility of distributing the theme it receives to its own children</b>.
+    /// TweeqRoot stops its search the moment it finds an ITweeqThemed, so unless a composite
+    /// component (e.g. AngleInput) forwards the theme to its internal children, it won't reach
+    /// further down.
     /// </para>
     /// <para>
-    /// setter は null を渡されても落ちないこと（既存実装と同じく <c>?? TweeqTheme.Dark()</c>
-    /// のフォールバックを想定）。
+    /// The setter must not fail even if passed null (a <c>?? TweeqTheme.Dark()</c> fallback is
+    /// assumed, same as existing implementations).
     /// </para>
     /// </remarks>
     public interface ITweeqThemed
     {
-        /// <summary>この要素が使う配色テーマ。</summary>
+        /// <summary>The color theme this element uses.</summary>
         TweeqTheme Theme { get; set; }
     }
 
     /// <summary>
-    /// 「複合部品が子へ転送する責務」の共通実装。TweeqRoot / TweeqModal / TweeqTabs /
-    /// Parameter 系がそれぞれ同じ走査を持っていたのを一本化した（M8 統合時）。
+    /// Common implementation of "the composite part's responsibility to forward to its children".
+    /// Unifies what TweeqRoot / TweeqModal / TweeqTabs / the Parameter family each used to
+    /// implement as the same traversal individually (unified during M8 integration).
     /// </summary>
     public static class TweeqThemeDistribution
     {
         /// <summary>
-        /// <paramref name="parent"/> 配下の <see cref="ITweeqThemed"/> へテーマを配る。
-        /// ITweeqThemed に当たったらその配下は相手の転送責務として打ち切り、
-        /// 入れ子の <see cref="TweeqRoot"/> は独自のテーマ境界としてまるごと飛ばす。
+        /// Distributes the theme to <see cref="ITweeqThemed"/> instances under <paramref name="parent"/>.
+        /// Once an ITweeqThemed is hit, its subtree is left to that instance's own forwarding
+        /// responsibility and the search stops there; a nested <see cref="TweeqRoot"/> is skipped
+        /// entirely as its own independent theme boundary.
         /// </summary>
         public static void Distribute(VisualElement parent, TweeqTheme theme)
         {

@@ -5,10 +5,12 @@ using UnityEngine;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// PositionInput の契約（m6-wave2-spec.md §C「PositionInput（合成）」）。
-    /// スクラバーと数値欄の双方向同期・通知の一本化・角丸の融合を見る。
-    /// 実際のポインタ操作とレイアウト、および NumberInput → Vec2Input → 自身という確定の
-    /// 配線そのものは Play Mode 側の担当（ここでは PerformFieldConfirm で口の側だけ確かめる）。
+    /// The contract of PositionInput (m6-wave2-spec.md §C "PositionInput (composite)").
+    /// Covers two-way sync between the scrubber and the numeric field, unified notification,
+    /// and the fusion of rounded corners.
+    /// The actual pointer operation and layout, and the confirm wiring itself (NumberInput →
+    /// Vec2Input → self), are the responsibility of the Play Mode side (here we only verify the
+    /// entry point via PerformFieldConfirm).
     /// </summary>
     public class PositionInputTests
     {
@@ -33,7 +35,7 @@ namespace Tweeq.UIToolkit.Tests
             Cursor.visible = true;
         }
 
-        #region 同期
+        #region Synchronization
 
         [Test]
         public void SetValueWithoutNotify_WritesBothChildren()
@@ -57,7 +59,8 @@ namespace Tweeq.UIToolkit.Tests
 
             Assert.AreEqual(1, changed.Count);
 
-            // Y は「上ドラッグ = +Y」の Unity 合わせ逸脱（m6-wave2-spec.md）。数値欄も同じ値
+            // Y is a deliberate deviation to match Unity's "drag up = +Y" convention
+            // (m6-wave2-spec.md). The numeric field holds the same value.
             AssertVector(new Vector2(10f, -5f), input.value);
             AssertVector(new Vector2(10f, -5f), input.Field.value);
         }
@@ -104,7 +107,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region 確定
+        #region Confirm
 
         [Test]
         public void Confirm_TranslateGestureRaisesConfirmedOnce()
@@ -142,7 +145,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region レンジ
+        #region Range
 
         [Test]
         public void Range_PropagatesToBothChildren()
@@ -172,7 +175,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region グループ融合
+        #region Group fusion
 
         [Test]
         public void BoxFusion_JoinsScrubberAndBothAxes()
@@ -211,7 +214,7 @@ namespace Tweeq.UIToolkit.Tests
         [Test]
         public void Invalid_GoesToTheFieldOnly()
         {
-            // スクラバーには Vue にも invalid 表現が無いので、数値側だけに配る
+            // The scrubber has no invalid representation in the Vue original either, so this is only routed to the numeric side
             PositionInput input = Create(Vector2.zero);
 
             input.Invalid = true;

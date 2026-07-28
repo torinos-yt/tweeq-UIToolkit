@@ -58,7 +58,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void ExactMultiplesAreNotFlaggedAsQuantized()
         {
-            // 0.3/0.1 は二進では割り切れず残差が出るが、それは「量子化された」ではない
+            // 0.3/0.1 doesn't divide evenly in binary and leaves a residue, but that isn't "quantized"
             NumberValidation result = NumberValidator.Validate(0.3, 0.0, 1.0, 0.1, 10.0, false);
 
             Assert.That(result.Value, Is.EqualTo(0.3).Within(TOLERANCE));
@@ -92,7 +92,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void ClampHappensBeforeQuantization()
         {
-            // 上限 1.0 は 0.3 の倍数ではないので、クランプ後に量子化されて 0.9 まで戻る
+            // Since the upper bound 1.0 isn't a multiple of 0.3, it gets quantized after clamping and falls back to 0.9
             NumberValidation result = NumberValidator.Validate(2.0, 0.0, 1.0, 0.3, 10.0, false);
 
             Assert.That(result.Value, Is.EqualTo(0.9).Within(TOLERANCE));
@@ -103,7 +103,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void SnapIsAppliedAfterStep()
         {
-            // step→snap の順なら 7 → 6 → 10。逆順なら 7 → 10 → 9 になる
+            // In step->snap order: 7 -> 6 -> 10. In the reverse order it would be 7 -> 10 -> 9
             NumberValidation result = NumberValidator.Validate(7.0, -100.0, 100.0, 3.0, 10.0, true);
 
             Assert.That(result.Value, Is.EqualTo(10.0).Within(TOLERANCE));

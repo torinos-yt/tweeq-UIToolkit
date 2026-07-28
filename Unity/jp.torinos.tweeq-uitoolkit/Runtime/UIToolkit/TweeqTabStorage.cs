@@ -4,38 +4,43 @@ using UnityEngine;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// <see cref="TweeqTabs"/> がアクティブタブ id を読み書きする先（M8 仕様 §D「永続化」）。
+    /// Where <see cref="TweeqTabs"/> reads and writes the active tab id (M8 spec §D "Persistence").
     /// </summary>
     /// <remarks>
-    /// 既定実装は <see cref="TweeqTabPlayerPrefsStorage"/>。テストや、設定ファイルを自前で
-    /// 持つアプリケーションは <see cref="TweeqTabs.Storage"/> に差し替える。
-    /// 実装は例外を投げないこと（公演現場でのランタイム例外＝事故）。
+    /// The default implementation is <see cref="TweeqTabPlayerPrefsStorage"/>. Tests, or
+    /// applications that maintain their own config file, should swap in
+    /// <see cref="TweeqTabs.Storage"/> instead.
+    /// Implementations must not throw exceptions (a runtime exception during a live show is an
+    /// incident).
     /// </remarks>
     public interface ITweeqTabStorage
     {
-        /// <summary>保存値を読む。未保存なら <paramref name="defaultValue"/> をそのまま返す。</summary>
+        /// <summary>Reads the stored value. Returns <paramref name="defaultValue"/> as-is if nothing was saved.</summary>
         string Get(string key, string defaultValue);
 
-        /// <summary>値を保存する。</summary>
+        /// <summary>Saves a value.</summary>
         void Set(string key, string value);
 
-        /// <summary>保存値を消す（＝既定へ戻す）。</summary>
+        /// <summary>Clears the stored value (i.e. reverts to default).</summary>
         void Delete(string key);
     }
 
     /// <summary>
-    /// <see cref="ITweeqTabStorage"/> の既定実装。Vue 版の localStorage に対応する位置づけ。
+    /// Default implementation of <see cref="ITweeqTabStorage"/>. Positioned as the counterpart to
+    /// the Vue original's localStorage.
     /// </summary>
     /// <remarks>
-    /// バッチモードやサンドボックスでは PlayerPrefs が使えないことがある。タブの選択状態の
-    /// 保存で例外を投げて上位を止めるのは割に合わないので、握って警告だけ出す
-    /// （<see cref="ParameterGroup"/> の開閉状態の保存と同じ方針）。
+    /// PlayerPrefs can be unavailable in batch mode or sandboxes. Throwing an exception and halting
+    /// the caller just because saving the tab selection state failed isn't worth it, so it's
+    /// caught and only a warning is logged (same policy as saving <see cref="ParameterGroup"/>'s
+    /// open/closed state).
     /// </remarks>
     public sealed class TweeqTabPlayerPrefsStorage : ITweeqTabStorage
     {
         /// <summary>
-        /// 共有インスタンス。<see cref="TweeqTabs.Storage"/> に null を代入したときの戻り先なので、
-        /// テストは「差し替えを解除できたか」をこの参照で確かめられる。
+        /// Shared instance. This is the fallback destination when <see cref="TweeqTabs.Storage"/>
+        /// is assigned null, so tests can verify "was the override cleared?" by checking against
+        /// this reference.
         /// </summary>
         public static readonly TweeqTabPlayerPrefsStorage Instance = new TweeqTabPlayerPrefsStorage();
 

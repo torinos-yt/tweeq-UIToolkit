@@ -6,27 +6,30 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// 画面全体を覆うモーダル（m8-modal-tabs-spec.md §A・Vue 版 PaneModal 相当）。
-    /// 利用者ツリーに置くが自分では何も描かず（サイズ 0）、<see cref="Open"/> の間だけ
-    /// 内部の backdrop を <see cref="TweeqOverlayLayer"/> へ載せる。
-    /// 中身は普通に Add すればよく、内部の <see cref="TweeqBalloon"/> に常駐するので
-    /// 開閉で破棄されない。
+    /// A modal that covers the entire screen (m8-modal-tabs-spec.md §A, equivalent to the Vue
+    /// original's PaneModal). It sits in the user's tree but draws nothing itself (size 0), and
+    /// only while <see cref="Open"/> is true does it place its internal backdrop onto the
+    /// <see cref="TweeqOverlayLayer"/>. Content can simply be Add-ed normally; it lives inside the
+    /// internal <see cref="TweeqBalloon"/> so it is not destroyed by opening/closing.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// 閉じる責務は所有者にある。基底の TweeqModal は<b>キーを一切扱わない</b>（Vue PaneModal 準拠）。
-    /// backdrop クリックでも閉じず、<see cref="Emphasize"/> のバウンスと
-    /// <see cref="OutsideClicked"/> だけを返す（「閉じないモーダル」）。
+    /// Closing is the owner's responsibility. The base TweeqModal <b>does not handle any keys at
+    /// all</b> (matching the Vue original's PaneModal). It does not close on a backdrop click either;
+    /// it only returns the <see cref="Emphasize"/> bounce and <see cref="OutsideClicked"/> (a
+    /// "modal that doesn't close on its own").
     /// </para>
     /// <para>
-    /// Vue からの意図的逸脱が 2 件ある（仕様書が根拠）:
-    /// backdrop-filter が無いので <see cref="TweeqTheme.Background"/> の 50% アルファで暗転すること、
-    /// および背面 UI の誤操作＝事故なので backdrop でポインタを遮断すること。
+    /// There are 2 deliberate deviations from the Vue original (backed by the spec doc): since
+    /// there is no backdrop-filter, dimming is done via <see cref="TweeqTheme.Background"/> at 50%
+    /// alpha, and since accidental interaction with background UI is a real incident risk, the
+    /// backdrop blocks pointer events.
     /// </para>
     /// <para>
-    /// <see cref="Open"/> は Vue と同じ純リフレクタで、この要素からは書き戻さない。
-    /// パネル未接続で開いた場合は例外を投げずに「載せられなかった」で済ませ、
-    /// パネルへ接続された時点で載せ直す（UXML の open="true" がこの経路を通る）。
+    /// <see cref="Open"/> is a pure reflector just like in the Vue original — this element never
+    /// writes back to it. If opened while not attached to a panel, no exception is thrown; it is
+    /// simply left "not yet placed" and gets placed once attached to a panel (UXML's open="true"
+    /// goes through this path).
     /// </para>
     /// </remarks>
     [UxmlElement]
@@ -34,39 +37,40 @@ namespace Tweeq.UIToolkit
     {
         #region Constants
 
-        /// <summary>層の端に確保する余白（px）。Vue の pane-margin。最大サイズはこの 2 倍を引いた値。</summary>
+        /// <summary>Margin reserved at the edge of the layer (px). The Vue original's pane-margin. Max size is this value doubled and subtracted.</summary>
         public const float PANE_MARGIN = 48f;
 
-        /// <summary>外装の角丸半径（px）。Vue の radius-popup。</summary>
+        /// <summary>Corner radius of the outer shell (px). The Vue original's radius-popup.</summary>
         public const float PANE_RADIUS = 13f;
 
-        /// <summary>外装の内側余白（px）。Vue の pane-padding（バルーン既定の 9 を上書き）。</summary>
+        /// <summary>Inner padding of the outer shell (px). The Vue original's pane-padding (overrides the balloon's default of 9).</summary>
         public const float PANE_PADDING = 12f;
 
-        // 矢印なしポップアップと同じ「広く柔らかい」影
+        // The same "wide and soft" shadow as the arrowless popup
         const float PANE_SHADOW_BLUR = 20f;
         const float PANE_SHADOW_OFFSET_Y = 0f;
 
-        // 暗転の濃さ。UI Toolkit に backdrop-filter が無いための代替（意図的逸脱）
+        // Strength of the dimming. A substitute for UI Toolkit's lack of backdrop-filter (deliberate deviation)
         const float BACKDROP_ALPHA = 0.5f;
 
-        // 出現時に下から持ち上げる量（px）。React 版 style.styl の translateY(-6px) 相当
+        // Amount lifted up from below on appearance (px). Equivalent to the translateY(-6px) used
+        // in another reference implementation's style sheet
         const float ENTER_TRANSLATE_Y = -6f;
 
-        // emphasize: scale 1 → 1.03(35%) → 1 を 0.2s
+        // emphasize: scale 1 -> 1.03(35%) -> 1 over 0.2s
         const long EMPHASIZE_DURATION_MS = 200L;
         const float EMPHASIZE_PEAK_SCALE = 1.03f;
         const float EMPHASIZE_PEAK_PHASE = 0.35f;
 
-        // schedule の最小刻み。60fps 相当で十分滑らかに見える
+        // The minimum schedule tick. Equivalent to 60fps, which looks smooth enough
         const long TICK_MS = 16L;
 
         #endregion
 
         #region Fields
 
-        // トランジション定義は不変なので 1 個だけ作って全インスタンスで共有する
-        // （style.transition* は毎回 List を要求するため、都度 new すると開くたびにゴミが出る）
+        // The transition definitions are immutable, so create just one and share it across all instances
+        // (style.transition* requires a List every time; a new one on each open would generate garbage)
         static readonly StyleList<StylePropertyName> PaneProperties =
             new StyleList<StylePropertyName>(new List<StylePropertyName>
             {
@@ -80,7 +84,7 @@ namespace Tweeq.UIToolkit
                 new StylePropertyName("background-color"),
             });
 
-        // 本数はプロパティ側と揃える（CSS の循環補完に頼らず、読んで分かる形にしておく）
+        // Keep the count aligned with the properties list (don't rely on CSS's cyclic fill-in; keep it explicit and readable)
         static readonly StyleList<EasingFunction> PaneEase =
             new StyleList<EasingFunction>(new List<EasingFunction>
             {
@@ -112,21 +116,23 @@ namespace Tweeq.UIToolkit
         readonly VisualElement _backdrop;
         readonly TweeqBalloon _pane;
 
-        // テーマ由来の秒数。テーマ差し替え時にだけ作り直す
+        // Durations derived from the theme. Rebuilt only when the theme is swapped
         StyleList<TimeValue> _paneDuration;
         StyleList<TimeValue> _backdropDuration;
 
         bool _open;
 
-        // 「層に載っているか」。_open は要求、_mounted は実際の設置状態（パネル未接続だと乖離する）
+        // Whether it's placed on the layer. _open is the request; _mounted is the actual placement
+        // state (they diverge when not attached to a panel)
         bool _mounted;
 
         TweeqOverlayLayer _layer;
 
-        // 毎回のメソッドグループ変換はデリゲートを確保するので、登録／解除で使い回す実体を持つ
+        // A method-group conversion allocates a delegate every time, so keep a single instance and
+        // reuse it for register/unregister
         readonly EventCallback<GeometryChangedEvent> _onLayerGeometryChanged;
 
-        // 「1フレーム後に開始値から目標値へ遷移させる」1件だけを使い回す
+        // Reuse a single item for "transition from the start value to the target value one frame later"
         IVisualElementScheduledItem _settleItem;
 
         IVisualElementScheduledItem _emphasizeItem;
@@ -137,18 +143,18 @@ namespace Tweeq.UIToolkit
 
         #region Public API
 
-        /// <summary><see cref="Open"/> が false→true になった時に一度だけ発火する。</summary>
+        /// <summary>Fires once when <see cref="Open"/> transitions from false to true.</summary>
         public event Action Opened;
 
-        /// <summary><see cref="Open"/> が true→false になった時に一度だけ発火する。</summary>
+        /// <summary>Fires once when <see cref="Open"/> transitions from true to false.</summary>
         public event Action Closed;
 
-        /// <summary>backdrop（＝モーダルの外側）が押された時に発火する。閉じるかは所有者の判断。</summary>
+        /// <summary>Fires when the backdrop (i.e. outside the modal) is pressed. Whether to close is up to the owner.</summary>
         public event Action OutsideClicked;
 
         /// <summary>
-        /// 開閉。Vue と同じ純リフレクタで、この要素からは書き戻さない
-        /// （backdrop クリックや Escape では false にならない）。
+        /// Open/closed state. A pure reflector just like in the Vue original — this element never
+        /// writes back to it (it does not become false from a backdrop click or Escape).
         /// </summary>
         [UxmlAttribute("open")]
         public bool Open
@@ -176,16 +182,16 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>全面を覆う背景層。暗転とポインタ遮断を担う。</summary>
+        /// <summary>The background layer covering the whole screen. Handles dimming and pointer blocking.</summary>
         public VisualElement Backdrop => _backdrop;
 
-        /// <summary>外装のバルーン。半径・パディング・影を個別に詰めたい時に触る。</summary>
+        /// <summary>The outer shell balloon. Touch this when you want to tweak the radius, padding, or shadow individually.</summary>
         public TweeqBalloon Pane => _pane;
 
-        /// <summary><see cref="Emphasize"/> のバウンスを再生中か。</summary>
+        /// <summary>Whether the <see cref="Emphasize"/> bounce is currently playing.</summary>
         public bool IsEmphasizing => _emphasizing;
 
-        /// <summary>配色テーマ。backdrop / バルーン / 中身の <see cref="ITweeqThemed"/> 子孫へ配る。</summary>
+        /// <summary>The color theme. Distributed to the backdrop / balloon / content's <see cref="ITweeqThemed"/> descendants.</summary>
         public TweeqTheme Theme
         {
             get => _theme;
@@ -195,8 +201,8 @@ namespace Tweeq.UIToolkit
 
                 _pane.Theme = _theme;
 
-                // バルーンは Theme 代入のたびに自分の transition（scale）を張り直すので、
-                // モーダル側の opacity / translate 指定はその後で上書きし直す必要がある
+                // The balloon re-applies its own transition (scale) every time Theme is assigned,
+                // so the modal's opacity / translate settings need to be re-applied afterward
                 ApplyTransitions();
                 ApplyBackdropColor(_mounted ? 1f : 0f);
                 DistributeTheme(_pane.contentContainer);
@@ -204,16 +210,17 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>中身はバルーンのコンテンツ層へ入る（開閉で親が変わらないので破棄されない）。</summary>
+        /// <summary>Content goes into the balloon's content layer (the parent doesn't change on open/close, so it isn't destroyed).</summary>
         public override VisualElement contentContainer => _pane != null ? _pane.contentContainer : this;
 
         /// <summary>
-        /// 注意を引くためのバウンス（scale 1 → 1.03 → 1 を 0.2s）。
-        /// 再生中に呼び直すと先頭から掛け直す。パネル未接続では scheduler が回らないので何もしない。
+        /// A bounce to draw attention (scale 1 -> 1.03 -> 1 over 0.2s).
+        /// Calling it again while playing restarts from the beginning. Does nothing while not
+        /// attached to a panel, since the scheduler doesn't run.
         /// </summary>
         public void Emphasize()
         {
-            // 先頭から。TimerState.now は毎ティック進むので開始時刻は自前で覚える
+            // From the beginning. TimerState.now advances every tick, so the start time is tracked manually
             _emphasizeStartMs = -1L;
             ApplyEmphasizeScale(0f);
 
@@ -235,8 +242,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// backdrop クリック相当の処理（バウンス → <see cref="OutsideClicked"/>）を発火する。
-        /// パネル無しではポインタイベントを合成できないため、テストと外部ドライバのために口を開けてある。
+        /// Fires the processing equivalent to a backdrop click (bounce then <see cref="OutsideClicked"/>).
+        /// Without a panel, pointer events can't be synthesized, so this is exposed for tests and external drivers.
         /// </summary>
         public void PerformOutsideClick()
         {
@@ -252,7 +259,7 @@ namespace Tweeq.UIToolkit
         {
             this.name = "tweeq-modal";
 
-            // 利用者ツリーでは場所を取らない。実体はオーバーレイ層側にある
+            // Takes no space in the user's tree. The actual content lives on the overlay layer
             this.style.display = DisplayStyle.None;
             this.pickingMode = PickingMode.Ignore;
 
@@ -260,8 +267,9 @@ namespace Tweeq.UIToolkit
             {
                 name = "tweeq-modal-backdrop",
 
-                // Vue の popover="manual" は背面を操作可能なままにするが、
-                // 公演現場での誤操作＝事故なのでポインタを遮断する（意図的逸脱）
+                // The Vue original's popover="manual" leaves the background operable, but here
+                // accidental interaction during a live performance is a real incident risk, so
+                // the pointer is blocked (deliberate deviation)
                 pickingMode = PickingMode.Position,
             };
             _backdrop.style.position = Position.Absolute;
@@ -284,8 +292,8 @@ namespace Tweeq.UIToolkit
                 ShadowOffsetY = PANE_SHADOW_OFFSET_Y,
             };
 
-            // バルーンは既定で alignSelf: FlexStart（吹き出しは内容なり幅で左に付く）。
-            // モーダルは backdrop の中央寄せに従わせたいので、親の alignItems へ戻す
+            // The balloon defaults to alignSelf: FlexStart (a speech-bubble sticks to the left at its content width).
+            // The modal wants it to follow the backdrop's centering instead, so reset it to the parent's alignItems
             _pane.style.alignSelf = Align.Auto;
             _backdrop.hierarchy.Add(_pane);
 
@@ -303,20 +311,20 @@ namespace Tweeq.UIToolkit
 
         #region Mounting
 
-        /// <summary>層に載っている間だけ非 null。派生クラスがキー配線などに使う。</summary>
+        /// <summary>Non-null only while placed on the layer. Used by derived classes for things like key wiring.</summary>
         protected TweeqOverlayLayer Layer => _layer;
 
-        /// <summary>層へ載った直後に呼ばれる。既定では何もしない。</summary>
+        /// <summary>Called right after being placed on the layer. Does nothing by default.</summary>
         protected virtual void OnMounted(TweeqOverlayLayer layer)
         {
         }
 
-        /// <summary>層から降ろす直前に呼ばれる。登録したハンドラはここで必ず外すこと。</summary>
+        /// <summary>Called right before being taken off the layer. Any registered handlers must be unregistered here.</summary>
         protected virtual void OnUnmounted()
         {
         }
 
-        /// <summary><see cref="Theme"/> 代入の最後に呼ばれる。派生の自前パーツへ配り直すためのフック。</summary>
+        /// <summary>Called at the end of a <see cref="Theme"/> assignment. A hook for redistributing to a derived class's own parts.</summary>
         protected virtual void OnThemeApplied()
         {
         }
@@ -331,7 +339,7 @@ namespace Tweeq.UIToolkit
             TweeqOverlayLayer layer = TweeqOverlayLayer.GetOrCreate(this);
             if (layer == null)
             {
-                // パネル未接続では置き場所が無い。例外は投げず、接続時に載せ直す
+                // No place to put it while not attached to a panel. Don't throw; place it once attached
                 return;
             }
 
@@ -345,7 +353,7 @@ namespace Tweeq.UIToolkit
 
             _mounted = true;
 
-            // 層のサイズ変化（＝ビューポート変化）は中身を動かさないことがあるので別途監視する
+            // A size change of the layer (i.e. a viewport change) doesn't always move the content, so watch it separately
             _layer.RegisterCallback(_onLayerGeometryChanged);
 
             ApplyMaxSize();
@@ -368,21 +376,22 @@ namespace Tweeq.UIToolkit
                     _layer.UnregisterCallback(_onLayerGeometryChanged);
                 }
 
-                // 派生のハンドラ解除はツリーから外す前に済ませる（リーク禁止）
+                // Unregister derived handlers before removing from the tree (no leaks allowed)
                 OnUnmounted();
             }
 
             _layer = null;
 
-            // 閉じている間 backdrop は親無しで保持する。中身はバルーンに残るので壊れない。
-            // 閉じたのに 1 フレームでもポインタを吸うと事故なので、フェードアウトは待たずに即座に降ろす
-            // （テスト契約「Close で除去」もこの即時性を要求している）
+            // The backdrop is kept parentless while closed. Its content stays in the balloon, so it isn't destroyed.
+            // Absorbing a pointer for even one frame after closing is a real incident risk, so it is
+            // taken down immediately without waiting for a fade-out
+            // (the test contract "removed on Close" also demands this immediacy)
             _backdrop.RemoveFromHierarchy();
         }
 
         void OnAttachToPanel(AttachToPanelEvent evt)
         {
-            // UXML の open="true" は属性適用（パネル接続前）で立つので、ここで拾い直す
+            // UXML's open="true" is set at attribute-apply time (before attaching to a panel), so pick it back up here
             if (_open && !_mounted)
             {
                 Mount();
@@ -391,8 +400,8 @@ namespace Tweeq.UIToolkit
 
         void OnDetachFromPanel(DetachFromPanelEvent evt)
         {
-            // 所有者ごとツリーから外されたら層に置き去りにしない。Open の要求自体は保つので、
-            // 載せ直せばまた開く
+            // Don't leave it stranded on the layer when the owner is removed from the tree along with it.
+            // The Open request itself is preserved, so re-mounting reopens it
             Unmount();
         }
 
@@ -405,7 +414,7 @@ namespace Tweeq.UIToolkit
             ApplyMaxSize();
         }
 
-        // 中身が層に収まらない時だけ効く上限。これ以下なら内容なりの中央寄せになる
+        // A ceiling that only kicks in when the content doesn't fit the layer. Below this it centers at its content size
         void ApplyMaxSize()
         {
             if (_layer == null)
@@ -417,7 +426,7 @@ namespace Tweeq.UIToolkit
             float height = _layer.layout.height;
             if (!IsUsableSize(width) || !IsUsableSize(height))
             {
-                // まだレイアウトが降りていない。GeometryChanged で呼び直される
+                // Layout hasn't landed yet. Will be called again by GeometryChanged
                 return;
             }
 
@@ -425,7 +434,7 @@ namespace Tweeq.UIToolkit
             _pane.style.maxHeight = Mathf.Max(0f, height - PANE_MARGIN * 2f);
         }
 
-        // トランジションは初期化時（とテーマ差し替え時）に一度だけ。毎フレーム触ると StyleList を確保する
+        // Transitions are set once at init (and on theme swap). Touching them every frame would allocate a StyleList
         void ApplyTransitions()
         {
             float duration = _theme != null ? _theme.ActiveTransitionDuration : 0.064f;
@@ -441,8 +450,8 @@ namespace Tweeq.UIToolkit
                 new TimeValue(duration, TimeUnit.Second),
             });
 
-            // scale をトランジション対象に含めない。emphasize は schedule で毎フレーム書くので、
-            // 遷移が乗っていると狙った波形にならない
+            // Don't include scale in the transition targets. Emphasize writes it every frame via
+            // schedule, and a transition riding on top of that would break the intended waveform
             _pane.style.transitionProperty = PaneProperties;
             _pane.style.transitionTimingFunction = PaneEase;
             _pane.style.transitionDuration = _paneDuration;
@@ -461,9 +470,9 @@ namespace Tweeq.UIToolkit
 
         void BeginEnterAnimation()
         {
-            // 2 回目以降は前回の終了値（opacity 1）が残っているので、そのまま 0 を入れると
-            // 「消えるアニメ」が先に走る。開始値は duration 0 で当てる
-            // （Vue の @starting-style が担っていた役目。Popover / Balloon と同じ手口）
+            // From the second time onward the previous end value (opacity 1) is still in place, so
+            // simply setting 0 would first play a "disappearing" animation. Apply the start value with duration 0
+            // (this plays the role the Vue original's @starting-style served. Same trick as Popover / Balloon)
             _pane.style.transitionDuration = PaneInstant;
             _pane.style.opacity = 0f;
             _pane.style.translate = new StyleTranslate(
@@ -474,7 +483,7 @@ namespace Tweeq.UIToolkit
 
             if (_backdrop.panel == null)
             {
-                // scheduler が回らないので、透明のまま固まらないよう即座に終了値へ飛ばす
+                // The scheduler doesn't run, so jump straight to the end value to avoid getting stuck transparent
                 Settle();
                 return;
             }
@@ -503,9 +512,10 @@ namespace Tweeq.UIToolkit
             ApplyBackdropColor(1f);
         }
 
-        // TweeqRoot は ITweeqThemed に当たると探索を打ち切る。モーダル自身が ITweeqThemed なので、
-        // 中身へはここから配り直さないとテーマが届かない（複合部品の転送責務）。
-        // 外装の不透明化は TweeqBalloon が Theme.SurfaceOpaque を使うことで全ポップアップ共通になった
+        // TweeqRoot stops traversal when it hits an ITweeqThemed. Since the modal itself is an
+        // ITweeqThemed, the theme won't reach the content unless it's redistributed from here
+        // (the composite part's forwarding responsibility). Opaquing the outer shell is now shared
+        // across all popups since TweeqBalloon uses Theme.SurfaceOpaque
         void DistributeTheme(VisualElement parent)
         {
             TweeqThemeDistribution.Distribute(parent, _theme);
@@ -529,7 +539,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 1 → 1.03(35%) → 1 の折れ線。角が立たないよう smoothstep（ease 相当）に通す
+            // A piecewise-linear 1 -> 1.03(35%) -> 1 curve. Passed through smoothstep (ease-equivalent) to avoid sharp corners
             float phase = elapsed / (float)EMPHASIZE_DURATION_MS;
             float ramp = phase <= EMPHASIZE_PEAK_PHASE
                 ? phase / EMPHASIZE_PEAK_PHASE
@@ -546,7 +556,7 @@ namespace Tweeq.UIToolkit
             ApplyEmphasizeScale(0f);
         }
 
-        // 毎フレーム経路。Scale / StyleScale は構造体なのでここでの確保は無い
+        // Per-frame path. Scale / StyleScale are structs, so there's no allocation here
         void ApplyEmphasizeScale(float weight)
         {
             float scale = Mathf.Lerp(1f, EMPHASIZE_PEAK_SCALE, Mathf.Clamp01(weight));
@@ -564,11 +574,12 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // パネルの中身は最前面の要素が拾うので、背面 UI へはそもそも届かない。
-            // ここで止めるのは「層より外へ抜けていく」経路の保険
+            // The frontmost element picks up input within the panel's content, so it never reaches
+            // background UI in the first place. Stopping it here is a safeguard against the path
+            // that would otherwise leak "outside the layer"
             if (!(evt.target is VisualElement target) || target != _backdrop)
             {
-                // pane の中身のクリックは素通し（内側の部品が自分で処理する）
+                // Let clicks on the pane's content pass through untouched (the inner part handles them itself)
                 return;
             }
 

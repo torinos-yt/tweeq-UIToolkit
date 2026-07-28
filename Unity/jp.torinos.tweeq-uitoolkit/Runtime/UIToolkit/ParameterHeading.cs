@@ -4,17 +4,17 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// セクション見出しの 1 行（仕様 §3）。高さ 24px・14px bold・右スロット付き。
+    /// A single section-heading row (spec §3). 24px height, 14px bold, with a right slot.
     /// </summary>
     [UxmlElement]
     public partial class ParameterHeading : VisualElement, ITweeqThemed
     {
         #region Constants
 
-        /// <summary>見出しテキスト要素の USS クラス。</summary>
+        /// <summary>USS class for the heading text element.</summary>
         public const string TEXT_USS_CLASS_NAME = "tweeq-parameter-heading__text";
 
-        /// <summary>右スロットの USS クラス。</summary>
+        /// <summary>USS class for the right slot.</summary>
         public const string RIGHT_USS_CLASS_NAME = "tweeq-parameter-heading__right";
 
         const float FONT_SIZE = 14f;
@@ -33,7 +33,7 @@ namespace Tweeq.UIToolkit
 
         #region Public API
 
-        /// <summary>見出し文字列。</summary>
+        /// <summary>The heading string.</summary>
         [UxmlAttribute("text")]
         public string Text
         {
@@ -41,21 +41,22 @@ namespace Tweeq.UIToolkit
             set => _text.text = value ?? string.Empty;
         }
 
-        /// <summary>右端に寄せて置くスロット。</summary>
+        /// <summary>The slot placed flush against the right edge.</summary>
         public VisualElement Right => _right;
 
         /// <summary>
-        /// 見出しテキスト側のコンテナ。ParameterGroup がシェブロンを差し込み、
-        /// クリック／ホバーを受けるために使う。
+        /// The container on the heading text side. Used by ParameterGroup to insert its chevron
+        /// and to receive click/hover events.
         /// </summary>
         public VisualElement HeadingContainer => _headingContainer;
 
-        /// <summary>見出しテキスト要素そのもの。色遷移を掛けたい場合に使う。</summary>
+        /// <summary>The heading text element itself. Use this when you want to apply a color transition.</summary>
         public VisualElement TextElement => _text;
 
         /// <summary>
-        /// 見出し文字色。既定は Theme.Text。明示的に設定すると Theme 変更でも上書きされない
-        /// （ParameterGroup は TextMuted↔Text のホバー遷移を自前で持つため）。
+        /// The heading text color. Defaults to Theme.Text. Once explicitly set, it is no longer
+        /// overwritten by Theme changes (because ParameterGroup manages its own TextMuted<->Text
+        /// hover transition).
         /// </summary>
         public Color TextColor
         {
@@ -67,7 +68,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>配色テーマ。通常は ParameterGrid から配られる。</summary>
+        /// <summary>Color theme. Normally distributed by the ParameterGrid.</summary>
         public TweeqTheme Theme
         {
             get => _theme;
@@ -104,7 +105,7 @@ namespace Tweeq.UIToolkit
             _text = new Label(string.Empty);
             _text.AddToClassList(TEXT_USS_CLASS_NAME);
 
-            // ウェイトは ApplyStaticStyles でフォントの実ウェイトと併せて決める
+            // Weight is decided together with the font's actual weight in ApplyStaticStyles
             _text.style.unityTextAlign = TextAnchor.MiddleLeft;
             _text.style.whiteSpace = WhiteSpace.NoWrap;
             _text.style.marginLeft = 0f;
@@ -143,9 +144,10 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        // 見出しフォント（Geist SemiBold）は実ウェイトを持つので、FontStyle.Bold を併せると
-        // レガシー Font の擬似ボールドが二重に乗って潰れる。ロードできなかった（＝空＝
-        // パネル既定フォントに落ちた）場合だけ、太く見せる手段が擬似ボールドしか無いので Bold を残す
+        // The heading font (Geist SemiBold) has an actual weight, so combining it with FontStyle.Bold
+        // stacks the legacy Font's faux-bold on top and crushes the glyphs. Only when it failed to
+        // load (i.e. empty, meaning it fell back to the panel's default font) is faux-bold the only
+        // way left to look bold, so keep Bold in that case
         void ApplyHeadingFont()
         {
             FontDefinition heading = _theme.FontHeading;

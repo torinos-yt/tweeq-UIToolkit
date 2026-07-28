@@ -116,7 +116,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void RejectsUnsupportedGrammar()
         {
-            // 意図的逸脱: 変数・関数・べき乗・指数表記は文法に無い
+            // Intentional deviation: variables, functions, exponentiation, and exponent notation are not part of the grammar.
             AssertRejected("x * 2");
             AssertRejected("i + 1");
             AssertRejected("fps");
@@ -146,7 +146,7 @@ namespace Tweeq.Core.Tests
         [Test]
         public void RejectsRunawayNesting()
         {
-            // スタックを守るための深さ制限。実用的な入れ子は通る
+            // A depth limit to protect the stack. Practical nesting still passes.
             string shallow = new string('(', 10) + "1" + new string(')', 10);
             Assert.That(Evaluate(shallow), Is.EqualTo(1.0).Within(TOLERANCE));
 

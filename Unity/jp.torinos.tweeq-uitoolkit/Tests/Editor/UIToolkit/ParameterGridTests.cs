@@ -5,14 +5,14 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// ParameterGrid ファミリーの契約検証（仕様 §7-5 ほか）。
-    /// VisualElement は panel が無くても生成・スタイル設定できるので EditMode で完結する。
-    /// ただし文字幅の実測（MeasureTextSize）は panel 外では 0 を返すため、
-    /// 共有ラベル幅のテストは下限 60px の配布までを対象にする。
+    /// Contract verification for the ParameterGrid family (spec §7-5 and others).
+    /// A VisualElement can be created and styled without a panel, so this is fully covered in EditMode.
+    /// However, actual text width measurement (MeasureTextSize) returns 0 outside a panel,
+    /// so shared label width tests only cover distribution down to the 60px minimum.
     /// </summary>
     public class ParameterGridTests
     {
-        // 他のテストや実プロジェクトの設定と衝突しないよう、専用のキーを使う
+        // Uses a dedicated key so it doesn't collide with other tests or real project settings
         const string TEST_GROUP_NAME = "tweeq.tests.parameterGridTests.group";
 
         string _prefsKey;
@@ -88,7 +88,7 @@ namespace Tweeq.UIToolkit.Tests
 
             grid.Refresh();
 
-            // panel 外では実測が効かないので、下限 60px が全行へ配られていれば良い
+            // Actual measurement doesn't work outside a panel, so it's enough that the 60px minimum is distributed to every row
             Assert.That(LabelOf(first).style.width.value.value,
                 Is.EqualTo(ParameterGrid.MIN_LABEL_WIDTH).Within(0.01f));
             Assert.That(LabelOf(second).style.width.value.value,
@@ -106,7 +106,7 @@ namespace Tweeq.UIToolkit.Tests
 
             grid.Refresh();
 
-            // 仕様 §5-6: グループの中の Parameter も同じ Grid から幅をもらう
+            // Spec §5-6: a Parameter inside a group also gets its width from the same Grid
             Assert.That(LabelOf(nested).style.width.value.value,
                 Is.EqualTo(ParameterGrid.MIN_LABEL_WIDTH).Within(0.01f));
         }
@@ -122,7 +122,7 @@ namespace Tweeq.UIToolkit.Tests
 
             grid.Theme = TweeqTheme.Light();
 
-            // Theme は Grid の Refresh 経路でグループ内の Parameter まで伝播する
+            // Theme propagates down to Parameters inside a group via the Grid's Refresh path
             Assert.That(nested.Theme, Is.SameAs(grid.Theme));
         }
 
@@ -160,7 +160,7 @@ namespace Tweeq.UIToolkit.Tests
                 text.style.unityFontDefinition.value.font,
                 Is.SameAs(theme.FontHeading.font));
 
-            // 実フォントが SemiBold なので、擬似ボールドを重ねない
+            // The actual font is SemiBold, so no faux bold is layered on top
             Assert.That(
                 text.style.unityFontStyleAndWeight.value,
                 Is.EqualTo(FontStyle.Normal));
@@ -177,7 +177,7 @@ namespace Tweeq.UIToolkit.Tests
 
             VisualElement text = heading.TextElement;
 
-            // 既定フォントへ落ちた場合は太く見せる手段が擬似ボールドしか無い
+            // When falling back to the default font, faux bold is the only way to make it look bold
             Assert.That(TweeqFonts.IsEmpty(text.style.unityFontDefinition.value), Is.True);
             Assert.That(
                 text.style.unityFontStyleAndWeight.value,
@@ -248,7 +248,7 @@ namespace Tweeq.UIToolkit.Tests
 
             group.Expanded = false;
 
-            // panel 外なのでアニメーションは走らず、閉状態が即座に適用される
+            // No animation runs outside a panel, so the closed state is applied immediately
             Assert.That(clip.style.overflow.value, Is.EqualTo(Overflow.Hidden));
             Assert.That(clip.style.maxHeight.value.value, Is.EqualTo(0f).Within(0.01f));
         }

@@ -4,12 +4,13 @@ using NUnit.Framework;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// ShuffleInput の契約（Vue InputShuffle 相当）。クリックが Generate を通ること・
-    /// 通知が 1 クリック 1 組であること・サイコロの演出が値と独立であることを見る。
+    /// The contract of ShuffleInput (equivalent to the Vue original's InputShuffle). Covers a
+    /// click going through Generate, notification being one pair per click, and the dice
+    /// animation being independent of the value.
     /// </summary>
     /// <remarks>
-    /// クリックは panel 非依存の <c>PerformClick</c> で駆動する。実ポインタ操作と描画は
-    /// Play Mode 側の担当。
+    /// Clicks are driven via the panel-independent <c>PerformClick</c>. Actual pointer operation
+    /// and rendering are the responsibility of the Play Mode side.
     /// </remarks>
     public class ShuffleInputTests
     {
@@ -20,7 +21,7 @@ namespace Tweeq.UIToolkit.Tests
             return input;
         }
 
-        #region クリック
+        #region Click
 
         [Test]
         public void Click_TakesTheNextValueFromGenerate()
@@ -81,7 +82,7 @@ namespace Tweeq.UIToolkit.Tests
         [Test]
         public void Click_NotifiesEvenWhenGenerateReturnsTheSameValue()
         {
-            // 「同じ値を引いた」ことも 1 回の操作なので、確定は飛ぶ
+            // Drawing "the same value" is still one operation, so Confirmed still fires
             ShuffleInput<string> input = Create("a", previous => previous);
             int confirmed = 0;
             input.Confirmed += _ => confirmed++;
@@ -128,7 +129,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region 値
+        #region Value
 
         [Test]
         public void SetValueWithoutNotify_IsSilent()
@@ -170,7 +171,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region サイコロの演出
+        #region Dice animation
 
         [Test]
         public void Icon_TurnsNinetyDegreesPerClick()
@@ -199,7 +200,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region グループ融合
+        #region Group fusion
 
         [Test]
         public void InlinePosition_RoundTrips()

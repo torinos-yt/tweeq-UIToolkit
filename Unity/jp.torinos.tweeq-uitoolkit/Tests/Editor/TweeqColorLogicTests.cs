@@ -7,7 +7,7 @@ namespace Tweeq.Core.Tests
     {
         const double TOLERANCE = 1e-12;
 
-        // 色相は 0〜360 のスケールなので、[0,1] のチャンネルより緩い許容で見る
+        // Hue is on a 0-360 scale, so it's checked with a looser tolerance than the [0,1] channels.
         const double HUE_TOLERANCE = 1e-9;
 
         #region Helpers
@@ -28,7 +28,7 @@ namespace Tweeq.Core.Tests
             Assert.That(actual.A, Is.EqualTo(a).Within(TOLERANCE), message + " (a)");
         }
 
-        // 6 分割の境界。ここで枝が入れ替わるので、変換の切れ目はすべてこの角度で起きる
+        // The boundaries between the 6 sectors. The branch switches here, so every discontinuity in the conversion occurs at these angles.
         static readonly double[] SectorBoundaries = { 0.0, 60.0, 120.0, 180.0, 240.0, 300.0 };
 
         static readonly double[][] BoundaryRgb =
@@ -69,7 +69,7 @@ namespace Tweeq.Core.Tests
             }
         }
 
-        // 境界の直前・直後で枝が変わっても色が飛ばないこと
+        // Even as the branch changes right before/after a boundary, the color must not jump.
         [Test]
         public void HueIsContinuousAcrossSectorBoundaries()
         {
@@ -171,7 +171,7 @@ namespace Tweeq.Core.Tests
             Assert.That(result.V, Is.EqualTo(0.0).Within(TOLERANCE));
         }
 
-        // SV パッドを下端・左端まで引いてから戻す往復で色相が失われないこと
+        // Hue must not be lost on a round trip that drags the SV pad all the way to the bottom/left edge and then returns.
         [Test]
         public void HueSurvivesRoundTripThroughBlackAndGray()
         {
@@ -259,7 +259,7 @@ namespace Tweeq.Core.Tests
                 rgba, 51.0 / 255.0, 102.0 / 255.0, 153.0 / 255.0, 128.0 / 255.0, "#33669980");
         }
 
-        // #RGB は 1 桁を 2 桁へ複製する（0x8 → 0x88）
+        // #RGB duplicates each 1-digit value into 2 digits (0x8 -> 0x88).
         [Test]
         public void TryParseHexExpandsThreeDigits()
         {
@@ -289,7 +289,7 @@ namespace Tweeq.Core.Tests
                 "#GGG",
                 "#xyz",
                 "#12",
-                "#1234",     // #RGBA の 4 桁短縮は受けない（仕様は 3/6/8 桁のみ）
+                "#1234",     // A 4-digit #RGBA shorthand is not accepted (the spec allows only 3/6/8 digits).
                 "#12345",
                 "#1234567",
                 "#123456789",
@@ -303,7 +303,7 @@ namespace Tweeq.Core.Tests
                 Assert.That(
                     TweeqColorLogic.TryParseHex(text, out Rgba rgba), Is.False, $"text={text ?? "null"}");
 
-                // 失敗時は不透明な黒で埋める契約
+                // Contract: on failure, it's filled with opaque black.
                 AssertRgba(rgba, 0.0, 0.0, 0.0, 1.0, $"text={text ?? "null"}");
             }
         }
@@ -330,7 +330,7 @@ namespace Tweeq.Core.Tests
                 TweeqColorLogic.FormatHex(new Rgba(0.0, 0.0, 0.0, 0.0)), Is.EqualTo("#00000000"));
         }
 
-        // 桁数の判定は量子化後の 255 未満で行う。丸めて不透明になる α は 6 桁のまま
+        // The digit-count decision is based on "less than 255 after quantization." An alpha that rounds to opaque stays at 6 digits.
         [Test]
         public void FormatHexKeepsSixDigitsWhenAlphaRoundsToOpaque()
         {

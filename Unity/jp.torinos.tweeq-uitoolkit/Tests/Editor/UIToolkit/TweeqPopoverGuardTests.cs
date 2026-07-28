@@ -4,13 +4,13 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// TweeqPopover の外側クリック判定（m8-modal-tabs-spec.md §C）を検証する。
+    /// Verifies TweeqPopover's outside-click determination (m8-modal-tabs-spec.md §C).
     ///
-    /// 旧実装は「target がオーバーレイ層の中なら閉じない」だったので、層にモーダルが載ると
-    /// モーダル内のクリックでネストしたポップオーバーが閉じなくなった。判定は
-    /// <see cref="TweeqPopover.IsOutsideClick"/> に集約したので、ここを直接叩いて確かめる
-    /// （PointerDownEvent の合成は EditMode では組めないため、root からの配送そのものは
-    /// Play Mode 側の担当）。
+    /// The old implementation was "don't close if target is inside the overlay layer", so once a modal
+    /// mounted on the layer, clicks inside the modal would stop nested popovers from closing. The determination
+    /// has since been consolidated into <see cref="TweeqPopover.IsOutsideClick"/>, so this hits that directly to verify
+    /// (PointerDownEvent can't be synthesized in EditMode, so dispatch from root itself is the
+    /// Play Mode side's responsibility).
     /// </summary>
     public class TweeqPopoverGuardTests
     {
@@ -26,7 +26,7 @@ namespace Tweeq.UIToolkit.Tests
             _panel = null;
         }
 
-        // アンカー付きで開いた popover と、その中身を 1 つ返す
+        // Returns a popover opened with an anchor, plus one item of its content
         TweeqPopover OpenPopover(out VisualElement content)
         {
             _panel = _panel ?? TweeqModalTestPanel.Create();
@@ -43,7 +43,7 @@ namespace Tweeq.UIToolkit.Tests
             return popover;
         }
 
-        #region 既存の入れ子ポップアップ（回帰）
+        #region Existing nested popup (regression)
 
         [Test]
         public void Inside_TheOwnContentIsNotAnOutsideClick()
@@ -59,7 +59,7 @@ namespace Tweeq.UIToolkit.Tests
         {
             _popover = OpenPopover(out VisualElement content);
 
-            // ピッカー内 Dropdown のリスト相当。層に兄弟として開く
+            // Equivalent to a Dropdown's list inside a picker. Opens as a sibling on the layer
             TweeqPopover nested = new TweeqPopover { LightDismiss = false };
             VisualElement nestedContent = new VisualElement();
             nested.Add(nestedContent);
@@ -79,7 +79,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region モーダル（今回の修正）
+        #region Modal (this fix)
 
         [Test]
         public void Outside_AModalOnTheSameLayerIsAnOutsideClick()
@@ -94,8 +94,8 @@ namespace Tweeq.UIToolkit.Tests
             {
                 Assume.That(modal.Backdrop.hierarchy.parent, Is.Not.Null);
 
-                // 層の中でもポップオーバーでなければ外側。モーダル内のクリックで
-                // ネストしたドロップダウンが正しく閉じる
+                // Even inside the layer, it's outside if it isn't a popover. This lets clicks inside
+                // the modal correctly close nested dropdowns
                 Assert.IsTrue(_popover.IsOutsideClick(modal.Backdrop));
                 Assert.IsTrue(_popover.IsOutsideClick(modal.Pane));
                 Assert.IsTrue(_popover.IsOutsideClick(modal.Pane.contentContainer));

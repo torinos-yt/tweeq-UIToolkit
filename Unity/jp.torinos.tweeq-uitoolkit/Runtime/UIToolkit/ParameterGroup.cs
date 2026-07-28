@@ -6,34 +6,36 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// 折りたたみ可能なパラメータグループ（仕様 §3）。
+    /// A collapsible parameter group (spec §3).
     ///
-    /// 本家は grid-template-rows を 1fr↔0fr で遷移させるが、UI Toolkit に grid は無い。
-    /// 代わりに clip 要素の max-height を「実測高↔0」で遷移させ、閉／遷移中だけ
-    /// overflow:hidden にする（開き切ったら解除しないと入力欄のフォーカスリングが切れる）。
+    /// The original transitions grid-template-rows between 1fr and 0fr, but UI Toolkit has no grid.
+    /// Instead, the clip element's max-height is transitioned between "measured height" and 0, with
+    /// overflow:hidden applied only while closed / transitioning (if not released once fully open,
+    /// the input field's focus ring gets clipped).
     /// </summary>
     [UxmlElement]
     public partial class ParameterGroup : VisualElement, ITweeqThemed
     {
         #region Constants
 
-        /// <summary>開閉状態の PlayerPrefs キー接頭辞。</summary>
+        /// <summary>PlayerPrefs key prefix for the expanded/collapsed state.</summary>
         public const string PREFS_PREFIX = "tweeq.";
 
-        /// <summary>開閉状態の PlayerPrefs キー接尾辞。</summary>
+        /// <summary>PlayerPrefs key suffix for the expanded/collapsed state.</summary>
         public const string PREFS_SUFFIX = ".expanded";
 
         const float CHEVRON_SIZE = 12f;
 
-        // 本家 .heading の gap 0.25em 相当
+        // Equivalent to the gap: 0.25em in the original .heading
         const float CHEVRON_GAP = 4f;
 
-        // TransitionEndEvent が届かない環境（アニメ無効・値が動かない等）でも
-        // 開き切った状態へ必ず戻すための保険。遷移時間 + 余裕
+        // A safeguard to always return to the fully-open state even in environments where
+        // TransitionEndEvent never arrives (animation disabled, value doesn't move, etc).
+        // Transition duration + margin
         const long FINISH_FALLBACK_MARGIN_MS = 80;
 
-        // 「pin した高さが既に目標高」と見なす許容差（px）。1px 未満の遷移は
-        // 目に見えないので、走らない遷移を待つより即座に開き切る
+        // Tolerance (px) for treating "the pinned height" as already at the target height. A transition
+        // under 1px isn't visible, so rather than waiting on a transition that won't run, open fully at once
         const float PIN_EPSILON = 0.5f;
 
         #endregion
@@ -54,18 +56,20 @@ namespace Tweeq.UIToolkit
         IVisualElementScheduledItem _transitionItem;
         IVisualElementScheduledItem _finishItem;
 
-        // 遷移の始点として固定した clip の高さ。往復反転で「もう目標高に居る」判定に使う
+        // The clip height pinned as the transition's starting point. Used to judge "already at the
+        // target height" when the direction is reversed mid-transition
         float _pinnedHeight;
 
-        // 最後に測れた content の高さ。クリップ中の実測が 0 を返したときの保険
+        // The last successfully measured content height. A safeguard for when the measurement
+        // returns 0 while clipped
         float _naturalContentHeight;
 
         #endregion
 
         #region Public API
 
-        /// <summary>見出し文字列。</summary>
-        // VisualElement 組み込みの text 系属性と混ざらないよう、UXML 側は heading-text にする
+        /// <summary>The heading string.</summary>
+        // Named heading-text on the UXML side so it doesn't collide with VisualElement's built-in text attributes
         [UxmlAttribute("heading-text")]
         public string Label
         {
@@ -73,7 +77,7 @@ namespace Tweeq.UIToolkit
             set => _heading.Text = value;
         }
 
-        /// <summary>開いているか。変更するとアニメーション付きで開閉し、状態を永続化する。</summary>
+        /// <summary>Whether it is open. Changing it expands/collapses with an animation and persists the state.</summary>
         [UxmlAttribute("expanded")]
         public bool Expanded
         {
@@ -92,11 +96,11 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 永続化キー。設定した時点で保存済みの開閉状態を読み込む（未保存なら展開のまま）。
+        /// The persistence key. Setting it loads the saved expanded/collapsed state (stays expanded if unsaved).
         /// </summary>
-        // UXML では name（VisualElement 組み込み）と衝突するので group-name にする。
-        // 属性は宣言順に適用されるため Expanded より後に置き、保存済み状態が
-        // UXML に書かれた既定値へ勝つようにする（コンストラクタと同じ優先順）
+        // Named group-name since UXML's name collides with VisualElement's built-in name.
+        // Attributes are applied in declaration order, so this is placed after Expanded so the
+        // saved state wins over the default written in UXML (same priority as the constructor)
         [UxmlAttribute("group-name")]
         public string Name
         {
@@ -107,33 +111,34 @@ namespace Tweeq.UIToolkit
 
                 if (TryLoadExpanded(PrefsKey(_name), out bool stored) && stored != _expanded)
                 {
-                    // 読み込みはユーザー操作ではないのでアニメも保存もしない
+                    // Loading is not a user action, so neither animate nor save
                     _expanded = stored;
                     ApplyExpanded(false);
                 }
             }
         }
 
-        /// <summary>Parameter などを Add する先。</summary>
+        /// <summary>The destination to Add() Parameters and the like to.</summary>
         public VisualElement Content => _content;
 
         /// <summary>
-        /// UXML の子や素の Add() が折りたたみ対象に入るようにする（内部構築は hierarchy.Add 経由）。
-        /// コンストラクタ中は _content 生成前に呼ばれ得るため null ガードする
+        /// Makes UXML children and plain Add() calls become part of the collapsible target (internal
+        /// construction goes through hierarchy.Add). Guarded against null since this can be called during
+        /// the constructor before _content is created
         /// </summary>
         public override VisualElement contentContainer => _content ?? this;
 
-        /// <summary>見出し右端のスロット。</summary>
+        /// <summary>The slot at the right edge of the heading.</summary>
         public VisualElement HeadingRight => _heading.Right;
 
-        /// <summary>配色テーマ。通常は ParameterGrid から配られる。</summary>
+        /// <summary>Color theme. Normally distributed by the ParameterGrid.</summary>
         public TweeqTheme Theme
         {
             get => _theme;
             set
             {
-                // 同一インスタンスでも打ち切らない。テーマ設定後に足された行へ届ける
-                // 再配布の入り口はこの setter しか無い（M7 転送契約の取りこぼし修正）
+                // Don't bail out even for the same instance, so rows added after the theme is set still receive it.
+                // This setter is the only entry point for redistribution (fix for a gap in the M7 propagation contract)
                 _theme = value ?? TweeqTheme.Dark();
                 _heading.Theme = _theme;
                 ApplyStaticStyles();
@@ -143,13 +148,13 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>指定名に対応する PlayerPrefs キーを返す。</summary>
+        /// <summary>Returns the PlayerPrefs key corresponding to the given name.</summary>
         public static string PrefsKey(string name)
         {
             return string.IsNullOrEmpty(name) ? string.Empty : PREFS_PREFIX + name + PREFS_SUFFIX;
         }
 
-        /// <summary>content 内の行間（gapControl）を配り直す。子を足したあとに呼ぶ。</summary>
+        /// <summary>Redistributes the row gap (gapControl) inside content. Call after adding children.</summary>
         public void RefreshContentGaps()
         {
             TweeqGap.Apply(_content, _theme.GapControl, FlexDirection.Column);
@@ -178,7 +183,7 @@ namespace Tweeq.UIToolkit
 
             VisualElement headingBox = _heading.HeadingContainer;
 
-            // ボタン相当。クリックと Enter/Space で開閉する
+            // Acts like a button. Toggles open/closed via click and Enter/Space
             headingBox.focusable = true;
             headingBox.RegisterCallback<PointerDownEvent>(OnHeadingPointerDown);
             headingBox.RegisterCallback<ClickEvent>(OnHeadingClick);
@@ -192,8 +197,8 @@ namespace Tweeq.UIToolkit
             _content = new VisualElement { name = "tweeq-parameter-group-content" };
             _content.style.flexDirection = FlexDirection.Column;
 
-            // clip 側の max-height が 0 でも実測高を保つため、縮まないようにする。
-            // これで閉じている間も _content.resolvedStyle.height が「開いたときの高さ」になる
+            // Prevent shrinking so the measured height is preserved even when the clip side's max-height is 0.
+            // This keeps _content.resolvedStyle.height equal to "the height when open" even while closed
             _content.style.flexShrink = 0f;
             _content.RegisterCallback<GeometryChangedEvent>(OnContentGeometryChanged);
             _clip.Add(_content);
@@ -201,7 +206,7 @@ namespace Tweeq.UIToolkit
             ApplyStaticStyles();
             RefreshHeadingColor();
 
-            // パネルに載る前に初期状態を書いておけば、最初の遷移は走らない
+            // Writing the initial state before being attached to a panel means the first transition never runs
             ApplyExpanded(false);
 
             _clip.RegisterCallback<TransitionEndEvent>(OnClipTransitionEnd);
@@ -220,11 +225,11 @@ namespace Tweeq.UIToolkit
         {
             float duration = _theme.HoverTransitionDuration;
 
-            // 本家は `ease`（cubic-bezier(0.25,0.1,0.25,1)）指定なのでそれに合わせる
+            // The original specifies `ease` (cubic-bezier(0.25,0.1,0.25,1)), so match that
             ApplyTransition(_clip, duration, EasingMode.Ease, "max-height", "padding-top");
             ApplyTransition(_chevron, duration, EasingMode.Ease, "rotate");
 
-            // 色は Label 自身のインラインスタイルで切り替わるので、遷移も Label へ掛ける
+            // Color is switched via the Label's own inline style, so apply the transition to the Label too
             ApplyTransition(_heading.TextElement, duration, EasingMode.Ease, "color");
 
             RefreshContentGaps();
@@ -246,17 +251,18 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // UI Toolkit の遷移は「直前のフレームで解決済みの値 → 新しい値」でしか補間されない。
-            // none(auto) からも、遷移途中の値からも、同一フレームで目標値を書くと補間が飛ぶ。
-            // 以前は閉じる側だけ「実測高で pin → 次 tick で 0」にしていたため、開く側が
-            // 補間されず +80ms のフォールバックで一気に見えていた（feedback-fixes-01.md B）。
-            // 開閉どちらも同じ二段構えに揃える。
+            // UI Toolkit transitions only interpolate from "the value resolved on the previous frame" to
+            // "the new value". Writing the target value within the same frame skips interpolation, whether
+            // starting from none(auto) or from a mid-transition value.
+            // Previously only the closing side did "pin at measured height -> 0 on the next tick", so the
+            // opening side wasn't interpolated and snapped open all at once via the +80ms fallback
+            // (feedback-fixes-01.md B). Align both open and close to the same two-step approach.
             //
-            // pin は「今まさに描かれている高さ」でなければ反転時に飛ぶので、保持している
-            // 自然高ではなく resolvedStyle から取る
+            // The pin must be "the height currently being drawn", otherwise it snaps when reversed, so
+            // take it from resolvedStyle rather than the natural height we're holding onto
             _pinnedHeight = CurrentClipHeight();
 
-            // 遷移中は必ずクリップする
+            // Always clip while transitioning
             _clip.style.overflow = Overflow.Hidden;
             _clip.style.maxHeight = _pinnedHeight;
             _clip.style.paddingTop = CurrentClipPaddingTop();
@@ -264,7 +270,8 @@ namespace Tweeq.UIToolkit
             _transitionItem = this.schedule.Execute(StartTransition).StartingIn(0);
         }
 
-        // pin から 1 tick 後。ここで初めて目標値を書く（＝始点が解決済みなので補間される）
+        // One tick after the pin. This is where the target value is first written (the start point is
+        // already resolved, so it gets interpolated)
         void StartTransition()
         {
             _transitionItem = null;
@@ -284,13 +291,13 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 計測は pin 後のこのタイミングで行う。クリック時点では未レイアウトの
-            // 古い値を掴むことがある
+            // Measurement is done at this point after the pin. At click time we might grab a stale,
+            // not-yet-laid-out value
             float content = MeasuredContentHeight();
             if (content <= 0f)
             {
-                // 中身がまだ一度もレイアウトされていない（初回展開など）。0 へ向けて
-                // 遷移させても動かず、フォールバックで一気に見えるだけなので即開きにする
+                // The content has never been laid out even once (e.g. first expansion). Transitioning
+                // toward 0 wouldn't move anything and would just snap open via the fallback, so open at once
                 ApplyEndState();
                 return;
             }
@@ -298,8 +305,8 @@ namespace Tweeq.UIToolkit
             float target = content + gap;
             if (_pinnedHeight >= target - PIN_EPSILON)
             {
-                // 閉じアニメの途中で開き直した等で、既に目標高に達している。
-                // 遷移が走らない＝TransitionEndEvent も来ないので、ここで開き切る
+                // Already at the target height, e.g. from reopening mid-way through a closing animation.
+                // No transition runs, meaning TransitionEndEvent never arrives either, so open fully here
                 ApplyEndState();
                 return;
             }
@@ -307,11 +314,11 @@ namespace Tweeq.UIToolkit
             _clip.style.paddingTop = gap;
             _clip.style.maxHeight = target;
 
-            // フォールバックは目標値を書いたこの瞬間から数える
+            // The fallback counts from this moment the target value was written
             ScheduleFinishExpand();
         }
 
-        // アニメーションを挟まない最終状態。展開なら max-height の枷を外す
+        // The final state with no animation involved. If expanded, remove the max-height constraint
         void ApplyEndState()
         {
             float gap = _theme.GapControl;
@@ -344,7 +351,7 @@ namespace Tweeq.UIToolkit
             _finishItem = this.schedule.Execute(FinishExpand).StartingIn(delay);
         }
 
-        // 開き切ったら max-height の枷を外す。中身が後から伸びても追従させるため
+        // Remove the max-height constraint once fully open, so growth of the content afterward is followed
         void FinishExpand()
         {
             _finishItem?.Pause();
@@ -384,16 +391,17 @@ namespace Tweeq.UIToolkit
 
         void OnClipTransitionEnd(TransitionEndEvent evt)
         {
-            // TransitionEndEvent はバブルするので、content 内の入力欄（背景色の遷移など）が
-            // 遷移を終えるたびにここへ来る。それでアニメを打ち切らないよう target を見る
+            // TransitionEndEvent bubbles, so this fires every time an input field inside content
+            // (e.g. a background-color transition) finishes a transition. Check target so the
+            // animation isn't cut short by those
             if (evt == null || !ReferenceEquals(evt.target, _clip) || !_expanded)
             {
                 return;
             }
 
-            // 自分が張った展開遷移の終わりでなければ無視する。閉じ遷移を pin で
-            // 打ち切った直後や、即開きの padding-top 遷移の終わりで開き切って
-            // しまうと、開くアニメが省略されて見える
+            // Ignore anything that isn't the end of the expand transition we started. If we opened
+            // fully right after cutting a close transition short with a pin, or at the end of the
+            // padding-top transition from an instant-open, the opening animation would appear skipped
             if (_finishItem == null)
             {
                 return;
@@ -404,14 +412,14 @@ namespace Tweeq.UIToolkit
 
         void OnContentGeometryChanged(GeometryChangedEvent evt)
         {
-            // バブルしてくる子孫のレイアウト変化は無視する
+            // Ignore descendant layout changes that bubble up
             if (evt == null || !ReferenceEquals(evt.target, _content))
             {
                 return;
             }
 
-            // clip が max-height 0 でも content は flexShrink 0 で自然高を保つ。
-            // ただし環境依存で 0 が返ることがあるので、測れた値は保険に残す
+            // Even when the clip's max-height is 0, content keeps its natural height thanks to flexShrink 0.
+            // However 0 can still be returned depending on the environment, so keep any measured value as a fallback
             float height = evt.newRect.height;
             if (!float.IsNaN(height) && height > 0f)
             {
@@ -432,7 +440,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // クリックでフォーカスを取り、以降キーボードでも開閉できるようにする
+            // Take focus on click, so it can also be expanded/collapsed via keyboard afterward
             _heading.HeadingContainer.Focus();
         }
 
@@ -483,7 +491,7 @@ namespace Tweeq.UIToolkit
         {
             Color color = _hovered ? _theme.Text : _theme.TextMuted;
 
-            // 文字色は transition で、シェブロンは Painter2D なので即時で切り替わる
+            // The text color switches via transition, while the chevron switches instantly since it's Painter2D
             _heading.HeadingContainer.style.color = color;
             _heading.TextColor = color;
             _chevron.MarkDirtyRepaint();
@@ -501,8 +509,8 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // バッチモードやサンドボックスでは PlayerPrefs が使えないことがある。
-            // 折りたたみ状態の保存で例外を投げて上位を止めるのは割に合わない
+            // PlayerPrefs can be unavailable in batch mode or a sandbox.
+            // It isn't worth throwing an exception that halts the caller just to save the collapsed state
             try
             {
                 PlayerPrefs.SetInt(key, _expanded ? 1 : 0);
@@ -551,14 +559,15 @@ namespace Tweeq.UIToolkit
 
         void OnDetachFromPanel(DetachFromPanelEvent evt)
         {
-            // content から子を外しただけで遷移を打ち切らないよう、自分自身の剥がれだけ見る
+            // Only check for this element's own detachment, so merely removing a child from content
+            // doesn't cut the transition short
             if (evt != null && !ReferenceEquals(evt.target, this))
             {
                 return;
             }
 
-            // 剥がしたパネルのスケジュール項目を掴んだままだと、次に載せたとき
-            // 遷移途中の pin（max-height 固定＋overflow hidden）で止まったままになる
+            // If we keep holding onto the scheduled item from the panel we were detached from, the next
+            // time we're attached it would stay stuck mid-transition at the pin (fixed max-height + overflow hidden)
             CancelScheduled();
             ApplyEndState();
         }
@@ -583,7 +592,8 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 下向き三角。回転しても見た目が偏らないよう、正方形の中心で釣り合う位置に置く
+            // A downward-pointing triangle. Positioned to balance around the center of the square
+            // so it doesn't look lopsided when rotated
             float halfWidth = width * 0.26f;
             float halfHeight = height * 0.16f;
             float centerX = width * 0.5f;

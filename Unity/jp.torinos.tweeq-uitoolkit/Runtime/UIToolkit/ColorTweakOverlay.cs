@@ -2,8 +2,8 @@ using System;
 using UnityEngine;
 using UnityEngine.UIElements;
 
-// ColorInput と同じ理由（Tweeq.Core を丸ごと引くと TweeqRect / TweeqVec2 が
-// UnityEngine 側と紛らわしい）で、使う型だけ別名で引き込む
+// Same reason as ColorInput (pulling in Tweeq.Core wholesale would make
+// TweeqRect / TweeqVec2 ambiguous with the UnityEngine side) — only alias in the types we use
 using HSVA = Tweeq.Core.Hsva;
 using CoreRgba = Tweeq.Core.Rgba;
 using TweeqColorLogic = Tweeq.Core.TweeqColorLogic;
@@ -12,64 +12,64 @@ using TweeqFormat = Tweeq.Core.TweeqFormat;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// <see cref="ColorTweakOverlay"/> へ渡す 1 フレーム分の描画パラメータ。
-    /// 座標はすべてパネル座標（＝オーバーレイ層のローカル座標）。
+    /// Per-frame rendering parameters passed to <see cref="ColorTweakOverlay"/>.
+    /// All coordinates are panel-space (= local coordinates of the overlay layer).
     /// </summary>
     struct ColorTweakOverlayState
     {
         public TweeqTheme Theme;
 
-        /// <summary>ドラッグ開始位置。プレビュー円とラベルの基準点。</summary>
+        /// <summary>Drag start position. Reference point for the preview circle and label.</summary>
         public Vector2 Origin;
 
         public ColorTweakMode Mode;
 
-        /// <summary>現在の HSVA。pad のスライド量と各スライダーのグラデはここから引く。</summary>
+        /// <summary>Current HSVA. The pad's slide amount and each slider's gradient are derived from this.</summary>
         public HSVA Hsva;
 
-        /// <summary>現在の色（α 込み）。</summary>
+        /// <summary>Current color (including alpha).</summary>
         public Color Value;
 
-        /// <summary>感度基準にもなる描画幅（＝ PopupWidth = 240）。</summary>
+        /// <summary>Rendering width, which also serves as the sensitivity baseline (= PopupWidth = 240).</summary>
         public float TweakWidth;
 
-        /// <summary>pad モードで敷く SV グラデーション。null なら pad 面は出さない。</summary>
+        /// <summary>SV gradient laid down in pad mode. If null, the pad surface is not shown.</summary>
         public Texture2D SvTexture;
     }
 
     /// <summary>
-    /// ColorInput のチャンネルスクラブ中だけ生きるオーバーレイ（m6-wave2-spec.md §A）。
-    /// <see cref="TweeqOverlayLayer"/> へ直接ぶら下がり、パネル全面を覆って
-    /// pad 面 / 色相リング / 単チャンネルスライダー / プレビュー円 / 値ラベルを描く。
+    /// An overlay that is only alive while a ColorInput channel is being scrubbed (m6-wave2-spec.md §A).
+    /// Hangs directly off <see cref="TweeqOverlayLayer"/>, covers the entire panel, and draws
+    /// the pad surface / hue ring / single-channel slider / preview circle / value label.
     ///
-    /// 描画順をヒエラルキーで保証するため 3 層に分けてある（UI Toolkit は
-    /// 「自分の generateVisualContent → 子」の順に描くので、pad を子に置くと
-    /// 親が描いたプレビュー円を覆ってしまう）。
+    /// Split into 3 layers so draw order is guaranteed by the hierarchy (UI Toolkit draws in
+    /// "own generateVisualContent → children" order, so if the pad were placed as a child it
+    /// would cover the preview circle drawn by the parent).
     /// </summary>
     sealed class ColorTweakOverlay : VisualElement
     {
         #region Constants
 
-        // プレビュー円の半径 21.6 = InputHeight(24) × 0.9（Vue の 24px 箱を scale 1.8 した円の半径）
+        // Preview circle radius 21.6 = InputHeight(24) × 0.9 (radius of a circle from scaling the Vue original's 24px box by 1.8)
         const float PREVIEW_RADIUS_FACTOR = 0.9f;
         const float PREVIEW_BORDER_WIDTH = 1f;
 
-        // 色相リング: 直径 240（＝ TweakWidth）・線幅 4px・60 分割
+        // Hue ring: diameter 240 (= TweakWidth), line width 4px, 60 segments
         const int HUE_SEGMENTS = 60;
         const float HUE_RING_WIDTH = 4f;
         const int HUE_TICK_COUNT = 6;
         const float HUE_TICK_RADIUS = 1.8f;
 
-        // 分割塗りの継ぎ目を消すための重ね幅（度 / px）
+        // Overlap width (degrees / px) to hide the seams between painted segments
         const float SEGMENT_OVERLAP_DEGREES = 0.5f;
         const float SEGMENT_OVERLAP_PIXELS = 1f;
 
-        // 単チャンネルスライダー: 240×12（val のみ 12×240 の縦）
+        // Single-channel slider: 240×12 (val alone is a vertical 12×240)
         const float SLIDER_THICKNESS = 12f;
         const int SLIDER_SEGMENTS = 60;
         const float SLIDER_BORDER_WIDTH = 1f;
 
-        // 現在位置マーカー。白い芯に薄い暗色の縁（ピッカーのカーソルと同じ考え方）
+        // Current-position marker. A white core with a thin dark shade around it (same idea as a picker cursor)
         const float MARKER_WIDTH = 3f;
         const float MARKER_SHADE_WIDTH = 1f;
         const float MARKER_OVERHANG = 2f;
@@ -80,20 +80,20 @@ namespace Tweeq.UIToolkit
         const float LABEL_RADIUS = 4f;
         const float LABEL_BORDER_WIDTH = 1f;
 
-        // ラベルは origin の上方 InputHeight×1.7 ＋ 自身の高さ / 2（Vue の translate 相当）
+        // The label sits InputHeight×1.7 above origin, plus half its own height (equivalent to the Vue original's translate)
         const float LABEL_GAP_FACTOR = 1.7f;
 
-        // 画面端クランプ（egui 準拠）
+        // Screen-edge clamp (matching the convention used by another port)
         const float LABEL_EDGE_MARGIN = 4f;
 
-        // チェッカーボードの 1 マス。ColorInput 側と同じ 6px
+        // One checkerboard cell. Same 6px as the ColorInput side
         const float CHECKER_CELL = 6f;
 
         const double HUE_RANGE = 360.0;
         const double PERCENT_SCALE = 100.0;
         const double BYTE_SCALE = 255.0;
 
-        // 表示キーの粒度。パーセント表示は F1 なので 0.1% = 値の 1/1000
+        // Granularity of the display key. Percent display is F1, so 0.1% = 1/1000 of the value
         const double PERCENT_KEY_SCALE = 1000.0;
         const double HUE_KEY_SCALE = 10.0;
 
@@ -101,15 +101,15 @@ namespace Tweeq.UIToolkit
 
         #region Fields
 
-        // Vue は white / #ddd 固定（テーマに追従しない）。ColorInput と同じ値
+        // The Vue original fixes these at white / #ddd (does not follow the theme). Same values as ColorInput
         static readonly Color CheckerLight = new Color32(0xFF, 0xFF, 0xFF, 0xFF);
         static readonly Color CheckerDark = new Color32(0xDD, 0xDD, 0xDD, 0xFF);
 
         static readonly Color MarkerCore = new Color(1f, 1f, 1f, 1f);
         static readonly Color MarkerShade = new Color(0f, 0f, 0f, 0.2f);
 
-        // モノスペースの解決結果は 1 度引いたら全インスタンスで使い回す。
-        // OS フォントは動的生成なので、参照も保持して破棄されないようにする
+        // Once the monospace font is resolved, reuse it across all instances.
+        // OS fonts are generated dynamically, so keep a reference so it isn't garbage collected
         static FontDefinition SharedMonospaceDefinition;
         static Font SharedOsMonospaceFont;
         static bool MonospaceResolved;
@@ -117,7 +117,7 @@ namespace Tweeq.UIToolkit
         ColorTweakOverlayState _state;
         bool _hasState;
 
-        // フォント適用はテーマが差し替わったフレームだけにする（Sync はスクラブ中毎フレーム走る）
+        // Only apply the font on the frame the theme actually changes (Sync runs every frame during a scrub)
         TweeqTheme _fontTheme;
 
         VisualElement _pad;
@@ -126,7 +126,7 @@ namespace Tweeq.UIToolkit
 
         Texture2D _padTexture;
 
-        // ラベルは表示が変わったときだけ組み直す。キーは表示の分解能で量子化した整数
+        // Only rebuild the label when the display actually changes. The key is an integer quantized to the display resolution
         bool _hasLabelKey;
         ColorTweakMode _labelMode;
         long _labelKey0;
@@ -163,7 +163,7 @@ namespace Tweeq.UIToolkit
             _pad.style.overflow = Overflow.Hidden;
             _pad.style.display = DisplayStyle.None;
 
-            // background-size の既定は auto（＝ネイティブ解像度）。64×64 を 240px へ引き伸ばす
+            // background-size defaults to auto (= native resolution). Stretch 64×64 up to 240px
             _pad.style.backgroundSize =
                 new BackgroundSize(Length.Percent(100f), Length.Percent(100f));
             _pad.style.backgroundRepeat = new BackgroundRepeat(Repeat.NoRepeat, Repeat.NoRepeat);
@@ -208,17 +208,17 @@ namespace Tweeq.UIToolkit
             SetBorderWidth(_label, LABEL_BORDER_WIDTH);
             SetBorderRadius(_label, LABEL_RADIUS);
 
-            // テーマが来る前でも桁が揺れないよう、既定の等幅を先に貼る
+            // Apply the default monospace font up front so digits don't shift before the theme arrives
             TweeqFonts.Apply(_label, GetMonospaceFont());
 
-            // 中心合わせは実解決サイズが要るので、確定した時点で置き直す（RotaryInput と同じ手）
+            // Centering needs the actually-resolved size, so reposition once it's settled (same trick as RotaryInput)
             _label.RegisterCallback<GeometryChangedEvent>(OnLabelGeometryChanged);
             this.Add(_label);
         }
 
-        // 可変幅フォントだと桁の増減でラベルが揺れる。第一候補は同梱の Geist Mono
-        // （TweeqFonts.CodeFont）で、パッケージからフォントを外した構成でも等幅を保てるよう
-        // OS 側のモノスペース検索をフォールバックに残す
+        // With a variable-width font, the label would shift as digit counts change. The first choice is the bundled
+        // Geist Mono (TweeqFonts.CodeFont); an OS-side monospace lookup is kept as a fallback so alignment still
+        // holds even in configurations where the font has been stripped from the package
         static FontDefinition GetMonospaceFont()
         {
             if (MonospaceResolved)
@@ -252,7 +252,7 @@ namespace Tweeq.UIToolkit
 
         #region Sync
 
-        /// <summary>描画パラメータを更新する。Theme が null のフレームは何も描かない。</summary>
+        /// <summary>Updates the rendering parameters. Draws nothing on frames where Theme is null.</summary>
         public void Sync(in ColorTweakOverlayState state)
         {
             _state = state;
@@ -292,7 +292,7 @@ namespace Tweeq.UIToolkit
             _pad.style.borderBottomLeftRadius = _state.Theme.InputRadius;
             _pad.style.borderBottomRightRadius = _state.Theme.InputRadius;
 
-            // 現在の S / V が常に origin に一致するようスライドさせる（Vue の padStyle 準拠）
+            // Slide so the current S / V always lines up with origin (matches the Vue original's padStyle)
             _pad.style.left = _state.Origin.x - (float)Clamp01(_state.Hsva.S) * size;
             _pad.style.top = _state.Origin.y - (float)(1.0 - Clamp01(_state.Hsva.V)) * size;
         }
@@ -308,8 +308,8 @@ namespace Tweeq.UIToolkit
             {
                 _fontTheme = theme;
 
-                // FontCode が空（＝上書きしない指定）のテーマでも等幅は死守したいので、
-                // その時だけ既定の等幅へ落とす
+                // Even for a theme whose FontCode is empty (= "don't override" setting), we still want to
+                // guarantee a monospace font, so fall back to the default monospace only in that case
                 FontDefinition font = TweeqFonts.IsEmpty(theme.FontCode)
                     ? GetMonospaceFont()
                     : theme.FontCode;
@@ -321,7 +321,7 @@ namespace Tweeq.UIToolkit
             UpdateLabelPosition();
         }
 
-        // Sync はポインタが動かないフレームでも走るので、表示が変わるときだけ文字列を作る
+        // Sync runs even on frames where the pointer doesn't move, so only rebuild the string when the display changes
         void SyncLabelText()
         {
             ComputeLabelKey(out long key0, out long key1);
@@ -412,7 +412,7 @@ namespace Tweeq.UIToolkit
             return TweeqFormat.Format(Clamp01(normalized) * PERCENT_SCALE, 1, true);
         }
 
-        // r/g/b は内部 0-1 だが、表示は 0-255（仕様 §A のマッピング表）
+        // r/g/b are internally 0-1, but displayed as 0-255 (per the mapping table in spec §A)
         static string Byte255(double normalized)
         {
             return TweeqFormat.Format(Clamp01(normalized) * BYTE_SCALE, 0, true);
@@ -445,7 +445,7 @@ namespace Tweeq.UIToolkit
             Rect bounds = this.contentRect;
             if (!float.IsNaN(bounds.width) && bounds.width > 0f && bounds.height > 0f)
             {
-                // 端クランプは「はみ出す側だけ」。ラベルが枠より大きい場合は左上を優先する
+                // Edge clamping only applies to the side that overflows. If the label is bigger than the bounds, prefer the top-left
                 left = Mathf.Min(left, bounds.xMax - LABEL_EDGE_MARGIN - width);
                 left = Mathf.Max(left, bounds.xMin + LABEL_EDGE_MARGIN);
                 top = Mathf.Min(top, bounds.yMax - LABEL_EDGE_MARGIN - height);
@@ -482,7 +482,7 @@ namespace Tweeq.UIToolkit
             switch (_state.Mode)
             {
                 case ColorTweakMode.Pad:
-                    // pad 面はテクスチャ背景の子要素が担当する
+                    // The pad surface is handled by the texture-background child element
                     break;
 
                 case ColorTweakMode.Hue:
@@ -497,8 +497,8 @@ namespace Tweeq.UIToolkit
             PaintPreview(painter, theme);
         }
 
-        // origin 中心・直径 TweakWidth の色相リング。リング全体を hue 分だけ逆回転させ、
-        // 現在の色相が常に真上を向くようにする（Vue の rotate: h * -360deg）
+        // A hue ring centered on origin with diameter TweakWidth. Rotates the whole ring backward by
+        // the hue amount so the current hue always faces straight up (the Vue original's rotate: h * -360deg)
         void PaintHueRing(Painter2D painter, TweeqTheme theme)
         {
             float radius = _state.TweakWidth * 0.5f - HUE_RING_WIDTH * 0.5f;
@@ -529,7 +529,7 @@ namespace Tweeq.UIToolkit
                 painter.Stroke();
             }
 
-            // 60° ごとの目盛り。Vue は mask で穴を開けているので、背景色で塗って抜けに見せる
+            // Tick marks every 60°. The Vue original punches holes with a mask, so here we paint with the background color to fake the cutout
             painter.fillColor = theme.Background;
 
             for (int index = 0; index < HUE_TICK_COUNT; index++)
@@ -540,7 +540,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        // 現在の色相を真上（-90°）へ固定する向き
+        // The orientation that fixes the current hue straight up (-90°)
         double RingAngle(double hue)
         {
             return hue - _state.Hsva.H - 90.0;
@@ -548,7 +548,7 @@ namespace Tweeq.UIToolkit
 
         void PaintSlider(Painter2D painter, TweeqTheme theme)
         {
-            // val だけ縦（仕様 §A のマッピング: val のみ dy）
+            // Only val is vertical (per spec §A's mapping: val alone uses dy)
             bool vertical = _state.Mode == ColorTweakMode.Value;
             float length = _state.TweakWidth;
             Vector2 origin = _state.Origin;
@@ -570,9 +570,9 @@ namespace Tweeq.UIToolkit
                 PaintCheckerboard(painter, rect);
             }
 
-            // 頂点カラー補間（context.Allocate）ではなく分割塗りにしてある。
-            // 同一要素内では Painter2D と Allocate の描画順が保証されず、
-            // 枠線やマーカーがグラデの下に潜り込むため
+            // Uses segmented painting rather than vertex-color interpolation (context.Allocate).
+            // Within a single element, Painter2D and Allocate draw order isn't guaranteed,
+            // which would let the border or marker sink beneath the gradient
             for (int index = 0; index < SLIDER_SEGMENTS; index++)
             {
                 double from = index / (double)SLIDER_SEGMENTS;
@@ -581,7 +581,7 @@ namespace Tweeq.UIToolkit
 
                 if (vertical)
                 {
-                    // 縦は下端が 0
+                    // For vertical, the bottom edge is 0
                     float top = rect.yMax - (float)to * length;
                     FillRect(
                         painter,
@@ -653,13 +653,13 @@ namespace Tweeq.UIToolkit
             Color fill = _state.Value;
             if (_state.Mode != ColorTweakMode.Alpha)
             {
-                // α まで載せると透明時にプレビューが消えて位置が読めない
-                // （Vue も a モード以外は不透明化している）
+                // If alpha were carried through, the preview would disappear at full transparency and its position
+                // would become unreadable (the Vue original also forces opacity outside of alpha mode)
                 fill.a = 1f;
             }
 
-            // α モードは半透明のまま描くので、背後のガイドが透けて色が読めなくなる。
-            // 下地に Background を 1 枚敷いてから色を重ねる
+            // Alpha mode draws while staying semi-transparent, so the guide behind it would show through and
+            // make the color unreadable. Lay down a Background layer first, then draw the color on top
             Vector2 center = _state.Origin;
 
             painter.fillColor = theme.Background;
@@ -685,8 +685,8 @@ namespace Tweeq.UIToolkit
 
         #region Channel
 
-        // スライダー上の位置 t（0-1）に対応する色。sat / val / r / g / b / alpha は
-        // いずれも 1 チャンネルだけを差し替えれば足りる
+        // The color corresponding to slider position t (0-1). For sat / val / r / g / b / alpha,
+        // swapping out a single channel is all that's needed
         Color ChannelColor(double t)
         {
             double amount = Clamp01(t);

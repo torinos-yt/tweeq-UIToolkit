@@ -4,23 +4,23 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// string 特化の <see cref="ShuffleInput{T}" />。UXML / UI Builder から置けるようにするための
-    /// ラッパ（m7-wave2-spec.md「UXML 対応」）と、選択肢からのランダム抽選を内蔵する。
+    /// A string-specialized <see cref="ShuffleInput{T}" />. A wrapper that lets it be placed from UXML / UI
+    /// Builder (m7-wave2-spec.md, "UXML support"), with a built-in random draw from a set of options.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <c>[UxmlElement]</c> はジェネリック型に付けられないため、UXML 化するには型を閉じた
-    /// 非ジェネリックのクラスが必要になる。
+    /// <c>[UxmlElement]</c> can't be attached to a generic type, so exposing it to UXML requires a
+    /// non-generic class with the type parameter closed.
     /// </para>
     /// <para>
-    /// 基底の <see cref="ShuffleInput{T}.Generate" /> は「未設定ならクリックしても何も起きない」
-    /// 契約なので、UXML だけで組んだ場合は無反応になってしまう。そこで
-    /// <see cref="Options" /> からの抽選を既定の Generate として構築時に入れておく
-    /// （<see cref="ShuffleInput{T}.Generate" /> へ代入すれば従来どおり差し替えられる）。
+    /// The base class's <see cref="ShuffleInput{T}.Generate" /> follows the contract "clicking does nothing
+    /// while unset," so a UXML-only setup would end up unresponsive. To address that, a draw from
+    /// <see cref="Options" /> is installed as the default Generate at construction time
+    /// (assigning to <see cref="ShuffleInput{T}.Generate" /> still overrides it as usual).
     /// </para>
     /// <para>
-    /// <c>ITweeqThemed</c> は基底の <c>Theme</c> プロパティがそのまま満たす。TweeqRoot が
-    /// 配下を Query する対象に入るよう、この型でも明示しておく。
+    /// <c>ITweeqThemed</c> is already satisfied by the base class's <c>Theme</c> property as-is. It's
+    /// declared explicitly on this type too, so it's included among what TweeqRoot queries beneath it.
     /// </para>
     /// </remarks>
     [UxmlElement]
@@ -50,8 +50,8 @@ namespace Tweeq.UIToolkit
         #region Public API
 
         /// <summary>
-        /// 抽選の母集団。設定・取得ともにコピーを通す（呼び出し側の配列と内部状態を切り離す）。
-        /// 空の間はクリックしても値が動かない。
+        /// The population to draw from. Both the setter and getter go through a copy (decoupling the
+        /// caller's array from internal state). While empty, clicking never changes the value.
         /// </summary>
         public string[] Options
         {
@@ -76,13 +76,13 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 既定の <see cref="ShuffleInput{T}.Generate" />。選択肢から 1 つ引き、
-        /// 現在値と同じものを引いてしまったら隣へずらす。
+        /// The default <see cref="ShuffleInput{T}.Generate" />. Draws one from the options, and if it
+        /// happens to draw the same value as the current one, shifts to the next one instead.
         /// </summary>
         /// <remarks>
-        /// シャッフルは「押したら変わる」ことが操作のフィードバックそのものなので、
-        /// 同じ値を引いた回を空振りにしない（Vue には無い挙動だが、Generate が
-        /// アプリ側実装だった原典ではそこがアプリの責務だった）。
+        /// A shuffle's operational feedback is precisely "it changes when you press it," so a draw that
+        /// lands on the same value is never left as a no-op (behavior Vue doesn't have, but in the
+        /// original, where Generate was an application-side implementation, that was the application's responsibility).
         /// </remarks>
         public string NextFromOptions(string current)
         {
@@ -106,8 +106,8 @@ namespace Tweeq.UIToolkit
 
         #region Uxml attributes
 
-        // 基底（ジェネリック）側の宣言には属性を付けられないので、ここで名前を明示して橋渡しする。
-        // public な別名を増やさないため、いずれも非公開プロパティにしてある
+        // Attributes can't be attached to the base (generic) class's declarations, so the name is made explicit and bridged here.
+        // All of these are kept as non-public properties, to avoid adding extra public aliases.
         [UxmlAttribute("value")]
         string UxmlValue
         {

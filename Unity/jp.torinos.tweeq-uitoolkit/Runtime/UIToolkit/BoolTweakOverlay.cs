@@ -5,33 +5,33 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// スワイプトグル中だけ生きるプレビューオーバーレイ（仕様「共通」）。
-    /// コントロールの左右に 18px の円バッジを 2 個描き、プレビュー値側だけ Accent にする。
+    /// Preview overlay that only lives while a swipe toggle is in progress (spec "Common").
+    /// Draws two 18px circular badges to the left and right of the control, coloring only the preview-value side Accent.
     ///
-    /// 置き場所は TweeqOverlayLayer（パネル最前面）ではなく「コントロール自身の子」にした。
-    /// バッジの位置はコントロールの箱に対する ±1.2×24px という純粋なローカル量なので、
-    /// パネル座標へ変換する理由が無く、レイアウト追従（スクロール・グループの開閉）も
-    /// 親に任せられる。前提として親側は overflow を Visible にしておくこと。
-    /// ParameterGroup は開き切ると Visible に戻るので、通常のレイアウトでは切られない。
+    /// Placement is "a child of the control itself" rather than TweeqOverlayLayer (the frontmost panel layer).
+    /// Badge position is a purely local quantity, ±1.2×24px relative to the control's box, so there is no reason
+    /// to convert to panel coordinates, and layout following (scroll, group expand/collapse) can be left to the
+    /// parent. The precondition is that the parent keeps overflow set to Visible.
+    /// ParameterGroup reverts to Visible once fully expanded, so it isn't clipped under normal layout.
     /// </summary>
     sealed class BoolTweakOverlay : VisualElement
     {
         #region Constants
 
-        // 出現時に ±1.0× から ±1.2× へ広がる（仕様「共通」・Vue の v-enter-from）
+        // Expands from ±1.0x to ±1.2x on appearance (spec "Common" / Vue's v-enter-from)
         const float COLLAPSED_FACTOR = 1.0f;
         const float EXPANDED_FACTOR = 1.2f;
 
         const float BADGE_SIZE = 18f;
         const float BADGE_STROKE_WIDTH = 2f;
 
-        // active 系トランジション 64ms（仕様の遷移表）
+        // Active-family transition is 64ms (spec's transition table)
         const float ACTIVE_TRANSITION_DURATION = 0.064f;
 
-        // check-circle グリフの中のチェックは、円に対しておよそ 6 割の大きさ
+        // The check inside the check-circle glyph is roughly 60% the size of the circle
         const float BADGE_CHECK_SCALE = 0.62f;
 
-        // チェックマーク（正方形内の正規化座標）。mdi:check-bold を 2 セグメントの折れ線に単純化した
+        // The check mark (normalized coordinates within a unit square). Simplified mdi:check-bold into a 2-segment polyline
         static readonly Vector2 MARK_START = new Vector2(0.18f, 0.50f);
         static readonly Vector2 MARK_ELBOW = new Vector2(0.42f, 0.74f);
         static readonly Vector2 MARK_END = new Vector2(0.82f, 0.26f);
@@ -67,8 +67,8 @@ namespace Tweeq.UIToolkit
 
         void ApplyTransition()
         {
-            // Vue は cubic-bezier(0.4,0,0.2,1)。UI Toolkit に同一カーブが無いため
-            // EaseInOutCubic で近似する（RotaryInput / NumberInput と同じ判断）
+            // Vue uses cubic-bezier(0.4,0,0.2,1). Since UI Toolkit has no identical curve,
+            // approximate it with EaseInOutCubic (same call as RotaryInput / NumberInput)
             this.style.transitionProperty = new StyleList<StylePropertyName>(
                 new List<StylePropertyName>
                 {
@@ -93,7 +93,7 @@ namespace Tweeq.UIToolkit
 
         #region Public API
 
-        /// <summary>描画パラメータを更新する。unit はコントロールの基準高さ（＝ InputHeight）。</summary>
+        /// <summary>Updates the drawing parameters. unit is the control's reference height (= InputHeight).</summary>
         public void Sync(TweeqTheme theme, bool previewValue, float unit)
         {
             _theme = theme;
@@ -119,7 +119,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 折り畳んだ inset が 1 フレーム描かれてからでないとトランジションが走らない
+            // The transition doesn't run unless the collapsed inset has been drawn for 1 frame first
             this.schedule.Execute(() =>
             {
                 _expanded = true;
@@ -157,7 +157,7 @@ namespace Tweeq.UIToolkit
             float radius = BADGE_SIZE * 0.5f;
             float centerY = height * 0.5f;
 
-            // Painter2D は色を補間できないので、色の 64ms 遷移は諦めて即時切り替えにしている
+            // Painter2D can't interpolate colors, so we give up on the 64ms color transition and switch instantly instead
             Color offColor = _previewValue ? _theme.Border : _theme.Accent;
             Color onColor = _previewValue ? _theme.Accent : _theme.Border;
 
@@ -165,7 +165,7 @@ namespace Tweeq.UIToolkit
             PaintOnBadge(painter, new Vector2(width - radius, centerY), radius, onColor);
         }
 
-        // ic:baseline-radio-button-unchecked 相当。Background の円の上にリングを描く
+        // Equivalent to ic:baseline-radio-button-unchecked. Draws a ring over a Background-colored circle
         void PaintOffBadge(Painter2D painter, Vector2 center, float radius, Color color)
         {
             FillCircle(painter, center, radius, _theme.Background);
@@ -183,7 +183,7 @@ namespace Tweeq.UIToolkit
             painter.Stroke();
         }
 
-        // ic:baseline-check-circle 相当。塗り円からチェックを抜いた形（＝背景色で描く）
+        // Equivalent to ic:baseline-check-circle. The shape of a filled circle with the check cut out (i.e. drawn in the background color)
         void PaintOnBadge(Painter2D painter, Vector2 center, float radius, Color color)
         {
             FillCircle(painter, center, radius, color);

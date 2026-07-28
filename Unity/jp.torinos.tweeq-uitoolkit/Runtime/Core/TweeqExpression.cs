@@ -3,16 +3,16 @@ using System.Globalization;
 namespace Tweeq.Core
 {
     /// <summary>
-    /// 入力欄に打たれた式の評価。原典（tweeq）は置換後の文字列を JS の eval に渡すが、
-    /// C# には等価物が無いので四則演算だけの再帰下降パーサへ縮小してある（意図的逸脱）。
-    /// 対応: 数値リテラル・+ - * /・単項 +/-・括弧・空白。変数/関数/べき乗は非対応。
+    /// Evaluates an expression typed into an input field. The original (tweeq) passes the substituted string to JS's eval,
+    /// but since C# has no equivalent, this is scaled down to a recursive-descent parser handling only the four arithmetic operations (an intentional deviation).
+    /// Supported: numeric literals, + - * /, unary +/-, parentheses, whitespace. Not supported: variables/functions/exponentiation.
     /// </summary>
     public static class TweeqExpression
     {
         #region Constants
 
-        // "((((..." のような入力でスタックを食い潰さないための上限。
-        // 実用的な式の入れ子は数段なので、これを超えたら構文エラー扱いで十分
+        // Upper bound so input like "((((..." can't exhaust the stack.
+        // Practical expressions only nest a few levels deep, so treating anything beyond this as a syntax error is sufficient.
         const int MAX_DEPTH = 64;
 
         #endregion
@@ -20,7 +20,7 @@ namespace Tweeq.Core
         #region Evaluate
 
         /// <summary>
-        /// 式を評価する。構文エラー・0 除算・非有限の結果は false（呼び出し側は現値維持）。
+        /// Evaluates an expression. Syntax errors, division by zero, and non-finite results all return false (the caller keeps the current value).
         /// </summary>
         public static bool TryEvaluate(string expression, out double result)
         {
@@ -118,7 +118,7 @@ namespace Tweeq.Core
 
                 if (op == '/' && right == 0.0)
                 {
-                    // JS なら Infinity になるが、値として使えないので構文エラーと同じ扱いにする
+                    // In JS this would become Infinity, but since it can't be used as a value, treat it the same as a syntax error.
                     value = 0.0;
                     return false;
                 }
@@ -192,7 +192,7 @@ namespace Tweeq.Core
             return TryParseNumber(text, ref index, out value);
         }
 
-        // number := digit* ('.' digit*) （数字が 1 文字以上あること。指数表記は非対応）
+        // number := digit* ('.' digit*) (at least one digit required; exponent notation not supported)
         static bool TryParseNumber(string text, ref int index, out double value)
         {
             value = 0.0;
@@ -222,7 +222,7 @@ namespace Tweeq.Core
                 return false;
             }
 
-            // JS の "1." は 1。.NET の TryParse は末尾の小数点を通すとは限らないので落としておく
+            // In JS, "1." is 1. .NET's TryParse doesn't reliably accept a trailing decimal point, so it's dropped here.
             int length = index - start;
             if (text[index - 1] == '.')
             {

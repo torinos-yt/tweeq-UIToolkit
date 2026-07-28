@@ -7,34 +7,35 @@ using Cysharp.Text;
 namespace Tweeq.Core
 {
     /// <summary>
-    /// 数値→文字列の唯一の窓口。スクラブ中の毎フレーム経路を通るので、
-    /// 書式指定文字列の作り直しや中間文字列を持たない形に閉じ込めてある。
-    /// ZString（com.cysharp.zstring）が入っていれば asmdef の versionDefines で
-    /// TWEEQ_ZSTRING が立ち、中間アロケーションを削った実装に切り替わる。
+    /// The single entry point for number-to-string conversion. Because this runs on the every-frame path while
+    /// scrubbing, it's built to avoid rebuilding format-specifier strings or holding intermediate strings.
+    /// If ZString (com.cysharp.zstring) is present, the asmdef's versionDefines sets TWEEQ_ZSTRING and
+    /// switches to an implementation with intermediate allocations stripped out.
     /// </summary>
     public static class TweeqFormat
     {
         #region Constants
 
         /// <summary>
-        /// 書式指定に渡す小数桁数の上限。"F16" 以上は .NET の実装差が出やすいのでここで頭打ちにする。
+        /// Upper bound on the decimal digit count passed to the format specifier. "F16" and above tends to
+        /// show .NET implementation differences, so it's capped here.
         /// </summary>
         public const int MAX_FORMAT_PRECISION = 15;
 
-        // 角度表示は 0.1° 固定。ZString 側は標準書式しか通せないので "F1" を併記してある
+        // Angle display is fixed at 0.1°. Since the ZString side can only pass standard format strings, "F1" is kept alongside it
         const string ANGLE_FORMAT = "0.0";
         const string DEGREE_SIGN = "°";
         const string REVOLUTION_SEPARATOR = "x ";
         const double FULL_TURN = 360.0;
 
-        // 表示キーを 0.1° 単位で持つためのスケール
+        // Scale for holding the display key in units of 0.1°
         const double ANGLE_DISPLAY_SCALE = 10.0;
 
-        // 丸めの境界（.05°）付近は ToString の丸めと判定がずれうるので、その帯はキャッシュ対象から外す
+        // Near the rounding boundary (.05°), ToString's rounding and this judgment can disagree, so that band is excluded from caching
         const double ANGLE_KEY_SAFE_BAND = 0.5 - 1e-6;
 
 #if TWEEQ_ZSTRING
-        // ZString の AppendFormat は複合書式を要求するため、標準書式版を別に持つ
+        // ZString's AppendFormat requires composite format strings, so a standard-format version is kept separately
         const string ANGLE_BRACED_FORMAT = "{0:F1}";
 #endif
 
@@ -42,8 +43,8 @@ namespace Tweeq.Core
 
         #region Specifiers
 
-        // "F" + digits.ToString() は呼ぶたびに 2 回アロケーションする。
-        // 毎フレーム経路なので全パターンを起動時に作り置きしておく
+        // "F" + digits.ToString() allocates twice on every call.
+        // Since this is on the every-frame path, every pattern is pre-built at startup
         static readonly string[] FixedSpecifiers = BuildFixedSpecifiers();
 
 #if TWEEQ_ZSTRING
@@ -74,7 +75,7 @@ namespace Tweeq.Core
         }
 #endif
 
-        /// <summary>桁数を [0, MAX_FORMAT_PRECISION] に丸める。</summary>
+        /// <summary>Clamps the digit count to [0, MAX_FORMAT_PRECISION].</summary>
         public static int ClampDigits(int digits)
         {
             if (digits < 0)
@@ -85,7 +86,7 @@ namespace Tweeq.Core
             return digits > MAX_FORMAT_PRECISION ? MAX_FORMAT_PRECISION : digits;
         }
 
-        /// <summary>"F0".."F15" の作り置き書式指定。桁数はクランプされる。</summary>
+        /// <summary>Pre-built format specifiers "F0".."F15". The digit count is clamped.</summary>
         public static string FixedSpecifier(int digits)
         {
             return FixedSpecifiers[ClampDigits(digits)];
@@ -96,8 +97,8 @@ namespace Tweeq.Core
         #region Number
 
         /// <summary>
-        /// tweaking 中は末尾ゼロを維持した固定小数、静止時は末尾ゼロ・末尾ドットをトリムし
-        /// -0 を "0" に正規化する。
+        /// While tweaking, fixed-point with trailing zeroes kept; when idle, trailing zeroes and a trailing dot
+        /// are trimmed and -0 is normalized to "0".
         /// </summary>
         public static string Format(double value, int precision, bool tweaking)
         {
@@ -109,8 +110,8 @@ namespace Tweeq.Core
             int digits = ClampDigits(precision);
 
 #if TWEEQ_ZSTRING
-            // ZString があるときは ToString → Substring の 2 段アロケーションを避け、
-            // バッファ上でトリムしてから 1 回だけ文字列化する
+            // When ZString is present, this avoids the two-stage ToString → Substring allocation
+            // by trimming on the buffer and converting to a string only once
             using (Utf16ValueStringBuilder builder = ZString.CreateStringBuilder(true))
             {
                 builder.AppendFormat(FixedBracedSpecifiers[digits], value);
@@ -118,7 +119,7 @@ namespace Tweeq.Core
 
                 if (tweaking)
                 {
-                    // 桁数がドラッグ感度のフィードバックそのものなので、生の桁を保つ
+                    // Since the digit count is itself the feedback for drag sensitivity, keep the raw digits
                     return span.ToString();
                 }
 
@@ -130,7 +131,7 @@ namespace Tweeq.Core
 
             if (tweaking)
             {
-                // 桁数がドラッグ感度のフィードバックそのものなので、生の桁を保つ
+                // Since the digit count is itself the feedback for drag sensitivity, keep the raw digits
                 return text;
             }
 
@@ -144,7 +145,7 @@ namespace Tweeq.Core
 #endif
         }
 
-        // 正規表現だと毎フレームのアロケーションになるため手動スキャンでトリムする
+        // A regex would allocate every frame, so trimming is done with a manual scan
         static int TrimmedLength(ReadOnlySpan<char> text)
         {
             if (text.IndexOf('.') < 0)
@@ -176,7 +177,7 @@ namespace Tweeq.Core
         #region Angle
 
         /// <summary>
-        /// ±360 未満は "0.0°"、それ以上は回転数を前置して "Nx 0.0°"。
+        /// Below ±360 this is "0.0°"; at or above that, the revolution count is prefixed as "Nx 0.0°".
         /// </summary>
         public static string FormatAngle(double value)
         {
@@ -213,11 +214,11 @@ namespace Tweeq.Core
         }
 
         /// <summary>
-        /// FormatAngle の結果が一致するかを判定するためのキー。表示は 0.1° 単位なので、
-        /// キーが一致する限り文字列を作り直さなくてよい。
-        /// 非有限値と丸めの境界付近は false を返す（＝必ず作り直す）。
-        /// revolutions は ±360 未満の枝では常に 0 になるので、枝の違いもキーに含まれる。
-        /// tenths は -0.0 と 0.0 で表示が変わりうるため、比較には SameValueBits を使うこと。
+        /// Key for determining whether FormatAngle's result would match. Since the display is in units of 0.1°,
+        /// the string doesn't need to be rebuilt as long as the key matches.
+        /// Returns false for non-finite values and near a rounding boundary (i.e. always rebuild in those cases).
+        /// revolutions is always 0 on the branch below ±360, so the branch difference is captured in the key too.
+        /// tenths can differ in display between -0.0 and 0.0, so use SameValueBits when comparing it.
         /// </summary>
         public static bool TryGetAngleDisplayKey(double value, out long revolutions, out double tenths)
         {
@@ -246,8 +247,8 @@ namespace Tweeq.Core
         #region Keys
 
         /// <summary>
-        /// ビット単位の同値判定。-0 と 0、NaN 同士を取り違えると表示キャッシュが誤爆するので、
-        /// == ではなくこちらを使う。
+        /// Bitwise equality check. Mixing up -0 and 0, or two NaNs, would cause the display cache to misfire,
+        /// so use this instead of ==.
         /// </summary>
         public static bool SameValueBits(double left, double right)
         {

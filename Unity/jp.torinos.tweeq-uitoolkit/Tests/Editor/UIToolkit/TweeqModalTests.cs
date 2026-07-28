@@ -7,11 +7,11 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// EditMode でも本物のパネルが要るテスト用の使い捨て UIDocument。
+    /// A disposable UIDocument for tests that need a real panel even in EditMode.
     ///
-    /// TweeqModal / TweeqPopover は「オーバーレイ層へ載せる」ことが仕事なので、
-    /// panel が無いと契約そのものが観測できない（層の取得が panel 依存）。
-    /// パネルを作れない環境では <see cref="Create"/> がテストを Ignore に倒す。
+    /// TweeqModal / TweeqPopover's job is to "mount onto the overlay layer", so
+    /// without a panel the contract itself can't be observed (obtaining the layer depends on the panel).
+    /// In environments where a panel can't be created, <see cref="Create"/> falls back to marking the test Ignore.
     /// </summary>
     public sealed class TweeqModalTestPanel : IDisposable
     {
@@ -19,7 +19,7 @@ namespace Tweeq.UIToolkit.Tests
         readonly PanelSettings _settings;
         readonly UIDocument _document;
 
-        /// <summary>パネルに載ったルート要素。ここへ被験要素を Add する。</summary>
+        /// <summary>The root element mounted on the panel. Add the element under test here.</summary>
         public VisualElement Root { get; }
 
         TweeqModalTestPanel()
@@ -27,8 +27,8 @@ namespace Tweeq.UIToolkit.Tests
             _settings = ScriptableObject.CreateInstance<PanelSettings>();
             _settings.name = "TweeqModalTestPanelSettings";
 
-            // テーマ未設定の PanelSettings は「テーマ無し」の警告を出す。
-            // 見た目は検証しないので、プロジェクトにある物を何でも 1 枚借りて黙らせる
+            // PanelSettings without a theme set emits a "no theme" warning.
+            // Since we don't verify appearance, borrow whatever is available in the project to silence it
             ThemeStyleSheet theme = FindAnyTheme();
             if (theme != null)
             {
@@ -46,7 +46,7 @@ namespace Tweeq.UIToolkit.Tests
             Root = _document.rootVisualElement;
         }
 
-        /// <summary>パネルを 1 枚用意する。作れなかった場合はテストを Ignore にする。</summary>
+        /// <summary>Prepares a single panel. Marks the test Ignore if it couldn't be created.</summary>
         public static TweeqModalTestPanel Create()
         {
             TweeqModalTestPanel panel = new TweeqModalTestPanel();
@@ -90,14 +90,14 @@ namespace Tweeq.UIToolkit.Tests
     }
 
     /// <summary>
-    /// TweeqModal の契約（m8-modal-tabs-spec.md §A「テスト契約」）を検証する。
+    /// Verifies TweeqModal's contract (m8-modal-tabs-spec.md §A "Test Contract").
     ///
-    /// 開閉の状態機械・中身の常駐・テーマ転送は panel 非依存なので素で確かめ、
-    /// 層への設置だけ <see cref="TweeqModalTestPanel"/> を借りる。以下は実レイアウトと
-    /// 描画が要るので Play Mode 側の担当:
-    /// - 最大サイズ（層サイズ − 2×48）の追従。EditMode ではレイアウトが降りない
-    /// - 出現アニメ（opacity / translateY）と emphasize の実波形。scheduler がテスト中に回らない
-    /// - panel.Pick による「背面 UI に当たらない」の実測（ここでは pickingMode と被覆で代用）
+    /// The open/close state machine, content persistence, and theme propagation are panel-independent,
+    /// so those are verified directly; only mounting onto the layer borrows <see cref="TweeqModalTestPanel"/>.
+    /// The following need real layout and rendering, so they're the Play Mode side's responsibility:
+    /// - Tracking the max size (layer size − 2×48). Layout doesn't resolve in EditMode
+    /// - The appearance animation (opacity / translateY) and emphasize's actual waveform. The scheduler doesn't run during tests
+    /// - The actual measurement of "not hitting the background UI" via panel.Pick (substituted here with pickingMode and coverage)
     /// </summary>
     public class TweeqModalTests
     {
@@ -125,7 +125,7 @@ namespace Tweeq.UIToolkit.Tests
             return element?.hierarchy.parent as TweeqOverlayLayer;
         }
 
-        #region 中身
+        #region Content
 
         [Test]
         public void Content_GoesIntoThePane()
@@ -151,14 +151,14 @@ namespace Tweeq.UIToolkit.Tests
             modal.Open = true;
             modal.Open = false;
 
-            // バルーン内に常駐するので開閉では捨てられない（Vue の popover 表示切替と等価）
+            // Persists inside the balloon, so it isn't discarded on open/close (equivalent to the Vue original's popover display toggling)
             Assert.AreSame(modal.Pane.contentContainer, child.hierarchy.parent);
             Assert.AreEqual(1, modal.childCount);
         }
 
         #endregion
 
-        #region 開閉
+        #region Open/Close
 
         [Test]
         public void Open_WithoutPanelIsSilentNoOp()
@@ -167,7 +167,7 @@ namespace Tweeq.UIToolkit.Tests
 
             Assert.DoesNotThrow(() => modal.Open = true);
 
-            // 置き場所が無いので載らないだけ。要求としての Open は保つ
+            // It just doesn't mount because there's nowhere to place it; the Open request itself is still retained
             Assert.IsTrue(modal.Open);
             Assert.IsNull(modal.Backdrop.hierarchy.parent);
         }
@@ -214,7 +214,7 @@ namespace Tweeq.UIToolkit.Tests
 
             modal.Open = false;
 
-            // 閉じた瞬間にポインタを吸わなくなること（残っていると背面が押せない事故になる）
+            // It must stop absorbing pointers the instant it closes (leaving it would accidentally block clicks on what's behind)
             Assert.IsNull(modal.Backdrop.hierarchy.parent);
             Assert.IsNotNull(layer);
             Assert.AreEqual(0, layer.hierarchy.childCount);
@@ -240,7 +240,7 @@ namespace Tweeq.UIToolkit.Tests
             TweeqModalTestPanel panel = RequirePanel();
             TweeqModal modal = new TweeqModal();
 
-            // UXML の open="true" は属性適用（パネル接続前）で立つ経路
+            // UXML's open="true" is the path taken via attribute application (before panel attachment)
             modal.Open = true;
             panel.Root.Add(modal);
 
@@ -269,7 +269,7 @@ namespace Tweeq.UIToolkit.Tests
         {
             TweeqModal modal = new TweeqModal();
 
-            // Vue の popover="manual"（背面操作可）からの意図的逸脱。誤操作＝事故なので遮断する
+            // An intentional deviation from the Vue original's popover="manual" (allows interacting with the background). A misclick would be an accident, so it's blocked
             Assert.AreEqual(PickingMode.Position, modal.Backdrop.pickingMode);
             Assert.AreEqual(Position.Absolute, modal.Backdrop.style.position.value);
             Assert.AreEqual(0f, modal.Backdrop.style.left.value.value);
@@ -303,7 +303,7 @@ namespace Tweeq.UIToolkit.Tests
 
             modal.Theme = theme;
 
-            // 暗転は Theme.Background のアルファ違い（アルファは開閉アニメで動く）
+            // The darkening is a difference in Theme.Background's alpha (alpha moves with the open/close animation)
             Color color = modal.Backdrop.style.backgroundColor.value;
             Assert.AreEqual(theme.Background.r, color.r, 0.001f);
             Assert.AreEqual(theme.Background.g, color.g, 0.001f);
@@ -312,7 +312,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region 外装
+        #region Chrome
 
         [Test]
         public void Pane_UsesThePopupChrome()
@@ -336,7 +336,7 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
-        #region テーマ
+        #region Theme
 
         [Test]
         public void Theme_ReachesThePaneAndTheContent()
@@ -350,12 +350,12 @@ namespace Tweeq.UIToolkit.Tests
             TweeqTheme theme = TweeqTheme.Light();
             modal.Theme = theme;
 
-            // 外装の不透明化は TweeqBalloon が Theme.SurfaceOpaque を使う共通方式になったので、
-            // テーマ自体は同一インスタンスが素通しで届く
+            // Chrome opacification became a shared mechanism where TweeqBalloon uses Theme.SurfaceOpaque,
+            // so the theme itself is passed through as the same instance untouched
             Assert.AreSame(theme, modal.Pane.Theme);
             Assert.AreEqual(1f, theme.SurfaceOpaque.a, "外装用の合成色は常に不透明");
 
-            // TweeqRoot は ITweeqThemed で探索を打ち切るので、中身へはモーダルが配る責務がある
+            // TweeqRoot halts its search at ITweeqThemed, so it's the modal's responsibility to distribute the theme to its content
             Assert.AreSame(theme, button.Theme);
         }
 
@@ -397,7 +397,7 @@ namespace Tweeq.UIToolkit.Tests
             modal.Emphasize();
             Assert.IsTrue(modal.IsEmphasizing);
 
-            // 連打しても例外なく先頭から掛け直す
+            // Even under repeated triggering it restarts from the beginning without throwing
             Assert.DoesNotThrow(() => modal.Emphasize());
             Assert.IsTrue(modal.IsEmphasizing);
             Assert.AreEqual(1f, modal.Pane.style.scale.value.value.x, 0.001f);

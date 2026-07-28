@@ -9,8 +9,8 @@ namespace Tweeq.Core.Tests
     {
         #region Reference implementation
 
-        // 移設前の NumberLogic.Format をそのまま写したもの。
-        // TweeqFormat（ZString を入れた場合はその実装）が挙動を 1 文字も変えていないことの基準にする
+        // A direct copy of NumberLogic.Format as it was before the move.
+        // Serves as the baseline for confirming TweeqFormat (or, with ZString installed, that implementation) hasn't changed behavior by even one character
         const int REFERENCE_MAX_PRECISION = 15;
 
         static string ReferenceFormat(double value, int precision, bool tweaking)
@@ -201,7 +201,7 @@ namespace Tweeq.Core.Tests
             Assert.That(TweeqFormat.ClampDigits(99), Is.EqualTo(TweeqFormat.MAX_FORMAT_PRECISION));
         }
 
-        // 作り置きは参照が同一であってはじめてアロケーション削減になる
+        // The pre-building only reduces allocations if the reference is actually the same instance
         [Test]
         public void FixedSpecifierReturnsCachedInstance()
         {
@@ -275,8 +275,8 @@ namespace Tweeq.Core.Tests
             Assert.That(TweeqFormat.FormatAngle(-1234.5), Is.EqualTo("-3x -154.5°"));
         }
 
-        // ZString 版は標準書式しか通せないので "F1" を使う。両者が食い違わないことを保証しておく。
-        // ±0.05 未満の負値は「負のゼロを表示に残すか」がランタイム実装差になりうるので対象外
+        // The ZString version can only pass standard format strings, so "F1" is used. Guarantee the two don't disagree.
+        // Negative values below ±0.05 are excluded, since "whether the negative zero survives into the display" can differ by runtime implementation
         static readonly double[] FixedFormatAgreementAngles =
         {
             0.0, 0.04, 12.34, 120.0, 154.5, 359.9, 359.94, 719.9, 3000.0,
@@ -299,7 +299,7 @@ namespace Tweeq.Core.Tests
 
         #region Angle display key
 
-        // キーが一致する ＝ 表示文字列も一致、が成り立たないとラベルが古い値のまま固まる
+        // If "key matches ⇒ display string also matches" doesn't hold, the label would freeze on a stale value
         [Test]
         public void AngleDisplayKeyImpliesSameText()
         {
@@ -330,7 +330,7 @@ namespace Tweeq.Core.Tests
             }
         }
 
-        // 360° をまたぐと表示の形そのものが変わるので、キーでも必ず分かれる必要がある
+        // Crossing 360° changes the display's shape itself, so the key must also always distinguish it
         [Test]
         public void AngleDisplayKeySeparatesRevolutionBoundary()
         {
@@ -354,7 +354,7 @@ namespace Tweeq.Core.Tests
                 TweeqFormat.TryGetAngleDisplayKey(double.NegativeInfinity, out _, out _), Is.False);
         }
 
-        // 丸めの境界（.05°）はキャッシュ対象から外し、必ず作り直させる
+        // The rounding boundary (.05°) is excluded from caching, forcing a rebuild every time
         [Test]
         public void AngleDisplayKeyRejectsRoundingTies()
         {

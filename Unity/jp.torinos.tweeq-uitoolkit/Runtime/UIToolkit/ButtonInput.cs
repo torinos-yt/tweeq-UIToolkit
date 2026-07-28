@@ -3,30 +3,30 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 
-// クラス側に string Label プロパティがあるため、Label 型は別名で参照する
+// The class has a string Label property, so the Label type is referenced under an alias
 using UILabel = UnityEngine.UIElements.Label;
 
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// アクション用ボタン（仕様 §3）。値を持たず <see cref="Clicked"/> だけを発火する。
-    /// 角丸融合に参加するため <see cref="ITweeqInputBox"/> を実装する。
+    /// A button for actions (spec §3). It holds no value and only fires <see cref="Clicked"/>.
+    /// It implements <see cref="ITweeqInputBox"/> to participate in corner-radius fusion.
     /// </summary>
     [UxmlElement]
     public partial class ButtonInput : VisualElement, ITweeqInputBox, ITweeqThemed
     {
         #region Constants
 
-        // Vue の padding-inline .75em / padding-right .6em を rem12 換算した実寸
+        // Actual dimensions converted from the Vue original's padding-inline .75em / padding-right .6em at rem12
         const float LABEL_PADDING = 9f;
         const float CHEVRON_PADDING = 7.2f;
 
-        // narrow は min-width を捨てて「グリフにほぼ密着」させる（仕様 §3）。
-        // CSS では .narrow が :has(.label) より後に来るのでラベル有りでも 1px が勝つ
+        // narrow discards min-width to make it "hug the glyph closely" (spec §3).
+        // In CSS, .narrow comes after :has(.label), so the 1px value wins even when a label is present
         const float NARROW_PADDING = 1f;
 
-        // mdi:chevron-down は 18px アイコン枠の中央半分しか埋めないので、
-        // 枠ではなく実幅（18 * 0.5）を占有域にする
+        // mdi:chevron-down only fills the center half of its 18px icon box, so
+        // the occupied area is the actual width (18 * 0.5) rather than the full box
         const float CHEVRON_ZONE = 9f;
         const float CHEVRON_OPACITY = 0.6f;
         const float CHEVRON_HALF_WIDTH = 4.5f;
@@ -35,7 +35,7 @@ namespace Tweeq.UIToolkit
         const float DISABLED_OPACITY = 0.4f;
         const float FOCUS_RING_WIDTH = 1f;
 
-        // Vue: animation blink .5s infinite alternate → 往復で 1.0s 周期
+        // Vue: animation blink .5s infinite alternate → a 1.0s period for a round trip
         const long BLINK_PERIOD_MS = 1000;
 
         // Vue: animation tq-input-button-flash .6s ease-in-out 2
@@ -46,10 +46,10 @@ namespace Tweeq.UIToolkit
         const float FLASH_GLOW_WIDTH = 4f;
         const float FLASH_GLOW_ALPHA = 0.35f;
 
-        // box-shadow の glow（0 0 10px 1px）が収まるだけルート外へはみ出させる
+        // Extends beyond the root by just enough to fit the box-shadow glow (0 0 10px 1px)
         const float FLASH_MARGIN = 8f;
 
-        // schedule の最小刻み。60fps 相当で十分滑らかに見える
+        // The minimum tick for schedule. Equivalent to 60fps, which looks smooth enough
         const long TICK_MS = 16;
 
         #endregion
@@ -74,7 +74,7 @@ namespace Tweeq.UIToolkit
         readonly VisualElement _focusOuter;
         readonly VisualElement _focusInner;
 
-        // 状態ごとの配色。毎フレーム引き直すのは無駄なので Theme / Subtle 変更時にだけ作る
+        // Colors per state. Redrawing every frame would be wasteful, so these are only built when Theme / Subtle changes
         Color _restBackground;
         Color _hoverBackground;
         Color _restText;
@@ -95,11 +95,11 @@ namespace Tweeq.UIToolkit
 
         #region Public API
 
-        /// <summary>クリック・Enter・Space で発火する。</summary>
+        /// <summary>Fires on click, Enter, or Space.</summary>
         public event Action Clicked;
 
-        /// <summary>ボタン内に表示する文字列。溢れた分は ellipsis で畳む。</summary>
-        // UXML 側は Vue の prop 名（text）に合わせる。C# 側は他 Input と揃えた Label のまま
+        /// <summary>The string displayed inside the button. Overflow is collapsed with an ellipsis.</summary>
+        // The UXML side matches the Vue original's prop name (text). The C# side stays as Label, in line with the other Inputs
         [UxmlAttribute("text")]
         public string Label
         {
@@ -117,7 +117,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>右端に下向き三角を出す。付けると中身は左詰めになる（仕様 §3）。</summary>
+        /// <summary>Shows a downward-pointing triangle on the right edge. Enabling it left-aligns the content (spec §3).</summary>
         [UxmlAttribute("chevron")]
         public bool Chevron
         {
@@ -134,7 +134,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>背景を 0.5s 交互に点滅させる。</summary>
+        /// <summary>Blinks the background back and forth every 0.5s.</summary>
         [UxmlAttribute("blink")]
         public bool Blink
         {
@@ -151,7 +151,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>控えめな塗り。rest は Neutral 相当だが hover は Accent 側へ跳ねる（仕様 §3）。</summary>
+        /// <summary>A subdued fill. Rest is equivalent to Neutral, but hover jumps over to the Accent side (spec §3).</summary>
         [UxmlAttribute("subtle")]
         public bool Subtle
         {
@@ -170,7 +170,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>正方形の最小幅を捨てて横方向に詰める。</summary>
+        /// <summary>Discards the square minimum width and packs it tighter horizontally.</summary>
         [UxmlAttribute("narrow")]
         public bool Narrow
         {
@@ -187,7 +187,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>操作不能状態。イベントは発火せず Blink も止まる（仕様 §3）。</summary>
+        /// <summary>Non-interactive state. Events don't fire and Blink also stops (spec §3).</summary>
         [UxmlAttribute("disabled")]
         public bool Disabled
         {
@@ -207,7 +207,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>配色テーマ。null を渡した場合は Dark() にフォールバックする。</summary>
+        /// <summary>The color theme. Falls back to Dark() if null is passed.</summary>
         public TweeqTheme Theme
         {
             get => _theme;
@@ -220,7 +220,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>横方向グループでの位置。</summary>
+        /// <summary>Position within a horizontal group.</summary>
         public TweeqBoxPosition InlinePosition
         {
             get => _inlinePosition;
@@ -236,7 +236,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>縦方向グループでの位置。</summary>
+        /// <summary>Position within a vertical group.</summary>
         public TweeqBoxPosition BlockPosition
         {
             get => _blockPosition;
@@ -253,8 +253,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 注意を引くための一発アニメーション（仕様 §3）。0.6s ease-in-out ×2 回。
-        /// 再生中に呼び直しても頭から掛け直す。
+        /// A one-shot attention-grabbing animation (spec §3). 0.6s ease-in-out ×2 cycles.
+        /// Calling it again while it's playing restarts it from the beginning.
         /// </summary>
         public void Flash()
         {
@@ -262,7 +262,7 @@ namespace Tweeq.UIToolkit
 
             if (this.panel == null)
             {
-                // スケジューラが回らないので視覚効果は出せない。状態だけ素直に戻しておく
+                // The scheduler won't run, so no visual effect can be shown. Just reset the state plainly
                 ApplyFlashVisual(0f);
                 return;
             }
@@ -272,8 +272,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// プログラムからのクリック。Disabled のときは何もしない。
-        /// パネル非依存なのでテストからの発火にも使える。
+        /// A programmatic click. Does nothing when Disabled.
+        /// Panel-independent, so it can also be used to fire from tests.
         /// </summary>
         public void PerformClick()
         {
@@ -299,7 +299,7 @@ namespace Tweeq.UIToolkit
             this.style.justifyContent = Justify.Center;
             this.style.flexShrink = 0f;
 
-            // Flash のリング／グローはルートの外側へ描くので、ここを Hidden にしてはいけない
+            // The Flash ring/glow is drawn outside the root, so this must not be set to Hidden
             this.style.overflow = Overflow.Visible;
 
             _flashLayer = new VisualElement
@@ -325,7 +325,7 @@ namespace Tweeq.UIToolkit
             _label.style.paddingRight = 0f;
             _label.style.unityTextAlign = TextAnchor.MiddleCenter;
 
-            // 溢れたら ellipsis。UI Toolkit は 3 点セットで指定しないと省略記号が出ない
+            // Ellipsis on overflow. UI Toolkit only shows the ellipsis when all three properties are set together
             _label.style.whiteSpace = WhiteSpace.NoWrap;
             _label.style.overflow = Overflow.Hidden;
             _label.style.textOverflow = TextOverflow.Ellipsis;
@@ -342,14 +342,14 @@ namespace Tweeq.UIToolkit
             _chevronElement.style.flexShrink = 0f;
             _chevronElement.style.alignSelf = Align.Stretch;
 
-            // margin-left auto で右端へ寄せる（＝残りの中身が左詰めになる）
+            // margin-left auto pushes it to the right edge (= the remaining content becomes left-aligned)
             _chevronElement.style.marginLeft = StyleKeyword.Auto;
             _chevronElement.style.display = DisplayStyle.None;
             _chevronElement.generateVisualContent += OnGenerateChevron;
             this.hierarchy.Add(_chevronElement);
 
-            // フォーカスリングはルートの border を使うと中身が 1px ずれるので別レイヤに分ける。
-            // 塗り潰しボタンは「内側 1px Input + 外側 1px Accent」の二重（Vue の fill-focus-style）
+            // Using the root's border for the focus ring would shift the content by 1px, so it's split into a separate layer.
+            // A filled button gets a double ring of "inner 1px Input + outer 1px Accent" (the Vue original's fill-focus-style)
             _focusInner = CreateRing(0f);
             _focusOuter = CreateRing(-FOCUS_RING_WIDTH);
             this.hierarchy.Add(_focusInner);
@@ -403,9 +403,9 @@ namespace Tweeq.UIToolkit
             ApplyCornerRadius();
             ApplyMinWidth();
 
-            // 仕様 §3: hover 系 0.15s。UI Toolkit に cubic-bezier(0.4,0,0.2,1) が無いので
-            // EaseInOutCubic で近似する（NumberInput と同じ判断）。
-            // transition は継承されないので、文字色はラベル側へ個別に掛ける
+            // Spec §3: hover-related 0.15s. UI Toolkit has no cubic-bezier(0.4,0,0.2,1), so
+            // it's approximated with EaseInOutCubic (the same call made for NumberInput).
+            // transition isn't inherited, so the text color transition is applied individually to the label
             ApplyTransition(
                 this, _theme.HoverTransitionDuration, EasingMode.EaseInOutCubic, "background-color");
             ApplyTransition(
@@ -423,7 +423,7 @@ namespace Tweeq.UIToolkit
             _label.style.display = hasLabel ? DisplayStyle.Flex : DisplayStyle.None;
             _chevronElement.style.display = _chevron ? DisplayStyle.Flex : DisplayStyle.None;
 
-            // シェブロンは右端に固定されるので、残りの中身は左詰めになる
+            // The chevron is fixed to the right edge, so the remaining content becomes left-aligned
             this.style.justifyContent = _chevron ? Justify.FlexStart : Justify.Center;
 
             float left = hasLabel ? LABEL_PADDING : 0f;
@@ -457,7 +457,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        // 仕様 §1 の角丸表。両軸の指定は OR で合成する（片方でも「潰す」なら潰す）
+        // The corner-radius table from spec §1. Values for both axes are combined with OR (if either says "flatten", it's flattened)
         void ApplyCornerRadius()
         {
             float radius = _theme != null ? _theme.InputRadius : 0f;
@@ -510,7 +510,7 @@ namespace Tweeq.UIToolkit
             SetCornerRadius(this, radius, topLeft, topRight, bottomLeft, bottomRight);
             SetCornerRadius(_focusInner, radius, topLeft, topRight, bottomLeft, bottomRight);
 
-            // 外側リングは 1px 外に居るので、同じ見え方になるよう半径も 1px 太らせる
+            // The outer ring sits 1px further out, so its radius is also grown by 1px to keep the same appearance
             SetCornerRadius(
                 _focusOuter,
                 radius + FOCUS_RING_WIDTH,
@@ -531,18 +531,18 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // Neutral トークンが無いため Subtle の rest は Input で近似する（Unity 決定事項 5）。
-            // Vue の --tq-color-neutral は input より一段「存在感のある」無彩色だが、
-            // 現行トークンで最も近いのが Input なのでそのまま採用している
+            // There's no Neutral token, so Subtle's rest state is approximated with Input (Unity decision item 5).
+            // The Vue original's --tq-color-neutral is an achromatic color with a bit more "presence" than input,
+            // but Input is the closest match among the current tokens, so it's adopted as-is
             _restBackground = _subtle ? _theme.Input : _theme.Accent;
 
-            // Subtle でも hover は Neutral hover ではなく AccentHover（仕様 §3 の明示事項）
+            // Even when Subtle, hover uses AccentHover rather than Neutral hover (an explicit item from spec §3)
             _hoverBackground = _theme.AccentHover;
 
             _restText = TweeqTheme.ContrastText(_restBackground);
             _hoverText = TweeqTheme.ContrastText(_hoverBackground);
 
-            // Vue の --bg / --bg-blink。Subtle は neutral↔neutral-hover なので Input↔InputHover で近似する
+            // The Vue original's --bg / --bg-blink. Subtle is neutral↔neutral-hover, so it's approximated with Input↔InputHover
             _blinkFrom = _restBackground;
             _blinkTo = _subtle ? _theme.InputHover : _theme.AccentHover;
         }
@@ -562,7 +562,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 点滅中の背景はスケジューラが毎フレーム書くので、ここでは触らない
+            // While blinking, the scheduler writes the background every frame, so it isn't touched here
             if (_blinkItem == null)
             {
                 this.style.backgroundColor = CurrentBackground;
@@ -573,7 +573,7 @@ namespace Tweeq.UIToolkit
 
             bool ringVisible = _focused && !_disabled;
 
-            // Subtle は塗りが淡いので外周リングだけ（Vue の --focus-ring 上書き）
+            // Subtle's fill is pale, so only the outer ring is shown (an override of the Vue original's --focus-ring)
             _focusInner.style.display = ringVisible && !_subtle
                 ? DisplayStyle.Flex
                 : DisplayStyle.None;
@@ -602,7 +602,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 毎フレーム背景を書き換えるので、0.15s の遷移が残っていると追従が鈍る
+            // The background is rewritten every frame, so leaving the 0.15s transition active would make it lag behind
             ApplyTransition(this, 0f, EasingMode.EaseInOutCubic, "background-color");
             _blinkItem = this.schedule.Execute(OnBlinkTick).Every(TICK_MS);
         }
@@ -633,7 +633,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // CSS の alternate は往復。三角波を smoothstep に通して ease 相当の折り返しにする
+            // CSS's alternate goes back and forth. The triangle wave is passed through smoothstep to make the turnaround ease-like
             float phase = (state.now % BLINK_PERIOD_MS) / (float)BLINK_PERIOD_MS;
             float triangle = 1f - Mathf.Abs(phase * 2f - 1f);
             float weight = triangle * triangle * (3f - 2f * triangle);
@@ -661,7 +661,7 @@ namespace Tweeq.UIToolkit
         {
             if (_flashStartMs < 0L)
             {
-                // TimerState.start はティックごとに進むので、開始時刻は自前で覚える
+                // TimerState.start advances on every tick, so the start time is tracked manually here
                 _flashStartMs = state.now;
             }
 
@@ -672,7 +672,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 0% / 100% で無効、50% で最大。ease-in-out 相当に smoothstep を掛ける
+            // Off at 0% / 100%, maximum at 50%. smoothstep is applied for an ease-in-out-like feel
             float phase = (elapsed % FLASH_CYCLE_MS) / (float)FLASH_CYCLE_MS;
             float triangle = 1f - Mathf.Abs(phase * 2f - 1f);
             ApplyFlashVisual(triangle * triangle * (3f - 2f * triangle));
@@ -684,7 +684,7 @@ namespace Tweeq.UIToolkit
 
             float scale = Mathf.Lerp(1f, FLASH_SCALE, _flashIntensity);
 
-            // Scale のコンストラクタは Vector3 を取る。Vector2 を渡すと z が 0 に潰れる
+            // Scale's constructor takes a Vector3. Passing a Vector2 would collapse z to 0
             this.style.scale = new Scale(new Vector3(scale, scale, 1f));
 
             _flashLayer.style.display = _flashIntensity > 0f
@@ -731,14 +731,15 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 押した指を外へ逃がして離した場合はクリック不成立
+            // If the pressed finger slides outside and is released there, the click doesn't count
             Vector3 position = evt.position;
             bool inside = this.ContainsPoint(this.WorldToLocal(new Vector2(position.x, position.y)));
 
-            // ポインタで得たフォーカスは離した時点で返す。残すと後の Enter/Space が誤爆する
-            // （Vue の @mousedown.prevent と同じ意図）。UI Toolkit のフォーカス移動は
-            // PreDispatch で済んでいるため「押す前に持っていたか」は handler からは判別できず、
-            // 一律で外している。Tab フォーカス中にクリックした場合だけ Vue と挙動が異なる
+            // Focus gained via pointer is released the moment the pointer is lifted. Leaving it would let a later
+            // Enter/Space misfire (the same intent as the Vue original's @mousedown.prevent). Because UI Toolkit's
+            // focus change already happens during PreDispatch, the handler can't tell "did it have focus before the
+            // press," so it's unconditionally cleared here. This only diverges from the Vue original's behavior
+            // when clicking while already Tab-focused
             if (_focused)
             {
                 this.Blur();
@@ -808,7 +809,7 @@ namespace Tweeq.UIToolkit
 
         void OnAttachToPanel(AttachToPanelEvent evt)
         {
-            // パネル外で Blink を立てられていた場合、ここで初めてスケジューラが回せる
+            // If Blink was turned on while outside a panel, the scheduler can only start running now
             RefreshBlink();
         }
 
@@ -853,7 +854,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // アイコンフォント非依存（Unity 決定事項 1）。下向き三角を図形で描く
+            // Independent of any icon font (Unity decision item 1). The downward triangle is drawn as a shape
             Color color = _blinkItem != null ? _restText : CurrentText;
             color.a *= CHEVRON_OPACITY;
 
@@ -884,8 +885,8 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // UI Toolkit に box-shadow が無いので、ルート外周へのリング 2 本で近似する
-            // （仕様 §3 の「2px accent + glow」）。内側＝実線リング、外側＝薄いグロー
+            // UI Toolkit has no box-shadow, so it's approximated with two rings around the root's perimeter
+            // (spec §3's "2px accent + glow"). Inner = solid ring, outer = faint glow
             float radius = _theme.InputRadius;
             Rect ring = new Rect(
                 FLASH_MARGIN - FLASH_RING_WIDTH * 0.5f,
@@ -917,7 +918,7 @@ namespace Tweeq.UIToolkit
                 rect.height + amount * 2f);
         }
 
-        // Painter2D に角丸矩形のプリミティブが無いので ArcTo で辿る
+        // Painter2D has no rounded-rect primitive, so it's traced using ArcTo
         static void TraceRoundedRect(Painter2D painter, Rect rect, float radius)
         {
             if (rect.width <= 0f || rect.height <= 0f)

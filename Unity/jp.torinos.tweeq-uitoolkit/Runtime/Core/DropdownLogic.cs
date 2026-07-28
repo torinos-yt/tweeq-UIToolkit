@@ -3,23 +3,23 @@ using System;
 namespace Tweeq.Core
 {
     /// <summary>
-    /// macOS 風ドロップダウンの縦位置。選択中の option がフィールドに重なる top を逆算する。
-    /// UnityEngine 非依存・すべて double。
+    /// The vertical position of a macOS-style dropdown. Back-calculates the top at which the selected option overlaps the field.
+    /// No UnityEngine dependency; everything is double.
     /// </summary>
     public static class DropdownLogic
     {
         #region Constants
 
-        /// <summary>viewport 端に確保する余白（InputDropdown.vue の VIEWPORT_MARGIN）。</summary>
+        /// <summary>The margin reserved at the viewport edge (InputDropdown.vue's VIEWPORT_MARGIN).</summary>
         public const double DEFAULT_VIEWPORT_MARGIN = 6.0;
 
-        /// <summary>popup の枠が option 行の外側に持つ厚み（padding + border 相当。Vue の SELECT_CHROME）。</summary>
+        /// <summary>The thickness the popup's frame has outside the option rows (equivalent to padding + border. Vue's SELECT_CHROME).</summary>
         public const double DEFAULT_SELECT_CHROME = 2.0;
 
         /// <summary>
-        /// フィールド側の border 1px + focus outline 1px（Vue/React の DOM 箱モデル由来の 2px）。
-        /// UIToolkit 版のフィールドはこのインセットを持たない（focus ring は別レイヤー）ため、
-        /// 呼び出し側が実測値（通常 0）を渡す。既定値は React 版との数値互換のため 2 のまま。
+        /// The field's border (1px) plus focus outline (1px) — a 2px inset that comes from the DOM box model used by the web-based reference implementations.
+        /// The UIToolkit version's fields don't have this inset (the focus ring is a separate layer),
+        /// so the caller passes the measured value (usually 0). The default stays at 2 for numeric compatibility with those reference implementations.
         /// </summary>
         public const double DEFAULT_FIELD_INSET = 2.0;
 
@@ -28,9 +28,10 @@ namespace Tweeq.Core
         #region Public API
 
         /// <summary>
-        /// popup の top（panel 座標）。currentIndex 番目の option がフィールドに重なる位置を理想値とし、
-        /// viewport に viewportMargin を確保できる範囲へクランプする。収まらない分は内部スクロールで見せる。
-        /// listHeight は実測済みのリスト全高（未実測なら 0 以下）。
+        /// The popup's top (panel coordinates). Treats the position where the currentIndex-th option overlaps the field
+        /// as the ideal value, and clamps it to a range that keeps viewportMargin free in the viewport. Whatever doesn't
+        /// fit is shown via internal scrolling.
+        /// listHeight is the already-measured total list height (0 or less if not yet measured).
         /// </summary>
         public static double GetDropdownTop(
             double fieldWorldY, int currentIndex, double itemHeight, double viewportHeight,
@@ -44,23 +45,23 @@ namespace Tweeq.Core
 
             double available = viewportHeight - viewportMargin * 2.0;
 
-            // 未実測（0 以下）は「収まらない側」に倒す。実測前に全高を楽観視すると、初回フレームだけ
-            // 下端がはみ出してスクロール矢印ごと画面外に出てしまう。
+            // An unmeasured value (0 or less) is treated as "doesn't fit". If the total height is assumed optimistically
+            // before it's measured, the bottom edge would overflow off-screen, scroll arrows and all, just on the first frame.
             double measured = listHeight > 0.0 ? listHeight : double.PositiveInfinity;
 
-            // 全部収まるならリスト全体が画面内に留まる位置で頭打ち。収まらないなら「最低 1 行は見える」位置まで下げてよい
-            // （下端はスクロール矢印込みで viewport 下端まで伸びる前提）。
+            // If everything fits, cap it at the position that keeps the whole list on-screen. If it doesn't fit, it's fine
+            // to lower it as far as "at least 1 row is visible" (assuming the bottom edge, scroll arrows included, extends to the viewport's bottom edge).
             double maxTop = measured <= available
                 ? viewportHeight - viewportMargin - listHeight
                 : viewportHeight - viewportMargin - itemHeight;
 
-            // maxTop が margin を下回る（viewport が極端に低い）ケースでも上端の margin を守る。
+            // Preserves the top margin even in cases where maxTop falls below margin (an extremely short viewport).
             return Math.Max(viewportMargin, Math.Min(Math.Max(viewportMargin, maxTop), idealTop));
         }
 
         /// <summary>
-        /// popup の最大高さ。viewport 下端まで伸ばすが、リスト自体より高くはしない
-        /// （listHeight &lt;= 0 は「未実測」とみなして下端までいっぱいに取る）。
+        /// The popup's maximum height. Extends to the viewport's bottom edge, but never taller than the list itself
+        /// (listHeight &lt;= 0 is treated as "unmeasured" and takes the full space down to the bottom edge).
         /// </summary>
         public static double GetDropdownMaxHeight(
             double top, double listHeight, double viewportHeight,

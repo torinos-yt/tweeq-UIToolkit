@@ -5,12 +5,12 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// CheckboxInput / SwitchInput が共有するスワイプトグルの状態機械（仕様「共通: スワイプトグル」）。
+    /// The swipe-toggle state machine shared by CheckboxInput / SwitchInput (spec "Common: swipe toggle").
     ///
-    /// 継承ではなくコンポジションを選んだ理由: 2 つのウィジェットで共通なのは
-    /// 「ポインタ／キーをどう bool の変化へ翻訳するか」だけで、見た目（角丸の箱とピル）と
-    /// 子要素の構成は全く別物。共通の基底 VisualElement を作ると、レイアウトを持たない
-    /// 抽象クラスに描画フックだけが並ぶことになり、どちらのウィジェットも読みにくくなる。
+    /// Reason composition was chosen over inheritance: what the two widgets share is only "how to translate
+    /// pointer/key input into a bool change"; the appearance (rounded box vs. pill) and child element composition
+    /// are completely different. A shared base VisualElement would end up as a layout-less abstract class lined
+    /// with nothing but rendering hooks, making both widgets harder to read.
     /// </summary>
     sealed class BoolSwipeGesture
     {
@@ -19,10 +19,10 @@ namespace Tweeq.UIToolkit
         const float MOUSE_DRAG_THRESHOLD = 3f;
         const float TOUCH_DRAG_THRESHOLD = 5f;
 
-        // 閾値に届かなくても 0.2s 長押しでドラッグへ入る（仕様「共通」）
+        // Even without reaching the threshold, a 0.2s hold enters drag (spec "Common")
         const long HOLD_DRAG_DELAY_MS = 200;
 
-        // プレビュー値のデッドゾーン。Vue の tweakThreshold と同値で、ポインタ種別によらず 3px
+        // Dead zone for the preview value. Same value as Vue's tweakThreshold, 3px regardless of pointer type
         const float PREVIEW_DEAD_ZONE = 3f;
 
         #endregion
@@ -45,28 +45,28 @@ namespace Tweeq.UIToolkit
 
         #region Public API
 
-        /// <summary>現在値の取得元。未設定なら false 扱い。</summary>
+        /// <summary>Source for reading the current value. Treated as false when unset.</summary>
         public Func<bool> ValueGetter { get; set; }
 
-        /// <summary>プレビュー値が変わるたびに呼ばれる（＝ドラッグ中も即反映する。仕様「共通」）。</summary>
+        /// <summary>Called every time the preview value changes (i.e. reflects immediately even mid-drag. Spec "Common").</summary>
         public Action<bool> ValueChanged { get; set; }
 
-        /// <summary>クリック／リリース／キー入力ごとに 1 回だけ呼ばれる。</summary>
+        /// <summary>Called exactly once per click / release / key input.</summary>
         public Action<bool> Confirmed { get; set; }
 
-        /// <summary>押下・ドラッグ状態が変わったときの再描画フック。</summary>
+        /// <summary>Redraw hook fired when the pressed/dragging state changes.</summary>
         public Action StateChanged { get; set; }
 
-        /// <summary>操作を受け付けないか。SwitchInput は常に false（仕様 §2: disabled 無し）。</summary>
+        /// <summary>Whether operation is rejected. Always false for SwitchInput (spec section 2: no disabled).</summary>
         public bool Disabled { get; set; }
 
-        /// <summary>閾値を越えてドラッグ中か。</summary>
+        /// <summary>Whether currently dragging past the threshold.</summary>
         public bool Dragging => _dragging;
 
-        /// <summary>押下中か（閾値未満を含む）。</summary>
+        /// <summary>Whether currently pressed (including below the threshold).</summary>
         public bool Pressed => _pointerDown;
 
-        /// <summary>ドラッグ中のプレビュー値。<see cref="Dragging"/> が false のときは意味を持たない。</summary>
+        /// <summary>The preview value while dragging. Meaningless when <see cref="Dragging"/> is false.</summary>
         public bool PreviewValue => _previewValue;
 
         public BoolSwipeGesture(VisualElement owner)
@@ -86,8 +86,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 進行中の操作を打ち切る。Confirmed は発火しない。
-        /// Disabled 化のように「離す手段が無くなる」状況で呼ぶ。
+        /// Aborts an in-progress operation. Confirmed does not fire.
+        /// Call this in situations like becoming Disabled, where "there is no longer a way to release."
         /// </summary>
         public void Cancel()
         {
@@ -122,8 +122,8 @@ namespace Tweeq.UIToolkit
             _pressPosition = LocalPosition(evt);
             _pointerPosition = _pressPosition;
 
-            // キーボードショートカット（T/F/Space...）を受け取るためにフォーカスを取る。
-            // Vue も onClick / onDragEnd で input.focus() している
+            // Take focus so keyboard shortcuts (T/F/Space...) can be received.
+            // The Vue version also calls input.focus() in onClick / onDragEnd
             _owner.Focus();
 
             if (_owner.panel != null)
@@ -171,19 +171,19 @@ namespace Tweeq.UIToolkit
             bool wasDragging = _dragging;
             int pointerId = _pointerId;
 
-            // 先に状態を落としてから解放する。解放で飛んでくる PointerCaptureOutEvent を空振りさせるため
+            // Tear down state before releasing, so the PointerCaptureOutEvent fired by the release is a no-op
             ResetState();
             ReleasePointerSafely(pointerId);
             StateChanged?.Invoke();
 
             if (wasDragging)
             {
-                // ドラッグ中の値はプレビューで反映済みなので、ここは確定だけ
+                // The value while dragging was already reflected via preview, so here we only confirm
                 Confirmed?.Invoke(CurrentValue);
             }
             else
             {
-                // 閾値未満で離した＝クリック → 値を反転
+                // Released below the threshold = a click -> flip the value
                 bool next = !CurrentValue;
                 ValueChanged?.Invoke(next);
                 Confirmed?.Invoke(next);
@@ -203,8 +203,8 @@ namespace Tweeq.UIToolkit
             ResetState();
             StateChanged?.Invoke();
 
-            // キャプチャを奪われてもドラッグ中の値は既に外へ通知済み。
-            // 確定を飛ばすと「変わったのにコミットされない」状態が残るので、ここでも確定させる
+            // Even if capture is taken away, the dragging value has already been notified outward.
+            // Skipping confirmation would leave a "changed but never committed" state, so confirm here too
             if (wasDragging)
             {
                 Confirmed?.Invoke(CurrentValue);
@@ -213,7 +213,7 @@ namespace Tweeq.UIToolkit
 
         void OnDetachFromPanel(DetachFromPanelEvent evt)
         {
-            // 要素ごと消えるので聞き手も居ない。状態だけ落とす（Confirmed は発火しない）
+            // The whole element is going away, so there's no listener left either. Just tear down state (Confirmed does not fire)
             ResetState();
         }
 
@@ -243,14 +243,14 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // 同じキーに割り当てられたアプリ側ショートカットを二重に叩かない（Vue と同じ判断）
+            // Avoid also triggering an app-side shortcut bound to the same key (same call as Vue)
             evt.StopPropagation();
 
             ValueChanged?.Invoke(next);
             Confirmed?.Invoke(next);
         }
 
-        // 仕様「共通」: T/Y/1/P→true、F/N/0/M→false、Space→トグル
+        // Spec "Common": T/Y/1/P -> true, F/N/0/M -> false, Space -> toggle
         static bool TryResolveKey(KeyCode keyCode, bool current, out bool next)
         {
             switch (keyCode)
@@ -290,8 +290,8 @@ namespace Tweeq.UIToolkit
             _valueOnDragStart = CurrentValue;
             StopHoldTimer();
 
-            // 開始直後は dx≈0 ＝ デッドゾーン内なので、プレビューは必ず開始値の反転になる。
-            // Vue の tweakingValue（null → 値）の watch と同じタイミングで最初の変更通知が出る
+            // Right after starting, dx≈0, i.e. within the dead zone, so the preview is always the inverse of the start value.
+            // The first change notification fires at the same timing as Vue's watch on tweakingValue (null -> value)
             UpdatePreview();
             StateChanged?.Invoke();
         }
@@ -306,9 +306,9 @@ namespace Tweeq.UIToolkit
 
             _previewValue = preview;
 
-            // 変化したときだけ通知する（Vue は tweakingValue の watch なので同じ挙動）。
-            // 前回のプレビューではなく実値と比べるのは、外部が値を拒否した場合にも
-            // 「見えている値＝通知した値」を保つため
+            // Notify only when the value changes (same behavior as Vue's watch on tweakingValue).
+            // We compare against the actual value rather than the previous preview so that, even if an external
+            // party rejects the value, "the value shown == the value notified" is preserved
             if (preview == CurrentValue)
             {
                 StateChanged?.Invoke();
@@ -353,7 +353,7 @@ namespace Tweeq.UIToolkit
 
         bool CurrentValue => ValueGetter != null && ValueGetter();
 
-        // キャプチャ中も座標系がぶれないよう、パネル座標からローカルへ変換する
+        // Convert from panel coordinates to local so the coordinate system stays consistent even while capturing
         Vector2 LocalPosition(IPointerEvent evt)
         {
             Vector3 position = evt.position;

@@ -4,11 +4,11 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// 部品化したフォーカスリング（ext-custom-widgets-spec.md EXT-03-C）の検証。
+    /// Verification of the componentized focus ring (ext-custom-widgets-spec.md EXT-03-C).
     ///
-    /// リングは箱と同じ角丸で重なることが要件なので、Attach の構造・Apply の追従・
-    /// Visible の切り替えに加えて、採用側（NumberInput / StringInput）が
-    /// 実際にこの部品を使っていることも固定する。
+    /// The ring is required to overlap with the same corner radius as the box, so in addition to
+    /// the structure of Attach, the tracking of Apply, and the toggling of Visible, this also pins down
+    /// that the adopting side (NumberInput / StringInput) actually uses this component.
     /// </summary>
     public class TweeqFocusRingTests
     {

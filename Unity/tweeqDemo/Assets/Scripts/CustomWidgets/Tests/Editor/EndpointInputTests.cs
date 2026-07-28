@@ -8,12 +8,12 @@ using UnityEngine.UIElements;
 namespace TweeqDemo.CustomWidgets.Tests
 {
     /// <summary>
-    /// EndpointInput（ext-custom-widgets-spec.md EXT-02）の契約検証。
+    /// Contract verification for EndpointInput (ext-custom-widgets-spec.md EXT-02).
     ///
-    /// 状態機械は panel 非依存なので大半はパネル無しで完結する。
-    /// ポインタ配線（TweeqScrubManipulator との結線）と ChangeEvent の送出だけ
-    /// パッケージが公開する <see cref="TweeqRuntimeTestPanel"/> を使う
-    /// （外部プロジェクトが testables 経由でテスト土台を借りられることの実証）。
+    /// The state machine is panel-independent, so most of this completes without a panel.
+    /// Only pointer wiring (the connection with TweeqScrubManipulator) and firing ChangeEvent
+    /// use the <see cref="TweeqRuntimeTestPanel"/> exposed by the package (a proof that an
+    /// external project can borrow the test scaffolding via testables).
     /// </summary>
     public class EndpointInputTests
     {
@@ -61,7 +61,8 @@ namespace TweeqDemo.CustomWidgets.Tests
         [Test]
         public void Value_ClampsAbsurdlyLongDigitsWithoutOverflow()
         {
-            // long でも溢れる桁数。TryParse は上限で頭打ちにしながら積むので落ちない
+            // A digit count that overflows even a long. TryParse accumulates while capping at the
+            // upper bound, so it doesn't fail
             Assert.AreEqual("255.255.9.9", Make("99999999999999999999.300.9.9").value);
         }
 
@@ -558,7 +559,7 @@ namespace TweeqDemo.CustomWidgets.Tests
         [Test]
         public void FocusRing_IsThePackageComponent()
         {
-            // 外部 asmdef から TweeqFocusRing を採用できることの実証（EXT-03-C）
+            // A proof that TweeqFocusRing can be adopted from an external asmdef (EXT-03-C)
             TweeqFocusRing ring = Make().Q<TweeqFocusRing>();
 
             Assert.IsNotNull(ring);
@@ -582,8 +583,8 @@ namespace TweeqDemo.CustomWidgets.Tests
         [Test]
         public void Segments_UseTheSharedTextFieldNormalization()
         {
-            // ApplyTextField（EXT-03-A）が効いていれば、区画の TextField は
-            // 24px の枠を使い切り、内側の既定クロームが消えている
+            // If ApplyTextField (EXT-03-A) is in effect, the segment's TextField fills the
+            // entire 24px box and the inner default chrome is gone
             EndpointInput input = Make();
             TextField field = input.Q<TextField>("tweeq-endpoint-segment-text");
             VisualElement textInput = field.Q("unity-text-input");
@@ -668,12 +669,12 @@ namespace TweeqDemo.CustomWidgets.Tests
             VisualElement segment = input.Q("tweeq-endpoint-segment-0");
             Assert.IsNotNull(segment);
 
-            // EditMode のパネルは「ポインタ下の要素」を持たないので、事前に掴んでおく
+            // An EditMode panel has no "element under the pointer", so capture it in advance
             segment.CapturePointer(PointerId.mousePointerId);
 
             SendPointer(segment, EventType.MouseDown, new Vector2(10f, 10f), EventModifiers.None);
 
-            // 1 回目の移動は閾値超えの宣言だけで値には乗らない
+            // The first move only declares that the threshold was crossed; it doesn't affect the value
             SendPointer(segment, EventType.MouseDrag, new Vector2(20f, 10f), EventModifiers.None);
             SendPointer(segment, EventType.MouseDrag, new Vector2(60f, 10f), EventModifiers.None);
             SendPointer(segment, EventType.MouseUp, new Vector2(60f, 10f), EventModifiers.None);
@@ -704,7 +705,7 @@ namespace TweeqDemo.CustomWidgets.Tests
         {
             EndpointInput input = Mounted();
 
-            // ChangeEvent はプール品なので、コールバックを抜けた後の中身は当てにならない
+            // ChangeEvent is a pooled object, so its contents can't be trusted after the callback returns
             List<string> transitions = new List<string>();
             input.RegisterCallback<ChangeEvent<string>>(
                 evt => transitions.Add(evt.previousValue + "→" + evt.newValue));

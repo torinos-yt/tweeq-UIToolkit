@@ -3,21 +3,21 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// 入力欄のフォーカスリング。host に重ねる絶対配置レイヤとして描く。
+    /// Focus ring for an input field. Drawn as an absolutely-positioned layer overlaid on the host.
     /// </summary>
     /// <remarks>
-    /// ホスト自身の border で描かないのは、border を足すと絶対配置の子（バー・ハンドル・
-    /// TextField）が 1px 内側へずれてしまうため。picking は無効なので、重ねてもポインタは
-    /// 下の要素へ抜ける。
+    /// Not drawn via the host's own border, because adding a border would shift the absolutely-
+    /// positioned children (bar, handle, TextField) 1px inward. Picking is disabled, so even when
+    /// overlaid, the pointer passes through to the element below.
     /// </remarks>
     public sealed class TweeqFocusRing : VisualElement
     {
         #region Constants
 
-        /// <summary>リングの線幅（px）。</summary>
+        /// <summary>Line width of the ring (px).</summary>
         public const float RING_WIDTH = 1f;
 
-        /// <summary>既定の要素名。</summary>
+        /// <summary>Default element name.</summary>
         public const string DEFAULT_NAME = "tweeq-focus-ring";
 
         #endregion
@@ -41,11 +41,11 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// リングを生成して host の最前面（子の末尾）へ重ねる。
+        /// Creates a ring and overlays it on top of host (as the last child).
         /// </summary>
         /// <remarks>
-        /// host が null でもリング自体は返す。呼び出し側の参照を null にしないことで、
-        /// 以降の <see cref="Apply" /> / <see cref="Visible" /> が素通りできる。
+        /// Returns a ring even if host is null. Keeping the caller's reference non-null lets
+        /// subsequent calls to <see cref="Apply" /> / <see cref="Visible" /> pass through harmlessly.
         /// </remarks>
         public static TweeqFocusRing Attach(VisualElement host)
         {
@@ -63,7 +63,7 @@ namespace Tweeq.UIToolkit
 
         #region Public API
 
-        /// <summary>リングを表示するか。</summary>
+        /// <summary>Whether to show the ring.</summary>
         public bool Visible
         {
             get { return this.style.display.value == DisplayStyle.Flex; }
@@ -71,7 +71,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 色と角丸をテーマ・グループ位置へ追従させる。箱と同じ引数で呼ぶこと。
+        /// Follows the color and corner rounding of the theme and group position. Call with the
+        /// same arguments as the box.
         /// </summary>
         public void Apply(
             TweeqTheme theme, TweeqBoxPosition inlinePosition, TweeqBoxPosition blockPosition)

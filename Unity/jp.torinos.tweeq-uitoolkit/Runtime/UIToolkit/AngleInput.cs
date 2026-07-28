@@ -5,22 +5,22 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// 角度の複合入力（Vue InputAngle 相当）。左に <see cref="RotaryInput"/>、右に度数表示の
-    /// <see cref="NumberInput"/> を並べ、値を双方向に同期する。
+    /// Composite angle input (equivalent to the Vue InputAngle). Places a <see cref="RotaryInput"/> on the left and a
+    /// degree-display <see cref="NumberInput"/> on the right, syncing the value bidirectionally.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// 幅が足りないときは Vue 版と同じく数値欄を畳んでノブだけにする
-    /// （閾値は <c>theme.inputHeight * 4</c>）。
+    /// When width is insufficient, collapse the number field and show only the knob, same as the Vue version
+    /// (threshold is <c>theme.inputHeight * 4</c>).
     /// </para>
     /// <para>
-    /// 通知は 1 系統に集約する。どちらの子で操作しても ValueChanged は毎更新 1 回、
-    /// Confirmed は 1 ジェスチャ 1 回だけになる。
+    /// Notifications are consolidated into a single stream. Regardless of which child is operated, ValueChanged
+    /// fires once per update and Confirmed fires once per gesture.
     /// </para>
     /// <para>
-    /// Vue 版は 2 つを gap-control（9px）で離して置くが、こちらは <see cref="InputGroup"/> で
-    /// 融合させる。Unity 側では「1 つの値を 2 つの口で編集する」ことが角丸のつながりで
-    /// 読み取れる方が、離して置くより意図が伝わるため。
+    /// The Vue version separates the two with a gap-control (9px), but here they are fused via
+    /// <see cref="InputGroup"/>. On the Unity side, having the connected rounded corners convey "one value edited
+    /// through two mouths" communicates the intent better than placing them apart.
     /// </para>
     /// </remarks>
     [UxmlElement]
@@ -49,23 +49,23 @@ namespace Tweeq.UIToolkit
         TweeqBoxPosition _inlinePosition = TweeqBoxPosition.None;
         TweeqBoxPosition _blockPosition = TweeqBoxPosition.None;
 
-        // Vue の useElementSize は初回計測まで 0 を返すので、既定は「畳んだ状態」で揃える
+        // Vue's useElementSize returns 0 until the first measurement, so default to the "collapsed" state to match
         bool _showNumber;
 
-        // 子へ書き戻している最中の通知を自分の入力と誤認しないためのガード
+        // Guard to avoid mistaking notifications during write-back to children for our own input
         bool _syncing;
 
         #endregion
 
         #region Public API
 
-        /// <summary>値が変わるたびに発火する。</summary>
+        /// <summary>Fires every time the value changes.</summary>
         public event Action<float> ValueChanged;
 
-        /// <summary>ドラッグ確定・Enter・blur で 1 ジェスチャ 1 回だけ発火する。</summary>
+        /// <summary>Fires once per gesture on drag commit, Enter, or blur.</summary>
         public event Action<float> Confirmed;
 
-        /// <summary>現在の角度（度数）。</summary>
+        /// <summary>Current angle (in degrees).</summary>
         [UxmlAttribute]
         public float value
         {
@@ -83,16 +83,16 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>左のノブ。オーバーレイ設定などを個別に触りたい場合に使う。</summary>
+        /// <summary>The left-side knob. Use this when you need to touch overlay settings etc. individually.</summary>
         public RotaryInput Rotary => _rotary;
 
-        /// <summary>右の数値欄。Bar や SnapStep などを個別に触りたい場合に使う。</summary>
+        /// <summary>The right-side number field. Use this when you need to touch Bar, SnapStep, etc. individually.</summary>
         public NumberInput Number => _number;
 
-        /// <summary>数値欄が表示されているか。幅の判定結果。</summary>
+        /// <summary>Whether the number field is shown. Result of the width check.</summary>
         public bool ShowsNumber => _showNumber;
 
-        /// <summary>配色テーマ。子へそのまま伝播する。</summary>
+        /// <summary>Color theme. Propagated to children as-is.</summary>
         public TweeqTheme Theme
         {
             get => _theme;
@@ -107,7 +107,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>スナップ角度（度数）。既定 45。ノブ側だけの概念なので数値欄へは配らない。</summary>
+        /// <summary>Snap angle (in degrees). Default 45. A knob-only concept, so it is not distributed to the number field.</summary>
         [UxmlAttribute]
         public double Snap
         {
@@ -115,7 +115,7 @@ namespace Tweeq.UIToolkit
             set => _rotary.Snap = value;
         }
 
-        /// <summary>インジケータの角度オフセット（度数）。</summary>
+        /// <summary>Indicator angle offset (in degrees).</summary>
         [UxmlAttribute]
         public double AngleOffset
         {
@@ -124,8 +124,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 量子化幅。ノブと数値欄の両方へ配る。
-        /// 片方だけに掛けると、ノブ由来の生の角度がそのまま欄に流れ込んで粒度が揃わない。
+        /// Quantization width. Distributed to both the knob and the number field.
+        /// Applying it to only one side would let the knob's raw angle flow straight into the field, leaving the granularity mismatched.
         /// </summary>
         [UxmlAttribute]
         public double Step
@@ -139,8 +139,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// 数値欄の下限。ノブは多回転を保持する仕様なのでクランプしない
-        /// （Vue の InputAngle も min/max を持たず、ノブ側は素通し）。
+        /// Lower bound of the number field. The knob is specced to retain multi-turn state, so it is not clamped
+        /// (the Vue InputAngle also has no min/max, and the knob side passes values through untouched).
         /// </summary>
         [UxmlAttribute]
         public double Min
@@ -149,7 +149,7 @@ namespace Tweeq.UIToolkit
             set => _number.Min = value;
         }
 
-        /// <summary>数値欄の上限。解釈は <see cref="Min"/> と同じ。</summary>
+        /// <summary>Upper bound of the number field. Interpreted the same as <see cref="Min"/>.</summary>
         [UxmlAttribute]
         public double Max
         {
@@ -157,7 +157,7 @@ namespace Tweeq.UIToolkit
             set => _number.Max = value;
         }
 
-        /// <summary>数値欄の静止時表示桁。</summary>
+        /// <summary>Digits shown in the number field at rest.</summary>
         [UxmlAttribute]
         public int Precision
         {
@@ -165,7 +165,7 @@ namespace Tweeq.UIToolkit
             set => _number.Precision = value;
         }
 
-        /// <summary>操作不能状態。ノブと数値欄の両方へ配る。</summary>
+        /// <summary>Disabled state. Distributed to both the knob and the number field.</summary>
         [UxmlAttribute]
         public bool Disabled
         {
@@ -183,7 +183,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>不正値表示。数値欄だけに配る（ノブに invalid 表現は無い）。</summary>
+        /// <summary>Invalid-value display. Distributed only to the number field (the knob has no invalid representation).</summary>
         [UxmlAttribute]
         public bool Invalid
         {
@@ -200,7 +200,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>横方向グループでの位置。中の 2 部品へ分解して配り直す。</summary>
+        /// <summary>Position within a horizontal group. Decomposed and redistributed to the two inner parts.</summary>
         public TweeqBoxPosition InlinePosition
         {
             get => _inlinePosition;
@@ -216,7 +216,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>縦方向グループでの位置。2 部品は横並びなので、そのまま両方へ配る。</summary>
+        /// <summary>Position within a vertical group. Since the two parts are laid out side by side, distribute the value to both as-is.</summary>
         public TweeqBoxPosition BlockPosition
         {
             get => _blockPosition;
@@ -233,9 +233,9 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// レイアウト幅を与えて数値欄の表示可否を引き直す。
-        /// 通常は GeometryChangedEvent から自動で呼ばれるが、レイアウトが走らない環境
-        /// （EditMode テスト・未アタッチ）から駆動するために口を開けてある。
+        /// Given a layout width, redetermine whether the number field should be shown.
+        /// Normally called automatically from GeometryChangedEvent, but this entry point is left open so it can
+        /// also be driven from environments where layout does not run (EditMode tests, not-yet-attached).
         /// </summary>
         public void PerformResize(float width)
         {
@@ -249,23 +249,23 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// ノブ側の値変更を再現する。RotaryInput の ChangeEvent は panel が無いと配送されないため、
-        /// 外部ドライバとテストのために口を開けてある。
+        /// Reproduces a value change on the knob side. Since RotaryInput's ChangeEvent is not dispatched without a
+        /// panel, this entry point is left open for external drivers and tests.
         /// </summary>
         public void PerformRotaryEdit(float newValue)
         {
-            // Disabled 中は実操作が届かないので、この口も塞いでおく（挙動を実経路と一致させる）
+            // While Disabled, real operations don't reach it, so block this entry point too (keep behavior consistent with the real path)
             if (_disabled)
             {
                 return;
             }
 
-            // 実経路でも値を持っているのは子なので、先に子へ書いてから集約へ流す
+            // The child holds the value even on the real path, so write to the child first, then flow it to the aggregate
             _rotary.SetValueWithoutNotify(newValue);
             Adopt(newValue, _number);
         }
 
-        /// <summary>数値欄側の値変更を再現する。用途は <see cref="PerformRotaryEdit"/> と同じ。</summary>
+        /// <summary>Reproduces a value change on the number field side. Same purpose as <see cref="PerformRotaryEdit"/>.</summary>
         public void PerformNumberEdit(float newValue)
         {
             if (_disabled)
@@ -278,8 +278,8 @@ namespace Tweeq.UIToolkit
         }
 
         /// <summary>
-        /// ジェスチャ確定を発火する。子の Confirmed は panel 上の操作でしか起きないため、
-        /// 外部ドライバとテストのために口を開けてある。
+        /// Fires gesture confirmation. Since a child's Confirmed only occurs from operations on the panel, this
+        /// entry point is left open for external drivers and tests.
         /// </summary>
         public void PerformConfirm()
         {
@@ -291,7 +291,7 @@ namespace Tweeq.UIToolkit
             OnChildConfirmed(_value);
         }
 
-        /// <summary>ChangeEvent を発火せずに値を設定する。</summary>
+        /// <summary>Sets the value without firing a ChangeEvent.</summary>
         public void SetValueWithoutNotify(float newValue)
         {
             _value = newValue;
@@ -320,8 +320,8 @@ namespace Tweeq.UIToolkit
                 Theme = _theme,
             };
 
-            // InputGroup.ApplyStretch は flexBasis 未指定の子へ basis 0 を配る。
-            // width より basis が勝つため、明示しないと 24px のノブがゼロ幅まで潰れる
+            // InputGroup.ApplyStretch assigns basis 0 to children with no flexBasis specified.
+            // Since basis wins over width, without an explicit value the 24px knob would collapse to zero width
             _rotary.style.flexGrow = 0f;
             _rotary.style.flexShrink = 0f;
 
@@ -334,7 +334,7 @@ namespace Tweeq.UIToolkit
             _number.style.flexGrow = 1f;
             _number.style.flexBasis = 0f;
 
-            // 子の値変更は ChangeEvent でしか出てこない（両者とも ValueChanged を持たない）
+            // A child's value change only ever surfaces via ChangeEvent (neither has a ValueChanged)
             _rotary.RegisterValueChangedCallback(OnRotaryChanged);
             _number.RegisterValueChangedCallback(OnNumberChanged);
             _rotary.Confirmed += OnChildConfirmed;
@@ -344,8 +344,8 @@ namespace Tweeq.UIToolkit
             _group.Add(_number);
             this.hierarchy.Add(_group);
 
-            // InputGroup は畳んだ数値欄も 1 個の箱として数えるので、角丸は自前で配り直す。
-            // グループが位置を配った後で上書きするため、レイアウト確定のたびに掛ける
+            // InputGroup still counts a collapsed number field as one box, so we redistribute the rounded corners ourselves.
+            // Since this overrides after the group assigns positions, run it every time layout is finalized
             this.RegisterCallback<GeometryChangedEvent>(OnGeometryChanged);
 
             ApplyRotarySize();
@@ -364,9 +364,9 @@ namespace Tweeq.UIToolkit
                 PerformResize(evt.newRect.width);
             }
 
-            // InputGroup は attach のたびに gap と角丸を配り直すので、
-            // 畳んだ数値欄ぶんの上書きはレイアウト確定のたびに掛け直す
-            // （各セッタは同値なら何もしないので毎回呼んでよい）
+            // InputGroup redistributes gap and rounded corners on every attach, so the override for the collapsed
+            // number field must be reapplied every time layout is finalized
+            // (each setter is a no-op for the same value, so it's fine to call them every time)
             ApplyNumberVisibility();
             ApplyBoxFusion();
         }
@@ -395,13 +395,13 @@ namespace Tweeq.UIToolkit
         {
             _number.style.display = _showNumber ? DisplayStyle.Flex : DisplayStyle.None;
 
-            // InputGroup の gap は「末尾以外」に配られるので、畳んだ側の余白は自分で外す
+            // InputGroup's gap is distributed to "all but the last", so remove the margin ourselves on the collapsed side
             float gap = _showNumber && _theme != null ? _theme.GapGroup : 0f;
             _rotary.style.marginRight = gap;
         }
 
-        // 外側から受けた位置を [ノブ][数値欄] の 2 箱へ分解する。
-        // ノブは円形で潰す角を持たない（RotaryInput 側で no-op）が、単独表示の判定には要る
+        // Decompose the position received from outside into the two boxes [knob][number field].
+        // The knob is circular and has no corners to round (a no-op on the RotaryInput side), but it's still needed for the standalone-display check
         void ApplyBoxFusion()
         {
             bool roundStart = _inlinePosition == TweeqBoxPosition.None
@@ -447,8 +447,8 @@ namespace Tweeq.UIToolkit
             Adopt(evt.newValue, _rotary);
         }
 
-        // 変更元へは書き戻さない。ドラッグ中の子は生の累積値を持っており、
-        // SetValueWithoutNotify がそれを踏み潰すとジェスチャが壊れる
+        // Don't write back to the source of the change. The child that's mid-drag holds a raw accumulated value, and
+        // if SetValueWithoutNotify overwrote it, the gesture would break
         void Adopt(float next, INotifyValueChanged<float> other)
         {
             if (_syncing || _value == next)

@@ -5,12 +5,12 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// UI Toolkit には CSS の gap が無いため、子のマージンで隙間を作る。
-    /// ParameterGrid ファミリー共通の実装なのでここに集約する。
+    /// UI Toolkit has no CSS gap, so the gap is created using margins on the children.
+    /// This is shared logic across the ParameterGrid family, so it is centralized here.
     /// </summary>
     internal static class TweeqGap
     {
-        /// <summary>先頭以外の子へ主軸方向のマージンを配る。</summary>
+        /// <summary>Distributes a main-axis margin to every child except the first.</summary>
         public static void Apply(VisualElement container, float gap, FlexDirection direction)
         {
             if (container == null)
@@ -29,7 +29,7 @@ namespace Tweeq.UIToolkit
                     continue;
                 }
 
-                // 同値の代入はインラインスタイル側で弾かれるので、レイアウトは汚れない
+                // Assigning the same value is filtered out on the inline-style side, so the layout stays clean
                 float value = i == 0 ? 0f : gap;
                 if (horizontal)
                 {
@@ -44,22 +44,23 @@ namespace Tweeq.UIToolkit
     }
 
     /// <summary>
-    /// ラベル列｜入力列の 2 カラムレイアウト（仕様 §3）。
+    /// The 2-column layout of a label column | input column (spec §3).
     ///
-    /// 本家は `grid-template-columns: minmax(60px, max-content) minmax(0, 1fr)` だが
-    /// UI Toolkit に CSS grid は無い。そこで「配下の Parameter のラベル希望幅を実測し、
-    /// max(60, 最大値) を全行へ配る」ことで max-content 共有列を再現する（仕様 §5-5）。
-    /// ParameterGroup の中の Parameter も同じ Grid から幅をもらう（仕様 §5-6）。
+    /// The original uses `grid-template-columns: minmax(60px, max-content) minmax(0, 1fr)`, but
+    /// UI Toolkit has no CSS grid. So instead, the shared max-content column is reproduced by
+    /// "measuring the desired label width of every descendant Parameter, and distributing
+    /// max(60, the maximum value) to every row" (spec §5-5).
+    /// Parameters inside a ParameterGroup also receive their width from the same Grid (spec §5-6).
     /// </summary>
     [UxmlElement]
     public partial class ParameterGrid : VisualElement, ITweeqThemed
     {
         #region Constants
 
-        /// <summary>ラベル列の下限幅（本家 minmax の 60px）。</summary>
+        /// <summary>Lower bound of the label column width (the 60px in the original's minmax).</summary>
         public const float MIN_LABEL_WIDTH = 60f;
 
-        // 本家 .TqParameterGrid の padding-left
+        // padding-left from the original .TqParameterGrid
         const float PADDING_LEFT = 3f;
 
         #endregion
@@ -68,7 +69,7 @@ namespace Tweeq.UIToolkit
 
         TweeqTheme _theme = TweeqTheme.Dark();
 
-        // Refresh のたびに作り直さないよう使い回す
+        // Reused so it isn't recreated on every Refresh
         readonly List<Parameter> _parameters = new List<Parameter>();
 
         IVisualElementScheduledItem _pendingRefresh;
@@ -78,16 +79,16 @@ namespace Tweeq.UIToolkit
         #region Public API
 
         /// <summary>
-        /// 配色テーマ。Refresh のたびに配下の Parameter / ParameterHeading /
-        /// ParameterGroup へ伝播するので、個別に設定し直す必要はない。
+        /// Color theme. Propagated to every descendant Parameter / ParameterHeading /
+        /// ParameterGroup on each Refresh, so there is no need to set it individually.
         /// </summary>
         public TweeqTheme Theme
         {
             get => _theme;
             set
             {
-                // 同一インスタンスでも打ち切らない。テーマ設定後に足された行へ届ける
-                // 再配布の入り口はこの setter しか無い（M7 転送契約の取りこぼし修正）
+                // Don't bail out even for the same instance, so rows added after the theme is set still receive it.
+                // This setter is the only entry point for redistribution (fix for a gap in the M7 propagation contract)
                 _theme = value ?? TweeqTheme.Dark();
                 ApplyStaticStyles();
                 RequestRefresh();
@@ -95,7 +96,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>行間の再配置とラベル列幅の再配布を即座に行う。</summary>
+        /// <summary>Immediately re-lays-out row gaps and redistributes label column widths.</summary>
         public void Refresh()
         {
             ApplyRowGaps();
@@ -129,13 +130,14 @@ namespace Tweeq.UIToolkit
         #region Refresh scheduling
 
         /// <summary>
-        /// 子（Parameter / Group）側から呼ぶ再計算要求。同一フレーム内の複数要求は 1 回に畳む。
+        /// A recalculation request called from a child (Parameter / Group). Multiple requests within the
+        /// same frame are folded into one.
         /// </summary>
         internal void RequestRefresh()
         {
             if (this.panel == null)
             {
-                // パネル外ではスケジューラが回らないので即時に済ませる
+                // The scheduler doesn't run outside a panel, so finish immediately
                 Refresh();
                 return;
             }
@@ -154,17 +156,17 @@ namespace Tweeq.UIToolkit
 
         void OnGeometryChanged(GeometryChangedEvent evt)
         {
-            // GeometryChangedEvent はバブルするので、入力欄のアニメーション中も
-            // 際限なく飛んでくる。自分自身のレイアウト変化（＝行の増減・パネル幅変更）
-            // だけを再計算のきっかけにする。行の追加は Parameter 側の
-            // AttachToPanelEvent からも通知される
+            // GeometryChangedEvent bubbles, so it keeps firing endlessly while an input field is
+            // animating too. Only trigger a recalculation on this element's own layout change
+            // (i.e. rows added/removed, panel width change). Row additions are also notified
+            // via Parameter's own AttachToPanelEvent
             if (evt == null || !ReferenceEquals(evt.target, this))
             {
                 return;
             }
 
-            // 幅を書き戻すと再びここへ来るが、値が変わらなければ ApplyLabelWidth が
-            // 何も書かないのでループは 1 往復で止まる
+            // Writing the width back brings us here again, but if the value hasn't changed
+            // ApplyLabelWidth writes nothing, so the loop stops after one round trip
             RequestRefresh();
         }
 
@@ -175,8 +177,8 @@ namespace Tweeq.UIToolkit
 
         void OnDetachFromPanel(DetachFromPanelEvent evt)
         {
-            // 剥がしたパネルのスケジュール項目を掴んだままだと、次に載せたとき
-            // 「予約済み」と誤認して二度と再計算されなくなる
+            // If we keep holding onto the scheduled item from the panel we were detached from, the next
+            // time we're attached it would be mistaken for "already pending" and never recalculate again
             _pendingRefresh?.Pause();
             _pendingRefresh = null;
         }
@@ -211,8 +213,8 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        // この Grid が面倒を見る Parameter を集めつつ、テーマも配る。
-        // ネストした ParameterGrid は自前で幅を配るので踏み込まない（仕様 §5-6）。
+        // Collect the Parameters this Grid is responsible for, distributing the theme along the way.
+        // Nested ParameterGrids distribute their own widths, so we don't recurse into them (spec §5-6).
         void Collect(VisualElement element)
         {
             if (element == null)
@@ -234,7 +236,7 @@ namespace Tweeq.UIToolkit
                     parameter.Theme = _theme;
                     _parameters.Add(parameter);
 
-                    // Parameter の中身は入力欄なので、これ以上降りる意味は無い
+                    // The contents of a Parameter are the input field, so there's no point descending further
                     continue;
                 }
 
@@ -259,7 +261,7 @@ namespace Tweeq.UIToolkit
 
         #region Helpers
 
-        /// <summary>自身を含めず祖先方向へ辿り、幅を配ってくれる Grid を探す（仕様 §5-6）。</summary>
+        /// <summary>Walks up toward the ancestors (excluding itself) to find the Grid that will distribute widths (spec §5-6).</summary>
         internal static ParameterGrid Find(VisualElement element)
         {
             VisualElement current = element?.hierarchy.parent;

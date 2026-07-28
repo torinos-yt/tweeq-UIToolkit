@@ -1,8 +1,8 @@
 namespace Tweeq.Core
 {
     /// <summary>
-    /// すべての編集ジェスチャが通過する明示的な境界。
-    /// Cancel はドラッグ開始値への復元を意味する（Escape）。
+    /// Explicit boundary that every edit gesture passes through.
+    /// Cancel means restoring to the value at drag start (Escape).
     /// </summary>
     public enum EditPhase
     {

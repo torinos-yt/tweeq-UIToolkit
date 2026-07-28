@@ -6,14 +6,14 @@ using System.Text.RegularExpressions;
 namespace Tweeq.Core
 {
     /// <summary>
-    /// タイムコードの整形・解析・スクラブ量子化。UnityEngine 非依存・すべて double。
-    /// 原典は tweeq/src/InputTime/utils.ts（整形・解析）と InputTime.vue（tweakSpeed / スナップ）。
+    /// Timecode formatting, parsing, and scrub quantization. No UnityEngine dependency, all double.
+    /// The original is tweeq/src/InputTime/utils.ts (formatting/parsing) and InputTime.vue (tweakSpeed / snap).
     /// </summary>
     public static class TimecodeLogic
     {
         #region Constants
 
-        /// <summary>tweak scale。原典 InputTime.vue の tweakScale と同じ 0..3。</summary>
+        /// <summary>tweak scale. Same 0..3 as tweakScale in the original InputTime.vue.</summary>
         public const int SCALE_FRAMES = 0;
         public const int SCALE_SECONDS = 1;
         public const int SCALE_MINUTES = 2;
@@ -22,7 +22,7 @@ namespace Tweeq.Core
         const double SECONDS_PER_MINUTE = 60.0;
         const double SECONDS_PER_HOUR = 3600.0;
 
-        // 原典の各正規表現。文字クラス内の '-' はエスケープ済みで、JS 版と同じ字面を保つ。
+        // Each regex from the original. The '-' inside the character class is escaped, keeping the same literal form as the JS version.
         static readonly Regex TimecodeLiteralPattern =
             new Regex(@"([0-9+\-.]+:)+[0-9+\-.]+", RegexOptions.IgnoreCase);
 
@@ -38,7 +38,7 @@ namespace Tweeq.Core
         static readonly Regex HoursLiteralPattern =
             new Regex(@"[0-9+\-.]+h((ou)?r)?s?", RegexOptions.IgnoreCase);
 
-        // 単位サフィックスの判定は「末尾一致かつ直前が数字系」。原典 parseTimecode と同じ字面。
+        // A unit suffix is detected by "matches at the end, immediately preceded by a digit-like character." Same literal form as the original parseTimecode.
         static readonly Regex SecondsSuffixPattern = new Regex(@"[0-9+\-.]s(ec(ond)?s?)?$");
         static readonly Regex MinutesSuffixPattern = new Regex(@"[0-9+\-.]m(in(ute)?s?)?$");
         static readonly Regex HoursSuffixPattern = new Regex(@"[0-9+\-.]h((ou)?r)?s?$");
@@ -48,10 +48,10 @@ namespace Tweeq.Core
         #region Format
 
         /// <summary>
-        /// "mm:ss:ff"、h&gt;0 のときだけ "h:mm:ss:ff"（h は 0 詰めしない）。負値は先頭に '-'。
-        /// f は剰余そのままなので、小数フレームは "00:00:1.5" のように小数のまま出る（原典と同じ）。
-        /// frameRate が 0・負・非有限のときはゼロ除算の文字列化を避けて "00:00:00" を返す
-        /// （公演中の表示が例外や "∞" になるより無難なため。原典は NaN 混じりの文字列を出す）。
+        /// "mm:ss:ff", or "h:mm:ss:ff" only when h&gt;0 (h is not zero-padded). Negative values get a leading '-'.
+        /// f is the raw remainder, so fractional frames come out as-is, e.g. "00:00:1.5" (same as the original).
+        /// When frameRate is 0, negative, or non-finite, returns "00:00:00" to avoid stringifying a division by zero
+        /// (safer than an exception or "∞" showing up on stage during a performance; the original outputs a string mixed with NaN).
         /// </summary>
         public static string FormatTimecode(double frames, double frameRate)
         {
@@ -96,7 +96,7 @@ namespace Tweeq.Core
             return builder.ToString();
         }
 
-        // 原典の pad() は padStart(2,'0') なので、3 文字以上（小数フレーム等）はそのまま通す
+        // The original pad() is padStart(2,'0'), so anything 3 characters or longer (e.g. fractional frames) passes through as-is
         static void AppendPadded(StringBuilder builder, double value)
         {
             string text = JsNumberToString(value);
@@ -113,8 +113,8 @@ namespace Tweeq.Core
         #region Parse
 
         /// <summary>
-        /// 原典 parseTimecode。"h:mm:ss:ff"（桁数任意）・単位サフィックス・裸のフレーム数を解釈する。
-        /// 原典が null / NaN を返すケースは false（呼び出し側は現値維持）。
+        /// The original parseTimecode. Interprets "h:mm:ss:ff" (any number of digits), unit suffixes,
+        /// and bare frame counts. Cases where the original returns null / NaN become false here (the caller keeps the current value).
         /// </summary>
         public static bool TryParseTimecode(string text, double frameRate, out double frames)
         {
@@ -139,7 +139,7 @@ namespace Tweeq.Core
                 string[] parts = timecode.Split(':');
                 double total = 0.0;
 
-                // 原典は reverse() してから右端＝フレームとして重みを付ける
+                // The original reverse()s first, then weights from the right end, i.e. treats it as frames
                 for (int i = 0; i < parts.Length; i++)
                 {
                     double digit = JsNumber(parts[parts.Length - 1 - i]);
@@ -177,7 +177,7 @@ namespace Tweeq.Core
                     : Finish(sign * JsRound(hours * frameRate * SECONDS_PER_HOUR), out frames);
             }
 
-            // 裸の数値は原典が parseInt なので、小数フレームは 0 方向へ切り捨てられる
+            // For bare numbers the original uses parseInt, so fractional frames are truncated toward 0
             double parsed = JsParseInt(timecode);
             return double.IsNaN(parsed) ? false : Finish(sign * parsed, out frames);
         }
@@ -195,9 +195,9 @@ namespace Tweeq.Core
         }
 
         /// <summary>
-        /// 式中のタイムコードリテラルと単位サフィックスをフレーム数へ置換する（原典 replaceTimecodeWithFrames）。
-        /// 置換順（コロン→f→s→m→h）は原典どおりで、これが単位の優先順位を決めている。
-        /// 解釈できない部分は原典と同じく "0" に潰す。
+        /// Replaces timecode literals and unit suffixes in an expression with frame counts (the original replaceTimecodeWithFrames).
+        /// The replacement order (colon → f → s → m → h) matches the original, and that order decides the units' priority.
+        /// Parts that can't be interpreted collapse to "0", same as the original.
         /// </summary>
         public static string ReplaceTimecodeWithFrames(string text, double frameRate)
         {
@@ -223,7 +223,7 @@ namespace Tweeq.Core
 
         #region Tweak
 
-        /// <summary>scale 1 単位あたりのフレーム数。0=1 / 1=fps / 2=fps*60 / 3 以上=fps*3600。</summary>
+        /// <summary>Frame count per 1 unit of scale. 0=1 / 1=fps / 2=fps*60 / 3 and above=fps*3600.</summary>
         public static double UnitFrames(int scale, double frameRate)
         {
             if (scale <= SCALE_FRAMES)
@@ -242,8 +242,8 @@ namespace Tweeq.Core
         }
 
         /// <summary>
-        /// 水平ドラッグ 1px あたりの増分（原典 InputTime.vue の tweakSpeed）。
-        /// frames は fps に依らず固定 1/4px、秒・分は 1/10、時は 1/100 の粗さ。
+        /// Increment per 1px of horizontal drag (tweakSpeed in the original InputTime.vue).
+        /// frames is a fixed 1/4px regardless of fps; seconds/minutes are 1/10 coarse, hours are 1/100 coarse.
         /// </summary>
         public static double ScaleSpeed(int scale, double frameRate)
         {
@@ -263,8 +263,8 @@ namespace Tweeq.Core
         }
 
         /// <summary>
-        /// scale の単位境界へスナップする（余りは持たない版）。
-        /// scale=0 は step=1、つまり連続値を整数フレームへ量子化する既定経路。
+        /// Snaps to the unit boundary of scale (the version that keeps no remainder).
+        /// scale=0 means step=1, i.e. the default path that quantizes a continuous value to an integer frame.
         /// </summary>
         public static double SnapToScale(double frames, int scale, double frameRate)
         {
@@ -272,8 +272,8 @@ namespace Tweeq.Core
         }
 
         /// <summary>
-        /// 原典方式のスナップ。offsetSource（Q 押下時の値）の単位内の余りを保持したまま
-        /// 単位刻みで動かす。原典 tweakSnapParams の [step, model % step] に対応する。
+        /// Snapping in the original's style. Moves in unit steps while keeping the remainder within the unit
+        /// from offsetSource (the value when Q was pressed). Corresponds to [step, model % step] in the original tweakSnapParams.
         /// </summary>
         public static double SnapToScale(double frames, int scale, double frameRate, double offsetSource)
         {
@@ -286,8 +286,8 @@ namespace Tweeq.Core
             return Quantize(frames, step, offsetSource % step);
         }
 
-        // linearly の scalar.quantize 相当。丸めは JS Math.round（=+∞ 方向）に合わせる必要がある：
-        // frames スケールの速度が 1/4px なので、負側で .5 ちょうどの端数が日常的に発生する
+        // Equivalent to scalar.quantize from linearly. The rounding needs to match JS Math.round (rounds toward +infinity):
+        // since the frames-scale speed is 1/4px, exact .5 fractions on the negative side occur routinely
         static double Quantize(double value, double step, double origin)
         {
             if (!TweeqMath.IsFinite(value) || !TweeqMath.IsFinite(step) || step <= 0.0
@@ -303,16 +303,16 @@ namespace Tweeq.Core
 
         #region JS number semantics
 
-        // 以下は原典が依存している JS 組み込みの挙動を必要な範囲だけ写したもの。
-        // 文字列生成は確定時のみ通るので、素直な実装で足りる。
+        // The following reproduces, only to the extent needed, the JS built-in behavior the original depends on.
+        // String generation only runs on commit, so a straightforward implementation is enough.
 
-        /// <summary>JS の Math.round（.5 は +∞ 方向）。C# の既定は銀行家丸めなので使えない。</summary>
+        /// <summary>JS's Math.round (.5 rounds toward +infinity). C#'s default is banker's rounding, so it can't be used as-is.</summary>
         static double JsRound(double value)
         {
             return Math.Floor(value + 0.5);
         }
 
-        /// <summary>JS の Number()。空文字は 0、解釈できなければ NaN。</summary>
+        /// <summary>JS's Number(). Empty string is 0, and NaN if it can't be interpreted.</summary>
         static double JsNumber(string text)
         {
             if (text == null)
@@ -332,7 +332,7 @@ namespace Tweeq.Core
                 : double.NaN;
         }
 
-        /// <summary>JS の parseFloat()。先頭の数値部分だけを読む。</summary>
+        /// <summary>JS's parseFloat(). Reads only the leading numeric portion.</summary>
         static double JsParseFloat(string text)
         {
             int length = NumericPrefixLength(text, true);
@@ -348,7 +348,7 @@ namespace Tweeq.Core
                 : double.NaN;
         }
 
-        /// <summary>JS の parseInt()。先頭の整数部分だけを読む（小数点以降は捨てる）。</summary>
+        /// <summary>JS's parseInt(). Reads only the leading integer portion (discards anything from the decimal point onward).</summary>
         static double JsParseInt(string text)
         {
             int length = NumericPrefixLength(text, false);
@@ -364,7 +364,7 @@ namespace Tweeq.Core
                 : double.NaN;
         }
 
-        // 数字が 1 文字も無ければ 0 を返す（＝NaN 扱い）
+        // Returns 0 if there isn't a single digit (treated as NaN)
         static int NumericPrefixLength(string text, bool allowFraction)
         {
             if (string.IsNullOrEmpty(text))
@@ -397,7 +397,7 @@ namespace Tweeq.Core
                     fractionDigits++;
                 }
 
-                // "1." は JS でも 1。小数部が無いときは '.' を落として整数部だけ返す
+                // "1." is 1 in JS too. When there's no fractional part, drop the '.' and return just the integer part
                 if (fractionDigits == 0)
                 {
                     index = fractionStart;
@@ -410,8 +410,9 @@ namespace Tweeq.Core
         }
 
         /// <summary>
-        /// JS の String(number)。整数は小数点を付けない。
-        /// 1e21 以上の指数表記は原典と字面が揃わないが、フレーム数の実用域から外れるため許容する。
+        /// JS's String(number). Integers get no decimal point.
+        /// Exponential notation for 1e21 and above won't match the original's literal form, but that's acceptable
+        /// since it's outside the practical range of frame counts.
         /// </summary>
         static string JsNumberToString(double value)
         {

@@ -5,27 +5,28 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit
 {
     /// <summary>
-    /// スクラブ 1 フレーム分の移動量と修飾キー。
+    /// The movement delta for a single scrub frame, plus modifier keys.
     /// </summary>
     /// <remarks>
-    /// 移動量は前回配信時からの差分（target のローカル座標）。
-    /// 修飾キーは Tweeq.Core の <c>GestureModifiers</c> へそのまま渡せる粒度で持つ。
+    /// The delta is relative to the last dispatch (in the target's local coordinates).
+    /// The modifier keys are kept at a granularity that can be passed straight through to
+    /// Tweeq.Core's <c>GestureModifiers</c>.
     /// </remarks>
     public readonly struct ScrubUpdate
     {
-        /// <summary>前回からの横移動量（px）。</summary>
+        /// <summary>The horizontal movement since the last dispatch (px).</summary>
         public readonly float DeltaX;
 
-        /// <summary>前回からの縦移動量（px）。</summary>
+        /// <summary>The vertical movement since the last dispatch (px).</summary>
         public readonly float DeltaY;
 
-        /// <summary>Shift（fast）が押されているか。</summary>
+        /// <summary>Whether Shift (fast) is held.</summary>
         public readonly bool Shift;
 
-        /// <summary>Alt（fine）が押されているか。</summary>
+        /// <summary>Whether Alt (fine) is held.</summary>
         public readonly bool Alt;
 
-        /// <summary>全項目を指定して生成する。</summary>
+        /// <summary>Creates an instance with all fields specified.</summary>
         public ScrubUpdate(float deltaX, float deltaY, bool shift, bool alt)
         {
             DeltaX = deltaX;
@@ -36,28 +37,28 @@ namespace Tweeq.UIToolkit
     }
 
     /// <summary>
-    /// 「押す → 閾値を越えたらスクラブ、越えなければクリック」のポインタ配線だけを持つ Manipulator。
+    /// A Manipulator that holds only the pointer wiring for "press → scrub once past the threshold, else click".
     /// </summary>
     /// <remarks>
     /// <para>
-    /// NumberInput のポインタ配線を外部 asmdef から再利用できる形へ抽出したもの
-    /// （ext-custom-widgets-spec.md EXT-01-B）。値の数学は一切持たないので、
-    /// <see cref="ScrubUpdated"/> の移動量を <c>TweakGesture</c> 等へ利用者が渡して組み立てる。
+    /// Extracted from NumberInput's pointer wiring into a form reusable from an external asmdef
+    /// (ext-custom-widgets-spec.md EXT-01-B). It holds no value math at all, so the caller passes
+    /// <see cref="ScrubUpdated"/>'s movement delta into things like <c>TweakGesture</c> to build values.
     /// </para>
     /// <para>
-    /// キャンセルの受け口は 2 つ（target の KeyDown(Escape) と PointerCaptureOut）。
-    /// Escape を拾うには target 自身がフォーカスを持っている必要があるので、
-    /// フォーカス移動は利用者側の責務。
+    /// There are two cancellation entry points (KeyDown(Escape) on the target, and PointerCaptureOut).
+    /// Catching Escape requires the target itself to hold focus, so moving focus there is the caller's
+    /// responsibility.
     /// </para>
     /// </remarks>
     public sealed class TweeqScrubManipulator : PointerManipulator
     {
         #region Constants
 
-        /// <summary>マウスでドラッグとみなす移動量（px）。</summary>
+        /// <summary>The movement (px) treated as a drag for mouse input.</summary>
         public const float MOUSE_DRAG_THRESHOLD = 3f;
 
-        /// <summary>タッチ・ペンでドラッグとみなす移動量（px）。指は素の手ぶれが大きいので緩い。</summary>
+        /// <summary>The movement (px) treated as a drag for touch/pen input. Looser than mouse, since raw finger jitter is larger.</summary>
         public const float TOUCH_DRAG_THRESHOLD = 5f;
 
         #endregion
@@ -78,28 +79,28 @@ namespace Tweeq.UIToolkit
 
         #region Public API
 
-        /// <summary>スクラブ中に OS カーソルを隠すか（既定 false）。</summary>
+        /// <summary>Whether to hide the OS cursor while scrubbing (default false).</summary>
         public bool HideCursorWhileScrubbing { get; set; }
 
-        /// <summary>スクラブ中か。描画側が「掴んでいる」表現へ切り替えるために読む。</summary>
+        /// <summary>Whether currently scrubbing. Read by the rendering side to switch to a "grabbed" appearance.</summary>
         public bool IsScrubbing
         {
             get { return _scrubbing; }
         }
 
-        /// <summary>閾値を越えてスクラブに入った瞬間に 1 回。</summary>
+        /// <summary>Fires once, the moment the threshold is crossed and scrubbing begins.</summary>
         public event Action ScrubBegan;
 
-        /// <summary>スクラブ中の移動ごと。<see cref="ScrubBegan"/> の直後は移動量 0 では飛ばない。</summary>
+        /// <summary>Fires on every movement while scrubbing. Right after <see cref="ScrubBegan"/>, it won't fire with a zero delta.</summary>
         public event Action<ScrubUpdate> ScrubUpdated;
 
-        /// <summary>スクラブしたままボタンを離した（＝コミット）。</summary>
+        /// <summary>The button was released while still scrubbing (i.e. committed).</summary>
         public event Action ScrubEnded;
 
-        /// <summary>Escape または PointerCaptureOut でスクラブが中断された。</summary>
+        /// <summary>Scrubbing was interrupted by Escape or PointerCaptureOut.</summary>
         public event Action ScrubCancelled;
 
-        /// <summary>閾値未満のまま離した（＝クリック）。</summary>
+        /// <summary>Released while still below the threshold (i.e. a click).</summary>
         public event Action Clicked;
 
         #endregion
@@ -155,8 +156,8 @@ namespace Tweeq.UIToolkit
                 this.target.CapturePointer(_pointerId);
             }
 
-            // ここでは StopPropagation しない。まだクリックかスクラブか決まっておらず、
-            // 押下を潰すと利用者側のフォーカス・キャレット処理まで巻き添えにするため
+            // Don't call StopPropagation here. Whether this is a click or a scrub isn't decided yet,
+            // and swallowing the press would also take out the caller's focus/caret handling
         }
 
         void OnPointerMove(PointerMoveEvent evt)
@@ -205,8 +206,8 @@ namespace Tweeq.UIToolkit
             bool wasScrubbing = _scrubbing;
             int pointerId = _pointerId;
 
-            // 解放より先に状態を畳む。ReleasePointer は PointerCaptureOut を呼び戻すので、
-            // 畳んでおかないと Commit と Cancel が二重に飛ぶ
+            // Fold the state before releasing. ReleasePointer calls PointerCaptureOut back in,
+            // so without folding first, both Commit and Cancel would fire
             ResetSession();
             ReleasePointerSafely(pointerId);
 
@@ -294,7 +295,7 @@ namespace Tweeq.UIToolkit
         {
             _scrubbing = true;
 
-            // 閾値を越えた地点を原点にする。越えるまでの移動量は値に乗せない
+            // Use the point where the threshold was crossed as the origin. Movement up to that point isn't carried into the value
             _previousPosition = position;
 
             if (HideCursorWhileScrubbing)
@@ -340,7 +341,7 @@ namespace Tweeq.UIToolkit
 
         void HideCursor()
         {
-            // panel が無い＝EditMode テストなどの論理層だけの実行。OS カーソルには触らない
+            // No panel means logic-only execution such as an EditMode test. Don't touch the OS cursor
             if (_cursorHidden || this.target == null || this.target.panel == null)
             {
                 return;

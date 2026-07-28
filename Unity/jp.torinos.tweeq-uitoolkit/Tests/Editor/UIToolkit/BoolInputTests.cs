@@ -5,15 +5,15 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// CheckboxInput / SwitchInput のうち panel 非依存の部分を検証する。
+    /// Verifies the panel-independent parts of CheckboxInput / SwitchInput.
     ///
-    /// スワイプ（ポインタイベント）とキーボードは panel が無いと SendEvent 自体が届かないため、
-    /// ここでは扱わない。以下はランタイムの E2E で確認すること:
-    /// - クリック＝トグル + Confirmed 1 回
-    /// - 3px(マウス)/5px(タッチ) または 0.2s 長押しでドラッグ開始
-    /// - ドラッグ中の dx 符号でプレビューが即反映され、リリースで Confirmed 1 回
-    /// - T/Y/1/P → true、F/N/0/M → false、Space → トグル（各々 change + Confirmed）
-    /// - ドラッグ中のプレビューオーバーレイの出現・展開
+    /// Swipe (pointer events) and keyboard input aren't handled here, since SendEvent itself
+    /// can't be delivered without a panel. The following should be verified via runtime E2E:
+    /// - Click = toggle + Confirmed fires once
+    /// - Drag starts at 3px (mouse) / 5px (touch) or a 0.2s long press
+    /// - The preview reflects the dx sign immediately while dragging, and release fires Confirmed once
+    /// - T/Y/1/P -> true, F/N/0/M -> false, Space -> toggle (each fires change + Confirmed)
+    /// - The preview overlay appearing/expanding while dragging
     /// </summary>
     public class BoolInputTests
     {
@@ -168,7 +168,7 @@ namespace Tweeq.UIToolkit.Tests
         [Test]
         public void Checkbox_AxesAreComposedWithOr()
         {
-            // Inline=Start（右を潰す）と Block=Start（下を潰す）の合成で右下だけが二重に潰れる
+            // Composing Inline=Start (flattens the right) with Block=Start (flattens the bottom) doubly flattens only the bottom-right
             CheckboxInput checkbox = new CheckboxInput
             {
                 InlinePosition = TweeqBoxPosition.Start,
@@ -239,7 +239,7 @@ namespace Tweeq.UIToolkit.Tests
             VisualElement handle = toggle.Q<VisualElement>("tweeq-switch-handle");
             Assert.IsNotNull(handle);
 
-            // off: inset 4px / 幅 16px
+            // off: inset 4px / width 16px
             Assert.AreEqual(4f, Radius(handle.style.left));
             Assert.AreEqual(16f, Radius(handle.style.width));
 
@@ -270,8 +270,8 @@ namespace Tweeq.UIToolkit.Tests
         [Test]
         public void Switch_HasNoDisabledMember()
         {
-            // 仕様 Unity 向け決定事項 3: Switch の disabled 無しは Vue 準拠。
-            // 誤って生やしたことに気付けるよう、コンパイル時の意図をテストとして残しておく
+            // Spec Unity-facing decision 3: Switch having no disabled matches the Vue original.
+            // Keep this as a test recording the compile-time intent, so accidentally adding it back gets noticed
             Assert.IsNull(typeof(SwitchInput).GetProperty("Disabled", BindingFlags.Public | BindingFlags.Instance));
             Assert.IsNull(typeof(SwitchInput).GetField("Disabled", BindingFlags.Public | BindingFlags.Instance));
         }

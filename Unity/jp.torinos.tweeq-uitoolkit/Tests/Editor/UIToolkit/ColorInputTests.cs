@@ -6,15 +6,16 @@ using UnityEngine.UIElements;
 namespace Tweeq.UIToolkit.Tests
 {
     /// <summary>
-    /// ColorInput の論理層（string-color-spec.md「テスト契約」の ColorInput 項目）を検証する。
+    /// Verifies the logical layer of ColorInput (the ColorInput item in string-color-spec.md's
+    /// "test contract").
     ///
-    /// ColorInput は開閉・ドラッグセッション・プリセット・HEX 同期を panel 非依存の
-    /// 命令的 API として持ち、ポップオーバーと描画だけをその上に乗せる。したがって
-    /// 「イベントが何回どの順で飛ぶか」はここで完結する。以下は panel と描画が要るので
-    /// Play Mode 側の担当:
-    /// - スウォッチ押下でピッカーが開く／外側クリックで閉じる
-    /// - SV パッド・Hue バー・Alpha バーの当たり判定とカーソル位置
-    /// - SV グラデーションが hue 変化時にだけ焼き直されること
+    /// ColorInput holds opening/closing, the drag session, presets, and HEX sync as a
+    /// panel-independent imperative API, with only the popover and rendering layered on top of
+    /// it. So "how many times events fire, and in what order" is fully covered here. The
+    /// following need a panel and rendering, so they're covered on the Play Mode side:
+    /// - The picker opening on swatch press / closing on an outside click
+    /// - Hit testing and cursor position for the SV pad, Hue bar, and Alpha bar
+    /// - The SV gradient only being redrawn when hue changes
     /// </summary>
     public class ColorInputTests
     {
@@ -50,7 +51,7 @@ namespace Tweeq.UIToolkit.Tests
         [Test]
         public void Preset_ClickRaisesValueChangedAndConfirmed()
         {
-            // 原典は confirm が飛ばないバグ。React 修正版 + test-contracts の契約を採用している
+            // The original has a bug where confirm doesn't fire. This adopts the contract from a fixed reference implementation plus test-contracts
             ColorInput input = Create(Color.white);
             input.Presets = new[] { Color.red, Color.green };
 
@@ -81,7 +82,7 @@ namespace Tweeq.UIToolkit.Tests
 
             input.PerformPresetClick(0);
 
-            // 値は動かないので ValueChanged は出ないが、確定操作であることは変わらない
+            // The value doesn't move so ValueChanged doesn't fire, but it's still a confirm operation
             Assert.AreEqual(0, changed);
             Assert.AreEqual(1, confirmed);
         }
@@ -176,7 +177,7 @@ namespace Tweeq.UIToolkit.Tests
             input.UpdatePickerDrag(0.1f, 0.75f);
             input.EndPickerDrag();
 
-            // pointermove ごとに ValueChanged（間引きなし・Vue 準拠）／終了で Confirmed 1 回
+            // ValueChanged fires on every pointermove (no throttling, matching the Vue original) / Confirmed fires once on end
             Assert.AreEqual(3, changed);
             Assert.AreEqual(1, confirmed);
         }
@@ -188,15 +189,15 @@ namespace Tweeq.UIToolkit.Tests
 
             input.BeginPickerDrag(ColorPickerAxis.SaturationValue);
 
-            // 左上 = 彩度 0 / 明度 1（白）
+            // Top-left = saturation 0 / value 1 (white)
             input.UpdatePickerDrag(0f, 0f);
             AssertColor(Color.white, input.value);
 
-            // 下端 = 明度 0（黒）
+            // Bottom edge = value 0 (black)
             input.UpdatePickerDrag(1f, 1f);
             AssertColor(Color.black, input.value);
 
-            // 右上 = 彩度 1 / 明度 1（純色）
+            // Top-right = saturation 1 / value 1 (pure color)
             input.UpdatePickerDrag(1f, 0f);
             AssertColor(Color.red, input.value);
 
@@ -317,8 +318,8 @@ namespace Tweeq.UIToolkit.Tests
 
         #region Channel scrub
 
-        // 感度基準は tweakWidth = PopupWidth = 240（仕様 §A）。
-        // 240px 動かすと pad / 単チャンネルは 0→1、hue は 1 周する
+        // The sensitivity basis is tweakWidth = PopupWidth = 240 (spec section A).
+        // Moving 240px takes pad / single-channel from 0 to 1, and hue makes one full turn
         const float TWEAK_WIDTH = 240f;
 
         static ColorInput CreateScrubbing(ColorTweakMode mode, double h, double s, double v, double a)
@@ -341,7 +342,7 @@ namespace Tweeq.UIToolkit.Tests
         {
             ColorInput input = CreateScrubbing(ColorTweakMode.Pad, 0.0, 0.5, 0.5, 1.0);
 
-            // dx = Δx/240、dy = −Δy/240（上方向が正）
+            // dx = Δx/240, dy = -Δy/240 (upward is positive)
             input.UpdateChannelScrub(new Vector2(TWEAK_WIDTH * 0.1f, -TWEAK_WIDTH * 0.1f));
 
             Assert.AreEqual(0.6, input.Hsva.S, EPSILON);
@@ -367,7 +368,7 @@ namespace Tweeq.UIToolkit.Tests
         {
             ColorInput input = CreateScrubbing(ColorTweakMode.Hue, 270.0, 1.0, 1.0, 1.0);
 
-            // 270 + 180 = 450 → 90
+            // 270 + 180 = 450 -> 90
             input.UpdateChannelScrub(new Vector2(TWEAK_WIDTH * 0.5f, 0f));
 
             Assert.AreEqual(90.0, input.Hsva.H, 1e-3);
@@ -409,7 +410,7 @@ namespace Tweeq.UIToolkit.Tests
         [Test]
         public void Scrub_RgbChannelsMoveInZeroToOneSpace()
         {
-            // 表示は 0-255 だが内部は 0-1。240px = チャンネル全域
+            // The display is 0-255 but internally it's 0-1. 240px = the full channel range
             ColorInput input = CreateScrubbing(ColorTweakMode.Red, 0.0, 1.0, 1.0, 1.0);
 
             input.UpdateChannelScrub(new Vector2(-TWEAK_WIDTH * 0.5f, 0f));
@@ -437,14 +438,14 @@ namespace Tweeq.UIToolkit.Tests
             Color afterPad = input.value;
             Assert.AreEqual(0.6, input.Hsva.S, EPSILON);
 
-            // 切替直後は「現在値が新しい基準」なので、同じ位置なら 1 ミリも動かない
+            // Right after switching, "the current value becomes the new basis", so staying at the same position doesn't move it a single bit
             input.SetScrubMode(ColorTweakMode.Hue);
             input.UpdateChannelScrub(new Vector2(TWEAK_WIDTH * 0.1f, 0f));
 
             AssertColor(afterPad, input.value);
             Assert.AreEqual(0.0, input.Hsva.H, EPSILON);
 
-            // 以降の移動量は新しい基準からの差分（累積 delta が残っていれば 216° になる）
+            // Subsequent movement is the delta from the new basis (it would be 216° if the accumulated delta had carried over)
             input.UpdateChannelScrub(new Vector2(TWEAK_WIDTH * 0.6f, 0f));
 
             Assert.AreEqual(180.0, input.Hsva.H, 1e-3);
@@ -584,7 +585,7 @@ namespace Tweeq.UIToolkit.Tests
         {
             ColorInput input = CreateScrubbing(ColorTweakMode.Pad, 0.0, 0.5, 0.5, 1.0);
 
-            // 2 度目の Begin で基準が動くと、掴み直しでも無いのに値が飛ぶ
+            // If the basis moved on the second Begin, the value would jump even though it wasn't re-grabbed
             input.BeginChannelScrub(new Vector2(100f, 100f));
             input.UpdateChannelScrub(new Vector2(TWEAK_WIDTH * 0.1f, 0f));
 
@@ -600,7 +601,7 @@ namespace Tweeq.UIToolkit.Tests
         {
             ColorInput input = Create(Color.red);
 
-            // "#" + 6 桁。α=1 のときは 8 桁にしない（FormatHex の契約）
+            // "#" + 6 digits. When alpha=1, it doesn't become 8 digits (FormatHex's contract)
             Assert.AreEqual(7, input.HexText.Length);
             StringAssert.StartsWith("#", input.HexText);
         }
@@ -663,7 +664,7 @@ namespace Tweeq.UIToolkit.Tests
             Assert.AreEqual(1, confirmed);
             AssertColor(Color.red, input.value);
 
-            // 確定後の表示は打った文字ではなく FormatHex の正規形
+            // The display after confirming is FormatHex's canonical form, not the typed text
             Assert.AreEqual(7, input.HexText.Length);
         }
 
@@ -698,7 +699,7 @@ namespace Tweeq.UIToolkit.Tests
             ColorInput input = Create(Color.white);
             input.SetHsva(200.0, 1.0, 1.0, 1.0);
 
-            // 黒は hue も彩度も定義できない。Vue の NaN 埋めと同じく直前の値を引き継ぐ
+            // Black can't define hue or saturation. Like the Vue original's NaN-filling, this carries over the previous value
             input.value = Color.black;
 
             Assert.AreEqual(200.0, input.Hsva.H, 1e-3);
