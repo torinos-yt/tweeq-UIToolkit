@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Globalization;
 using Tweeq.UIToolkit;
 using TweeqDemo.CustomWidgets;
@@ -40,6 +41,7 @@ namespace TweeqDemo
         const string BOOLEAN_GROUP_NAME = "tweeqDemo.boolean";
         const string SELECT_GROUP_NAME = "tweeqDemo.select";
         const string TIME_GROUP_NAME = "tweeqDemo.time";
+        const string TIMELINE_GROUP_NAME = "tweeqDemo.timeline";
         const string DIALOG_GROUP_NAME = "tweeqDemo.dialog";
         const string CUSTOM_GROUP_NAME = "tweeqDemo.custom";
 
@@ -67,6 +69,36 @@ namespace TweeqDemo
         const float INITIAL_TIME_FRAMES = 2172f;
 
         const double INITIAL_FRAME_RATE = 24.0;
+
+        // 10 seconds at the initial 24fps, so the timecode ruler shows whole minutes and seconds
+        const double TIMELINE_RANGE_END = 240.0;
+        const float TIMELINE_HEIGHT = 96f;
+        const float RULER_HEIGHT = 16f;
+
+        // In/Out are seeded so "Focus In/Out" has something to jump to on the first click
+        const double TIMELINE_IN = 24.0;
+        const double TIMELINE_OUT = 120.0;
+
+        // The library default of 60px/frame only shows 6 frames in this 360px column, so the demo
+        // opens the zoom range far enough to fit all 240 frames and start from the whole picture
+        const double TIMELINE_FRAME_WIDTH_MIN = 1.0;
+        const double TIMELINE_FRAME_WIDTH = 1.5;
+
+        // Unity reports single-digit wheel deltas while the original's coefficients are tuned for
+        // the browser's ~100-per-notch pixel deltas, so one notch would otherwise barely move
+        const double TIMELINE_WHEEL_SENSITIVITY = 40.0;
+
+        const double RULER_LABEL_GAP = 64.0;
+
+        const float CLIP_TOP = 24f;
+        const float CLIP_HEIGHT = 40f;
+        const float PLAYHEAD_WIDTH = 1f;
+
+        // Away from both In and Out, so the playhead line is not mistaken for one of them
+        const double TIMELINE_PLAYHEAD_START = 60.0;
+
+        static readonly double[] ClipStarts = { 12.0, 72.0, 150.0 };
+        static readonly double[] ClipLengths = { 36.0, 48.0, 60.0 };
 
         static readonly string[] FrameRates = { "24", "30", "60" };
 
@@ -120,6 +152,10 @@ namespace TweeqDemo
         TimeInput _time;
         StringDropdownInput _frameRate;
         ButtonToggleInput _timecodeMode;
+        TweeqTimeline _timeline;
+        TweeqRuler _ruler;
+        VisualElement _playhead;
+        ButtonInput _focusInOutButton;
         StringInput _text;
         ColorInput _tint;
         ButtonInput _flashButton;
@@ -181,6 +217,10 @@ namespace TweeqDemo
         string _endpointConfirmed = INITIAL_ENDPOINT;
         string _endpointPortConfirmed = INITIAL_ENDPOINT_PORT;
         string _endpointLive = INITIAL_ENDPOINT;
+
+        // The ruler's scales are rebuilt on every visible range change, so the list is reused
+        readonly List<RulerScale> _rulerScales = new List<RulerScale>();
+        double _playheadFrame = TIMELINE_PLAYHEAD_START;
 
         #endregion
 
@@ -324,6 +364,36 @@ namespace TweeqDemo
             {
                 _timecodeMode.Confirmed -= OnTimecodeModeConfirmed;
                 _timecodeMode = null;
+            }
+
+            if (_ruler != null)
+            {
+                _ruler.Dragged -= OnRulerDragged;
+                _ruler.UnregisterCallback<GeometryChangedEvent>(OnRulerGeometryChanged);
+
+                // The ruler holds the demo-owned scale buffer, so drop that reference too
+                _ruler.Scales = null;
+                _ruler = null;
+            }
+
+            if (_timeline != null)
+            {
+                _timeline.VisibleRangeChanged -= OnTimelineVisibleRangeChanged;
+
+                if (_playhead != null)
+                {
+                    _timeline.UnpinItem(_playhead);
+                }
+
+                _timeline = null;
+            }
+
+            _playhead = null;
+
+            if (_focusInOutButton != null)
+            {
+                _focusInOutButton.Clicked -= OnFocusInOutClicked;
+                _focusInOutButton = null;
             }
 
             if (_text != null)
@@ -545,6 +615,7 @@ namespace TweeqDemo
             grid.Add(BuildBooleanGroup());
             grid.Add(BuildSelectGroup());
             grid.Add(BuildTimeGroup());
+            grid.Add(BuildTimelineGroup());
             grid.Add(BuildDialogGroup());
             grid.Add(BuildCustomGroup());
 
@@ -746,6 +817,92 @@ namespace TweeqDemo
 
             group.RefreshContentGaps();
             return group;
+        }
+
+        // Timeline and Ruler are independent primitives, so the ruler is stacked above the
+        // timeline and fed from VisibleRangeChanged rather than living inside it
+        ParameterGroup BuildTimelineGroup()
+        {
+            ParameterGroup group = new ParameterGroup(TIMELINE_GROUP_NAME, "Timeline");
+
+            _ruler = new TweeqRuler
+            {
+                Theme = _theme,
+            };
+            _ruler.style.height = RULER_HEIGHT;
+            _ruler.Scales = _rulerScales;
+            _ruler.Dragged += OnRulerDragged;
+
+            // The scales depend on the pixel width, which is only known once laid out
+            _ruler.RegisterCallback<GeometryChangedEvent>(OnRulerGeometryChanged);
+
+            _timeline = new TweeqTimeline
+            {
+                Theme = _theme,
+                RangeStart = 0.0,
+                RangeEnd = TIMELINE_RANGE_END,
+
+                // The bound has to widen before the zoom itself can go below the library minimum
+                FrameWidthMin = TIMELINE_FRAME_WIDTH_MIN,
+                FrameWidth = TIMELINE_FRAME_WIDTH,
+                WheelSensitivity = TIMELINE_WHEEL_SENSITIVITY,
+                InPoint = TIMELINE_IN,
+                OutPoint = TIMELINE_OUT,
+            };
+            _timeline.style.height = TIMELINE_HEIGHT;
+            _timeline.VisibleRangeChanged += OnTimelineVisibleRangeChanged;
+
+            for (int index = 0; index < ClipStarts.Length; index++)
+            {
+                _timeline.Add(BuildClip(index));
+            }
+
+            _playhead = new VisualElement { name = "demo-playhead" };
+            _playhead.style.top = 0f;
+            _playhead.style.bottom = 0f;
+            _playhead.style.width = PLAYHEAD_WIDTH;
+            _playhead.style.backgroundColor = _theme.Accent;
+            _playhead.pickingMode = PickingMode.Ignore;
+            _timeline.Add(_playhead);
+
+            VisualElement stack = new VisualElement { name = "demo-timeline-stack" };
+            stack.style.flexDirection = FlexDirection.Column;
+            stack.Add(_ruler);
+            stack.Add(_timeline);
+            group.Content.Add(stack);
+
+            _focusInOutButton = new ButtonInput("Focus In/Out")
+            {
+                Theme = _theme,
+            };
+            _focusInOutButton.style.flexGrow = 1f;
+            _focusInOutButton.Clicked += OnFocusInOutClicked;
+            group.Content.Add(BuildRow("In/Out", _focusInOutButton));
+
+            SetPlayhead(_playheadFrame, false);
+            SyncRuler();
+
+            group.RefreshContentGaps();
+            return group;
+        }
+
+        // A clip only declares its frame and length; the timeline owns the horizontal geometry
+        VisualElement BuildClip(int index)
+        {
+            VisualElement clip = new VisualElement { name = "demo-clip-" + index };
+            clip.style.top = CLIP_TOP;
+            clip.style.height = CLIP_HEIGHT;
+
+            // Surface resolves to almost the same value as the track in the dark theme, so the
+            // block borrows Neutral, the step meant to read as a raised surface
+            clip.style.backgroundColor = _theme.Neutral;
+            clip.style.borderTopLeftRadius = _theme.InputRadius;
+            clip.style.borderTopRightRadius = _theme.InputRadius;
+            clip.style.borderBottomLeftRadius = _theme.InputRadius;
+            clip.style.borderBottomRightRadius = _theme.InputRadius;
+
+            _timeline.PinItem(clip, ClipStarts[index], ClipLengths[index]);
+            return clip;
         }
 
         ParameterGroup BuildDialogGroup()
@@ -1084,6 +1241,10 @@ namespace TweeqDemo
             }
 
             _timeLive = evt.newValue;
+
+            // The field and the playhead are two views of the same frame, so the field drives the
+            // timeline as well. Notifying back is skipped, otherwise the two would ping-pong
+            SetPlayhead(evt.newValue, false);
             RefreshConfirmedLabel();
         }
 
@@ -1104,6 +1265,75 @@ namespace TweeqDemo
             }
 
             _time.FrameRate = frameRate;
+
+            // Only the labels change: the ruler still spans the same frames
+            RefreshRulerScales();
+            RefreshConfirmedLabel();
+        }
+
+        void OnTimelineVisibleRangeChanged()
+        {
+            SyncRuler();
+        }
+
+        void OnRulerGeometryChanged(GeometryChangedEvent evt)
+        {
+            RefreshRulerScales();
+        }
+
+        void OnRulerDragged(double frame)
+        {
+            SetPlayhead(frame, true);
+        }
+
+        void OnFocusInOutClicked()
+        {
+            _timeline?.FocusInOut();
+        }
+
+        void SyncRuler()
+        {
+            if (_ruler == null || _timeline == null)
+            {
+                return;
+            }
+
+            _ruler.RangeStart = _timeline.VisibleStart;
+            _ruler.RangeEnd = _timeline.VisibleEnd;
+            RefreshRulerScales();
+        }
+
+        void RefreshRulerScales()
+        {
+            if (_ruler == null)
+            {
+                return;
+            }
+
+            double frameRate = _time != null ? _time.FrameRate : INITIAL_FRAME_RATE;
+
+            TweeqRulerScales.BuildTimecode(
+                _rulerScales, _ruler.RangeStart, _ruler.RangeEnd, frameRate, RULER_LABEL_GAP,
+                _ruler.ViewportWidth);
+
+            // The ruler already holds this list, so only the redraw has to be requested
+            _ruler.Refresh();
+        }
+
+        void SetPlayhead(double frame, bool syncTimeInput)
+        {
+            _playheadFrame = frame;
+
+            if (_timeline != null && _playhead != null)
+            {
+                _timeline.PinItem(_playhead, _playheadFrame);
+            }
+
+            if (syncTimeInput)
+            {
+                _time?.SetValueWithoutNotify((float)_playheadFrame);
+            }
+
             RefreshConfirmedLabel();
         }
 
@@ -1310,6 +1540,7 @@ namespace TweeqDemo
                 + " / angle " + Format(_angleConfirmed) + "°"
                 + " / time " + Format(_timeConfirmed) + "F"
                 + " (live " + Format(_timeLive) + "F, " + TimeDisplay() + ")"
+                + " / playhead " + Format((float)_playheadFrame) + "F"
                 + " / text \"" + _textConfirmed + "\""
                 + " / tint #" + ColorUtility.ToHtmlStringRGBA(_tintConfirmed)
                 + " / flash " + _flashClicks
