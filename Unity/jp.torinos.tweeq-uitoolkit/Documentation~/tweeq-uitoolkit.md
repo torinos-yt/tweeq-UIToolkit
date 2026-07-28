@@ -146,6 +146,8 @@ all four tokens at your own fonts and the bundled files go unused (see
 | `Enter` | Commit text editing |
 | Arrow keys | Step the focused field |
 | `Tab` | Focus next field and enter text editing with select-all |
+| `H` / `M` / `S` / `F` | Force the scrub scale on `TimeInput` (hours/minutes/seconds/frames) |
+| `Alt` + wheel | Zoom `TweeqTimeline`, anchored at the cursor (wheel alone pans; middle-drag pans too) |
 
 ## Persistence
 

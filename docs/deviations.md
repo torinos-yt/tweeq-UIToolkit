@@ -65,6 +65,9 @@ Web capabilities without a Unity equivalent, replaced rather than emulated:
   original. `WheelSensitivity` (default 1 = faithful coefficients) compensates
   for Unity's much smaller wheel deltas.
 - **Middle-mouse drag pans** — a DCC convention the original doesn't have.
+- **An optional built-in playhead** (`PlayheadFrame`, null by default) covers
+  the common seekbar case; the original draws no content of its own. Driving
+  it is still the host's job.
 - **Experimental: an In/Out band** (`InPoint` / `OutPoint` / `FocusInOut()`)
   exists behind the API — highlight between the points, dimming outside, focus
   navigation. The original has no such concept, and range semantics are really

@@ -31,7 +31,7 @@ preserved at the git tag [`vue-final`](https://github.com/torinos-yt/tweeq-UIToo
 | `Balloon` | `TweeqBalloon` | |
 | `Tooltip` | `TweeqTooltip` | Single instance, show/move delays |
 | `TweakOverlay` | per-widget overlays | Drawn on the shared `TweeqOverlayLayer` |
-| `Timeline` | `TweeqTimeline` | Zoom/pan frame viewport; hosts pin content via `PinItem` |
+| `Timeline` | `TweeqTimeline` | Zoom/pan frame viewport; hosts pin content via `PinItem`; optional built-in playhead |
 | `Ruler` | `TweeqRuler` | Ticks + labels, drag-to-value; `TweeqRulerScales` adds numeric/timecode label thinning |
 | `PaneModal` | `TweeqModal` | Centered balloon, emphasize bounce, non-dismissing |
 | `PaneModalComplex` / `PaneModalTabs` | `TweeqModalDialog` (+ `TweeqTabs`) | Title, scrolling body, Cancel/Confirm footer, Escape/Enter |
@@ -55,10 +55,10 @@ App-level or web-specific pieces that a host application should own, or that
 have no sensible Unity equivalent:
 
 - **Editors / canvases**: `InputCode`, `MonacoEditor`, `GlslCanvas`, `Markdown`
-- **App chrome**: `CommandPalette`, `Menu`, `TitleBar`, `PaneZUI`, `Timeline`,
-  `Viewport`, `Ruler`
+- **App chrome**: `CommandPalette`, `Menu`, `TitleBar`, `PaneZUI`, `Viewport`
 - **Selection**: `MultiSelectPopup` and simultaneous multi-parameter editing
-- **Expression input**: JavaScript expressions in number fields
+- **Expression input**: arbitrary JavaScript expressions in number fields
+  (`TimeInput` supports a reduced arithmetic grammar instead)
 - **Eyedropper**: relies on a browser API
 - **Icon system**: `Icon` / `SvgIcon` / `BindIcon` / `ColorIcon` /
   `IconIndicator` — this port draws its glyphs directly with `Painter2D`

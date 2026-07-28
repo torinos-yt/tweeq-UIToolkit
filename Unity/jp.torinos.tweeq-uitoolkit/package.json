@@ -2,7 +2,7 @@
   "name": "jp.torinos.tweeq-uitoolkit",
   "version": "0.1.0",
   "displayName": "tweeq UIToolkit",
-  "description": "Parameter-tuning GUI widgets for UI Toolkit - a Unity port of Tweeq by Baku Hashimoto. Drag-to-tweak inputs (number, rotary, vector, color, ...), parameter layout, popovers/modals/tabs, and Radix-scale theming.",
+  "description": "Parameter-tuning GUI widgets for UI Toolkit - a Unity port of Tweeq by Baku Hashimoto. Drag-to-tweak inputs (number, rotary, vector, color, time, ...), parameter layout, popovers/modals/tabs, a timeline viewport, and Radix-scale theming.",
   "unity": "6000.3",
   "author": {
     "name": "torinos"

@@ -20,7 +20,9 @@ Tweeq.UIToolkit   VisualElement implementations, theming, drag manipulators,
 - Package: `jp.torinos.tweeq-uitoolkit`
   - `Runtime/Core/` → asmdef `Tweeq.Core` (namespace `Tweeq.Core`)
   - `Runtime/UIToolkit/` → asmdef `Tweeq.UIToolkit` (namespace `Tweeq.UIToolkit`)
-  - `Tests/Editor/` → EditMode behavior tests (820+ assertions/cases)
+  - `Tests/Editor/` → EditMode behavior tests (1200+ cases)
+  - `Tests/Support/` → asmdef `Tweeq.UIToolkit.TestSupport` (helpers for
+    external widget tests, opt-in via `testables`)
 
 ## The interaction contract
 

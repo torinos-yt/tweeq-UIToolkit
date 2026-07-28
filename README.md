@@ -79,14 +79,23 @@ package's *UXML Demo* sample shows a full panel built without any C#.
 - **Inputs**: number (bar/scrub/scale ticks), rotary knob, vector (2/3/4),
   position / size / translate pads, angle, string, color (HSV pad, channel
   scrub, presets), dropdown with fuzzy filtering, shuffle, checkbox, switch,
-  button, button toggle, radio.
+  button, button toggle, radio, SMPTE time/timecode field with per-digit
+  scrub, cubic-bezier easing editor.
+- **Time**: a zoom/pan timeline viewport (hosts pin their own lane content)
+  and a tick/label ruler with drag-to-value.
 - **Layout**: input groups with fused corners, parameter grid with a shared
-  label column, collapsible parameter groups with persistence.
+  label column, collapsible parameter groups.
 - **Floating UI**: popover placement engine, balloons, tooltips, modals and
-  modal dialogs, tabs with keyboard navigation and persistence.
+  modal dialogs, tabs with keyboard navigation.
 - **Theming**: Radix-scale theme generation from arbitrary seed colors,
-  light/dark, USS seed properties, bundled
-  [Geist](https://vercel.com/font) font (OFL).
+  light/dark, USS seed properties (colors and fonts), bundled
+  [Geist](https://vercel.com/font) font (OFL) with all four font tokens
+  replaceable.
+- **Extensible**: the input-box chrome, scrub gesture wiring, focus ring and
+  theming contracts are public, so host projects can build their own widgets
+  with the same look and feel (a worked example ships in the demo project).
+- Persistence (active tabs, collapsed groups) is in-memory by default — the
+  library writes nothing to disk unless the host opts into `PlayerPrefs`.
 
 See [docs/components.md](docs/components.md) for the full mapping against the
 original component set, including what is planned and what is intentionally
