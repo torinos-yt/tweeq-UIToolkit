@@ -103,6 +103,12 @@ namespace Tweeq.UIToolkit
 
             float gap = _theme != null ? _theme.GapGroup : 0f;
             bool row = _direction == FlexDirection.Row || _direction == FlexDirection.RowReverse;
+
+            // Reversed directions flip the visual order while paint order stays hierarchy order
+            // (the idiom for "later sibling must paint on top", e.g. AngleInput's enlarged knob),
+            // so Start/End and the gap side must resolve against the visual position, not the index.
+            bool reversed = _direction == FlexDirection.RowReverse
+                || _direction == FlexDirection.ColumnReverse;
             int boxIndex = 0;
 
             for (int i = 0; i < childCount; i++)
@@ -113,7 +119,11 @@ namespace Tweeq.UIToolkit
                     continue;
                 }
 
-                ApplyGap(child, gap, row, i == childCount - 1);
+                // The gap margin sits on the physical trailing side (right/bottom), so the child
+                // exempted from it is the one with nothing after it there: visually last, which in
+                // reversed directions is hierarchy-first.
+                bool visuallyLast = reversed ? i == 0 : i == childCount - 1;
+                ApplyGap(child, gap, row, visuallyLast);
 
                 if (!(child is ITweeqInputBox box))
                 {
@@ -123,7 +133,7 @@ namespace Tweeq.UIToolkit
                 // With fewer than 2, no "connection" exists, so nothing is assigned (spec §1)
                 TweeqBoxPosition position = boxCount < 2
                     ? TweeqBoxPosition.None
-                    : Resolve(boxIndex, boxCount);
+                    : Resolve(reversed ? boxCount - 1 - boxIndex : boxIndex, boxCount);
 
                 if (row)
                 {
@@ -174,9 +184,9 @@ namespace Tweeq.UIToolkit
         // UI Toolkit 6000.3's inline styles have no flex gap, so child margins are used instead.
         // Only the last one has its margin removed, because this is "spacing", not "padding".
         // The check runs over all children, not just ITweeqInputBox implementers (spacing is still needed even if the last child is a label, etc.)
-        static void ApplyGap(VisualElement child, float gap, bool row, bool last)
+        static void ApplyGap(VisualElement child, float gap, bool row, bool visuallyLast)
         {
-            float value = last ? 0f : gap;
+            float value = visuallyLast ? 0f : gap;
             child.style.marginRight = row ? value : 0f;
             child.style.marginBottom = row ? 0f : value;
         }

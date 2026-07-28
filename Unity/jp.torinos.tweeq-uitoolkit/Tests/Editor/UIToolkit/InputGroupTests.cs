@@ -50,6 +50,30 @@ namespace Tweeq.UIToolkit.Tests
         }
 
         [Test]
+        public void RowReverse_Three_AssignsPositionsAgainstTheVisualOrder()
+        {
+            // Reversed directions exist so a hierarchy-later child (painted on top) can sit
+            // visually first; Start/End must therefore follow the visual order, not the index.
+            InputGroup group = CreateGroup(3, FlexDirection.RowReverse);
+
+            Assert.AreEqual(TweeqBoxPosition.End, AxisAt(group, 0).InlinePosition);
+            Assert.AreEqual(TweeqBoxPosition.Middle, AxisAt(group, 1).InlinePosition);
+            Assert.AreEqual(TweeqBoxPosition.Start, AxisAt(group, 2).InlinePosition);
+        }
+
+        [Test]
+        public void RowReverse_GapExemptsTheVisuallyLastChild()
+        {
+            InputGroup group = CreateGroup(3, FlexDirection.RowReverse);
+
+            // Hierarchy-first is visually rightmost, so it must carry no trailing margin;
+            // everything else keeps the physical-right gap between neighbours.
+            Assert.AreEqual(0f, AxisAt(group, 0).style.marginRight.value.value);
+            Assert.Greater(AxisAt(group, 1).style.marginRight.value.value, 0f);
+            Assert.Greater(AxisAt(group, 2).style.marginRight.value.value, 0f);
+        }
+
+        [Test]
         public void Vertical_Three_AssignsBlockPositions()
         {
             InputGroup group = CreateGroup(3, FlexDirection.Column);

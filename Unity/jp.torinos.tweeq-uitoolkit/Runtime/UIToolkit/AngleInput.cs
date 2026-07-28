@@ -340,8 +340,13 @@ namespace Tweeq.UIToolkit
             _rotary.Confirmed += OnChildConfirmed;
             _number.Confirmed += OnChildConfirmed;
 
-            _group.Add(_rotary);
+            // Paint order in UI Toolkit is hierarchy order, and the knob scales to 1.8x on
+            // hover/drag — added last so it paints over the number field (the original solves
+            // this with z-index: 2, which UI Toolkit does not have). RowReverse keeps the
+            // visual order knob-left, field-right.
+            _group.Direction = FlexDirection.RowReverse;
             _group.Add(_number);
+            _group.Add(_rotary);
             this.hierarchy.Add(_group);
 
             // InputGroup still counts a collapsed number field as one box, so we redistribute the rounded corners ourselves.

@@ -28,6 +28,38 @@ namespace Tweeq.UIToolkit.Tests
             return input;
         }
 
+        #region Structure
+
+        [Test]
+        public void Rotary_PaintsAboveTheNumberField()
+        {
+            AngleInput input = Create(45f);
+
+            // Paint order is hierarchy order, and the knob scales to 1.8x on hover/drag, so it
+            // must be the later sibling; RowReverse keeps it visually on the left.
+            VisualElement group = input.Rotary.hierarchy.parent;
+            Assert.AreEqual(FlexDirection.RowReverse, ((InputGroup)group).Direction);
+            Assert.Greater(
+                group.hierarchy.IndexOf(input.Rotary),
+                group.hierarchy.IndexOf(input.Number),
+                "the knob must come later in the hierarchy to paint over the field");
+        }
+
+        [Test]
+        public void Rotary_KeepsTheVisualStartCorners()
+        {
+            AngleInput input = Create(45f);
+
+            // Wide enough for the number field to show; the fusion override assigns against the
+            // visual order regardless of hierarchy order.
+            input.PerformResize(THRESHOLD * 2f);
+
+            Assert.AreEqual(TweeqBoxPosition.Start, input.Rotary.InlinePosition);
+            Assert.AreEqual(TweeqBoxPosition.End, input.Number.InlinePosition);
+        }
+
+        #endregion
+
         #region Synchronization
 
         [Test]
