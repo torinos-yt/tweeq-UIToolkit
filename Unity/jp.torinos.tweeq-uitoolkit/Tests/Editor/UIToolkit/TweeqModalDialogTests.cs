@@ -86,7 +86,7 @@ namespace Tweeq.UIToolkit.Tests
             Assume.That(
                 TweeqFonts.IsEmpty(theme.FontHeading),
                 Is.False,
-                "既定テーマの FontHeading が空。同梱フォントが Resources から読めていない");
+                "default theme's FontHeading is empty; the bundled font could not be read from Resources");
 
             TweeqModalDialog dialog = Create();
             dialog.Theme = theme;
@@ -176,7 +176,7 @@ namespace Tweeq.UIToolkit.Tests
 
             Assert.AreEqual(1, cancelled);
             Assert.AreEqual(0, confirmed);
-            Assert.IsFalse(dialog.Open, "Cancelled のあと Open は自動で倒れる");
+            Assert.IsFalse(dialog.Open, "Open automatically falls after Cancelled");
 
             dialog.Open = true;
             dialog.ConfirmButton.PerformClick();
@@ -249,7 +249,7 @@ namespace Tweeq.UIToolkit.Tests
 
             bool handled = dialog.PerformKey(KeyCode.Return, inner);
 
-            Assert.IsFalse(handled, "複数行編集では改行を優先する");
+            Assert.IsFalse(handled, "multiline editing prioritizes the newline");
             Assert.AreEqual(0, confirmed);
             Assert.IsTrue(dialog.Open);
         }
@@ -327,7 +327,7 @@ namespace Tweeq.UIToolkit.Tests
 
             TweeqPopover popover = new TweeqPopover();
             popover.Open(anchor);
-            Assume.That(popover.IsOpen, Is.True, "ポップオーバーを層に載せられなかった");
+            Assume.That(popover.IsOpen, Is.True, "could not mount the popover on the layer");
 
             bool escapeHandled = dialog.PerformKey(KeyCode.Escape, null);
             bool enterHandled = dialog.PerformKey(KeyCode.Return, null);

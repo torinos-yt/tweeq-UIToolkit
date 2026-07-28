@@ -48,7 +48,7 @@ namespace Tweeq.UIToolkit.TestSupport
             if (panel.Root == null || panel.Root.panel == null)
             {
                 panel.Dispose();
-                Assert.Ignore("EditMode でランタイムパネルを作れなかった（この契約は Play Mode 側で検証する）");
+                Assert.Ignore("could not create a runtime panel in EditMode (this contract is verified on the Play Mode side)");
             }
 
             return panel;

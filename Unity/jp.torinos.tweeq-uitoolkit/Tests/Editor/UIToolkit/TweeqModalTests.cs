@@ -53,7 +53,7 @@ namespace Tweeq.UIToolkit.Tests
             if (panel.Root == null || panel.Root.panel == null)
             {
                 panel.Dispose();
-                Assert.Ignore("EditMode でランタイムパネルを作れなかった（この契約は Play Mode 側で検証する）");
+                Assert.Ignore("could not create a runtime panel in EditMode (this contract is verified on the Play Mode side)");
             }
 
             return panel;
@@ -199,7 +199,7 @@ namespace Tweeq.UIToolkit.Tests
 
             modal.Open = true;
 
-            Assert.IsNotNull(LayerOf(modal.Backdrop), "backdrop がオーバーレイ層に載っていない");
+            Assert.IsNotNull(LayerOf(modal.Backdrop), "backdrop is not mounted on the overlay layer");
             Assert.AreSame(modal.Backdrop, modal.Pane.hierarchy.parent);
         }
 
@@ -257,7 +257,7 @@ namespace Tweeq.UIToolkit.Tests
 
             modal.RemoveFromHierarchy();
 
-            Assert.IsNull(modal.Backdrop.hierarchy.parent, "所有者を外したのに層へ置き去りになっている");
+            Assert.IsNull(modal.Backdrop.hierarchy.parent, "left behind on the layer after removing the owner");
         }
 
         #endregion
@@ -292,7 +292,7 @@ namespace Tweeq.UIToolkit.Tests
 
             Assert.AreEqual(1, outside);
             Assert.AreEqual(0, closed);
-            Assert.IsTrue(modal.Open, "PaneModal は外側クリックでは閉じない");
+            Assert.IsTrue(modal.Open, "PaneModal does not close on an outside click");
         }
 
         [Test]
@@ -353,7 +353,7 @@ namespace Tweeq.UIToolkit.Tests
             // Chrome opacification became a shared mechanism where TweeqBalloon uses Theme.SurfaceOpaque,
             // so the theme itself is passed through as the same instance untouched
             Assert.AreSame(theme, modal.Pane.Theme);
-            Assert.AreEqual(1f, theme.SurfaceOpaque.a, "外装用の合成色は常に不透明");
+            Assert.AreEqual(1f, theme.SurfaceOpaque.a, "the chrome composite color is always opaque");
 
             // TweeqRoot halts its search at ITweeqThemed, so it's the modal's responsibility to distribute the theme to its content
             Assert.AreSame(theme, button.Theme);

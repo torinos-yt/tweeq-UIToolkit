@@ -49,7 +49,7 @@ namespace Tweeq.UIToolkit.Tests
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
 
             VisualTreeAsset asset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(path);
-            Assert.IsNotNull(asset, "UXML のインポートに失敗した: " + path);
+            Assert.IsNotNull(asset, "failed to import the UXML: " + path);
 
             return asset.Instantiate();
         }

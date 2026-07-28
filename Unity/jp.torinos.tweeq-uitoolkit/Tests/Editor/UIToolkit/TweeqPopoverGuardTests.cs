@@ -39,7 +39,7 @@ namespace Tweeq.UIToolkit.Tests
             popover.Add(content);
             popover.Open(anchor);
 
-            Assume.That(popover.IsOpen, Is.True, "ポップオーバーを層に載せられなかった");
+            Assume.That(popover.IsOpen, Is.True, "could not mount the popover on the layer");
             return popover;
         }
 
@@ -68,7 +68,7 @@ namespace Tweeq.UIToolkit.Tests
             try
             {
                 Assume.That(nested.IsOpen, Is.True);
-                Assert.IsFalse(_popover.IsOutsideClick(nestedContent), "入れ子のポップオーバー内で親が閉じている");
+                Assert.IsFalse(_popover.IsOutsideClick(nestedContent), "the parent closed inside a nested popover");
                 Assert.IsFalse(_popover.IsOutsideClick(nested));
             }
             finally

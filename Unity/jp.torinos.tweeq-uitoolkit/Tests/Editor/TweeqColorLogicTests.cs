@@ -211,15 +211,15 @@ namespace Tweeq.Core.Tests
         {
             AssertRgba(
                 TweeqColorLogic.HsvaToRgba(new Hsva(-300.0, 1.0, 1.0, 1.0)),
-                1.0, 1.0, 0.0, 1.0, "hue=-300 は 60 と同じ");
+                1.0, 1.0, 0.0, 1.0, "hue=-300 is equivalent to 60");
 
             AssertRgba(
                 TweeqColorLogic.HsvaToRgba(new Hsva(0.0, 2.0, 5.0, 3.0)),
-                1.0, 0.0, 0.0, 1.0, "範囲外は飽和");
+                1.0, 0.0, 0.0, 1.0, "out-of-range values saturate");
 
             AssertRgba(
                 TweeqColorLogic.HsvaToRgba(new Hsva(0.0, -1.0, 0.5, -2.0)),
-                0.5, 0.5, 0.5, 0.0, "負値は 0 に飽和");
+                0.5, 0.5, 0.5, 0.0, "negative values saturate to 0");
         }
 
         [Test]

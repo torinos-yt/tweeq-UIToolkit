@@ -25,7 +25,7 @@ namespace Tweeq.UIToolkit.Tests
             public void SimulateAxisEdit(int index, float newValue)
             {
                 NumberInput axis = this.GetAxis(index);
-                Assert.IsNotNull(axis, "軸番号が範囲外");
+                Assert.IsNotNull(axis, "axis index out of range");
 
                 float previous = axis.value;
 

@@ -11,7 +11,7 @@ namespace Tweeq.UIToolkit.Tests
     {
         static void AssertBundledDefaults(TweeqTheme theme, string path)
         {
-            Assert.IsTrue(TweeqFonts.IsEmpty(theme.FontUi), $"{path}: FontUi は既定で空");
+            Assert.IsTrue(TweeqFonts.IsEmpty(theme.FontUi), $"{path}: FontUi is empty by default");
             Assert.AreEqual(TweeqFonts.NumericFont.font, theme.FontNumeric.font, $"{path}: FontNumeric");
             Assert.AreEqual(TweeqFonts.HeadingFont.font, theme.FontHeading.font, $"{path}: FontHeading");
             Assert.AreEqual(TweeqFonts.CodeFont.font, theme.FontCode.font, $"{path}: FontCode");
@@ -77,7 +77,7 @@ namespace Tweeq.UIToolkit.Tests
 
             TweeqTheme derived = theme.WithAccent(TweeqTheme.DEFAULT_GRAY);
 
-            Assert.IsTrue(TweeqFonts.IsEmpty(derived.FontCode), "明示的に外した指定も引き継ぐこと");
+            Assert.IsTrue(TweeqFonts.IsEmpty(derived.FontCode), "an explicitly cleared setting must also carry over");
             Assert.AreEqual(TweeqFonts.NumericFont.font, derived.FontNumeric.font);
         }
 

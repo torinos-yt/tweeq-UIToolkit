@@ -196,7 +196,7 @@ namespace Tweeq.UIToolkit.Tests
         {
             Type dataType = typeof(RotaryInput).GetNestedType(
                 "UxmlSerializedData", BindingFlags.Public | BindingFlags.NonPublic);
-            Assert.IsNotNull(dataType, "[UxmlElement] の UxmlSerializedData が生成されていない");
+            Assert.IsNotNull(dataType, "[UxmlElement]'s UxmlSerializedData was not generated");
 
             UxmlSerializedData data = (UxmlSerializedData)Activator.CreateInstance(dataType);
             OverrideAttribute(dataType, data, "Snap", 30.0);
@@ -222,11 +222,11 @@ namespace Tweeq.UIToolkit.Tests
             const BindingFlags lookup = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
 
             FieldInfo field = dataType.GetField(name, lookup);
-            Assert.IsNotNull(field, $"UxmlSerializedData に属性フィールド {name} が無い");
+            Assert.IsNotNull(field, $"UxmlSerializedData has no attribute field named {name}");
             field.SetValue(data, value);
 
             FieldInfo flags = dataType.GetField(name + "_UxmlAttributeFlags", lookup);
-            Assert.IsNotNull(flags, $"UxmlSerializedData に {name} のフラグフィールドが無い");
+            Assert.IsNotNull(flags, $"UxmlSerializedData has no flag field for {name}");
             flags.SetValue(data, FirstNonZero(flags.FieldType));
         }
 
@@ -240,7 +240,7 @@ namespace Tweeq.UIToolkit.Tests
                 }
             }
 
-            Assert.Fail($"{enumType.Name} に非ゼロの値が無い");
+            Assert.Fail($"{enumType.Name} has no non-zero value");
             return null;
         }
 

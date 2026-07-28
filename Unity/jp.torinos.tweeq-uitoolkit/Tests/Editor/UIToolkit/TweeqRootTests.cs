@@ -91,7 +91,7 @@ namespace Tweeq.UIToolkit.Tests
             root.Redistribute();
 
             Assert.AreEqual(1, outer.AssignCount);
-            Assert.AreEqual(0, inner.AssignCount, "ITweeqThemed の配下はその部品の責務");
+            Assert.AreEqual(0, inner.AssignCount, "what's under an ITweeqThemed is that component's own responsibility");
         }
 
         [Test]
@@ -111,7 +111,7 @@ namespace Tweeq.UIToolkit.Tests
 
             Assert.AreEqual(1, outerProbe.AssignCount);
             Assert.AreSame(innerRoot.Theme, innerProbe.Theme,
-                "入れ子ルートはテーマ境界。外側に踏み潰されない");
+                "a nested root is a theme boundary; it isn't overwritten by the outer one");
             Assert.AreNotSame(outerRoot.Theme, innerProbe.Theme);
         }
 
@@ -123,7 +123,7 @@ namespace Tweeq.UIToolkit.Tests
 
             ThemedProbe late = new ThemedProbe();
             root.Add(late);
-            Assert.AreEqual(0, late.AssignCount, "追加だけでは配られない");
+            Assert.AreEqual(0, late.AssignCount, "adding alone does not distribute the theme");
 
             root.Redistribute();
 
@@ -161,7 +161,7 @@ namespace Tweeq.UIToolkit.Tests
             TweeqTheme custom = CustomTheme();
             root.Theme = custom;
 
-            Assert.AreSame(custom, probe.Theme, "C# 代入は即配布される");
+            Assert.AreSame(custom, probe.Theme, "a C# assignment distributes immediately");
         }
 
         [Test]
@@ -210,7 +210,7 @@ namespace Tweeq.UIToolkit.Tests
             root.PaintBackground = false;
 
             Assert.AreEqual(StyleKeyword.Null, root.style.backgroundColor.keyword,
-                "自分で塗らない指定なら USS / 既定へ戻ること");
+                "when told not to paint it itself, it should fall back to USS / the default");
         }
 
         #endregion
@@ -223,12 +223,12 @@ namespace Tweeq.UIToolkit.Tests
             Type type = typeof(TweeqRoot);
 
             Assert.IsNotEmpty(type.GetCustomAttributes(typeof(UxmlElementAttribute), false),
-                "[UxmlElement] が付いていないと UXML から使えない");
+                "without [UxmlElement] it can't be used from UXML");
             Assert.IsNotNull(
                 type.GetNestedType("UxmlSerializedData", BindingFlags.Public | BindingFlags.NonPublic),
-                "UxmlSerializedData が生成されていない（partial 宣言漏れ）");
+                "UxmlSerializedData was not generated (missing partial declaration)");
             Assert.IsNotNull(type.GetConstructor(Type.EmptyTypes),
-                "UXML からの生成にはパラメータなしコンストラクタが必要");
+                "construction from UXML requires a parameterless constructor");
         }
 
         [Test]

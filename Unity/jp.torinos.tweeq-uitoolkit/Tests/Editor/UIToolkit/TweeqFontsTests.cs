@@ -28,7 +28,7 @@ namespace Tweeq.UIToolkit.Tests
         {
             FontDefinition definition = TweeqFonts.GeistRegular;
 
-            Assert.IsFalse(TweeqFonts.IsEmpty(definition), "Geist-Regular が Resources から読めていない");
+            Assert.IsFalse(TweeqFonts.IsEmpty(definition), "Geist-Regular could not be read from Resources");
             Assert.IsNotNull(definition.font);
             Assert.AreEqual("Geist-Regular", definition.font.name);
         }
@@ -38,7 +38,7 @@ namespace Tweeq.UIToolkit.Tests
         {
             FontDefinition definition = TweeqFonts.GeistSemiBold;
 
-            Assert.IsFalse(TweeqFonts.IsEmpty(definition), "Geist-SemiBold が Resources から読めていない");
+            Assert.IsFalse(TweeqFonts.IsEmpty(definition), "Geist-SemiBold could not be read from Resources");
             Assert.AreEqual("Geist-SemiBold", definition.font.name);
         }
 
@@ -47,7 +47,7 @@ namespace Tweeq.UIToolkit.Tests
         {
             FontDefinition definition = TweeqFonts.GeistMonoRegular;
 
-            Assert.IsFalse(TweeqFonts.IsEmpty(definition), "GeistMono-Regular が Resources から読めていない");
+            Assert.IsFalse(TweeqFonts.IsEmpty(definition), "GeistMono-Regular could not be read from Resources");
             Assert.AreEqual("GeistMono-Regular", definition.font.name);
         }
 
@@ -81,7 +81,7 @@ namespace Tweeq.UIToolkit.Tests
         {
             Assert.IsTrue(TweeqFonts.IsAvailable);
             TweeqFonts.ResetCache();
-            Assert.IsTrue(TweeqFonts.IsAvailable, "ResetCache 後も再ロードできること");
+            Assert.IsTrue(TweeqFonts.IsAvailable, "should be able to reload after ResetCache too");
         }
 
         #endregion
@@ -155,7 +155,7 @@ namespace Tweeq.UIToolkit.Tests
             TweeqFonts.Apply(element, default);
 
             Assert.IsTrue(TweeqFonts.IsEmpty(element.style.unityFontDefinition.value),
-                "空の定義を渡したらインライン指定が外れて既定へ戻ること");
+                "passing an empty definition should clear the inline override and fall back to the default");
         }
 
         [Test]

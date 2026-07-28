@@ -126,7 +126,7 @@ namespace Tweeq.UIToolkit.Tests
         {
             Type dataType = typeof(NumberInput).GetNestedType(
                 "UxmlSerializedData", BindingFlags.Public | BindingFlags.NonPublic);
-            Assert.IsNotNull(dataType, "[UxmlElement] の UxmlSerializedData が生成されていない");
+            Assert.IsNotNull(dataType, "[UxmlElement]'s UxmlSerializedData was not generated");
 
             UxmlSerializedData data = (UxmlSerializedData)Activator.CreateInstance(dataType);
             OverrideAttribute(dataType, data, "ScaleStyle", NumberScaleStyle.Values);
@@ -162,7 +162,7 @@ namespace Tweeq.UIToolkit.Tests
         static bool ScaleDotsVisible(NumberInput input)
         {
             PropertyInfo property = typeof(NumberInput).GetProperty("ScaleDotsVisible", LOOKUP);
-            Assert.IsNotNull(property, "ScaleDotsVisible が見つからない");
+            Assert.IsNotNull(property, "ScaleDotsVisible was not found");
 
             return (bool)property.GetValue(input);
         }
@@ -171,11 +171,11 @@ namespace Tweeq.UIToolkit.Tests
         static void OverrideAttribute(Type dataType, object data, string name, object value)
         {
             FieldInfo field = dataType.GetField(name, LOOKUP);
-            Assert.IsNotNull(field, $"UxmlSerializedData に属性フィールド {name} が無い");
+            Assert.IsNotNull(field, $"UxmlSerializedData has no attribute field named {name}");
             field.SetValue(data, value);
 
             FieldInfo flags = dataType.GetField(name + "_UxmlAttributeFlags", LOOKUP);
-            Assert.IsNotNull(flags, $"UxmlSerializedData に {name} のフラグフィールドが無い");
+            Assert.IsNotNull(flags, $"UxmlSerializedData has no flag field for {name}");
             flags.SetValue(data, FirstNonZero(flags.FieldType));
         }
 
@@ -189,7 +189,7 @@ namespace Tweeq.UIToolkit.Tests
                 }
             }
 
-            Assert.Fail($"{enumType.Name} に非ゼロの値が無い");
+            Assert.Fail($"{enumType.Name} has no non-zero value");
             return null;
         }
 

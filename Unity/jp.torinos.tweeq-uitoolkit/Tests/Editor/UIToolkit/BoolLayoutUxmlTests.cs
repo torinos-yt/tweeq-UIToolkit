@@ -52,10 +52,10 @@ namespace Tweeq.UIToolkit.Tests
             AssetDatabase.ImportAsset(TEMP_ASSET, ImportAssetOptions.ForceSynchronousImport);
 
             VisualTreeAsset asset = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(TEMP_ASSET);
-            Assert.That(asset, Is.Not.Null, "一時 UXML をインポートできない");
+            Assert.That(asset, Is.Not.Null, "failed to import the temp UXML");
 
             VisualElement root = asset.Instantiate();
-            Assert.That(root, Is.Not.Null, "UXML を実体化できない");
+            Assert.That(root, Is.Not.Null, "failed to instantiate the UXML");
             return root;
         }
 
@@ -68,7 +68,7 @@ namespace Tweeq.UIToolkit.Tests
                 "<tq:CheckboxInput label=\"Visible\" value=\"true\" disabled=\"true\" />");
 
             CheckboxInput checkbox = root.Q<CheckboxInput>();
-            Assert.That(checkbox, Is.Not.Null, "CheckboxInput が UXML から解決できていない");
+            Assert.That(checkbox, Is.Not.Null, "CheckboxInput could not be resolved from UXML");
             Assert.That(checkbox.Label, Is.EqualTo("Visible"));
             Assert.That(checkbox.value, Is.True);
             Assert.That(checkbox.Disabled, Is.True);
@@ -81,7 +81,7 @@ namespace Tweeq.UIToolkit.Tests
             VisualElement root = Instantiate("<tq:SwitchInput value=\"true\" label=\"Loop\" />");
 
             SwitchInput toggle = root.Q<SwitchInput>();
-            Assert.That(toggle, Is.Not.Null, "SwitchInput が UXML から解決できていない");
+            Assert.That(toggle, Is.Not.Null, "SwitchInput could not be resolved from UXML");
             Assert.That(toggle.value, Is.True);
             Assert.That(toggle.Label, Is.EqualTo("Loop"));
         }
@@ -93,7 +93,7 @@ namespace Tweeq.UIToolkit.Tests
                 "<tq:ButtonInput text=\"Render\" subtle=\"true\" narrow=\"true\" chevron=\"true\" />");
 
             ButtonInput button = root.Q<ButtonInput>();
-            Assert.That(button, Is.Not.Null, "ButtonInput が UXML から解決できていない");
+            Assert.That(button, Is.Not.Null, "ButtonInput could not be resolved from UXML");
 
             // The C# side uses Label, while the UXML side uses text to match the Vue original's prop name
             Assert.That(button.Label, Is.EqualTo("Render"));
@@ -110,7 +110,7 @@ namespace Tweeq.UIToolkit.Tests
                 "<tq:ButtonToggleInput text=\"Solo\" value=\"true\" disabled=\"true\" />");
 
             ButtonToggleInput toggle = root.Q<ButtonToggleInput>();
-            Assert.That(toggle, Is.Not.Null, "ButtonToggleInput が UXML から解決できていない");
+            Assert.That(toggle, Is.Not.Null, "ButtonToggleInput could not be resolved from UXML");
             Assert.That(toggle.Label, Is.EqualTo("Solo"));
             Assert.That(toggle.value, Is.True);
             Assert.That(toggle.Disabled, Is.True);
@@ -123,7 +123,7 @@ namespace Tweeq.UIToolkit.Tests
                 "<tq:RadioInput options=\"Low,Mid,High\" value=\"2\" />");
 
             RadioInput radio = root.Q<RadioInput>();
-            Assert.That(radio, Is.Not.Null, "RadioInput が UXML から解決できていない");
+            Assert.That(radio, Is.Not.Null, "RadioInput could not be resolved from UXML");
 
             // options must be readable as a comma-separated string[] (a dedicated CSV property would be needed if it can't be read)
             Assert.That(radio.Options, Is.EqualTo(new[] { "Low", "Mid", "High" }));
@@ -146,7 +146,7 @@ namespace Tweeq.UIToolkit.Tests
                 + "</tq:InputGroup>");
 
             InputGroup group = root.Q<InputGroup>();
-            Assert.That(group, Is.Not.Null, "InputGroup が UXML から解決できていない");
+            Assert.That(group, Is.Not.Null, "InputGroup could not be resolved from UXML");
             Assert.That(group.Direction, Is.EqualTo(FlexDirection.Column));
             Assert.That(group.childCount, Is.EqualTo(2));
         }
@@ -157,7 +157,7 @@ namespace Tweeq.UIToolkit.Tests
             VisualElement root = Instantiate("<tq:Parameter label=\"Opacity\" />");
 
             Parameter parameter = root.Q<Parameter>();
-            Assert.That(parameter, Is.Not.Null, "Parameter が UXML から解決できていない");
+            Assert.That(parameter, Is.Not.Null, "Parameter could not be resolved from UXML");
             Assert.That(parameter.Label, Is.EqualTo("Opacity"));
         }
 
@@ -171,14 +171,14 @@ namespace Tweeq.UIToolkit.Tests
                 + "\" heading-text=\"Vector\" expanded=\"false\" />"
                 + "</tq:ParameterGrid>");
 
-            Assert.That(root.Q<ParameterGrid>(), Is.Not.Null, "ParameterGrid が UXML から解決できていない");
+            Assert.That(root.Q<ParameterGrid>(), Is.Not.Null, "ParameterGrid could not be resolved from UXML");
 
             ParameterHeading heading = root.Q<ParameterHeading>();
-            Assert.That(heading, Is.Not.Null, "ParameterHeading が UXML から解決できていない");
+            Assert.That(heading, Is.Not.Null, "ParameterHeading could not be resolved from UXML");
             Assert.That(heading.Text, Is.EqualTo("Transform"));
 
             ParameterGroup group = root.Q<ParameterGroup>();
-            Assert.That(group, Is.Not.Null, "ParameterGroup が UXML から解決できていない");
+            Assert.That(group, Is.Not.Null, "ParameterGroup could not be resolved from UXML");
             Assert.That(group.Name, Is.EqualTo(TEST_GROUP_NAME));
             Assert.That(group.Label, Is.EqualTo("Vector"));
             Assert.That(group.Expanded, Is.False);
@@ -192,7 +192,7 @@ namespace Tweeq.UIToolkit.Tests
                 + " chrome=\"false\" />");
 
             TweeqPopover popover = root.Q<TweeqPopover>();
-            Assert.That(popover, Is.Not.Null, "TweeqPopover が UXML から解決できていない");
+            Assert.That(popover, Is.Not.Null, "TweeqPopover could not be resolved from UXML");
             Assert.That(popover.Placement, Is.EqualTo(Tweeq.Core.PopoverPlacement.Top));
             Assert.That(popover.Arrow, Is.False);
             Assert.That(popover.LightDismiss, Is.False);
@@ -207,7 +207,7 @@ namespace Tweeq.UIToolkit.Tests
                 "<tq:TweeqBalloon arrow-side=\"Bottom\" arrow-offset=\"12\" />");
 
             TweeqBalloon balloon = root.Q<TweeqBalloon>();
-            Assert.That(balloon, Is.Not.Null, "TweeqBalloon が UXML から解決できていない");
+            Assert.That(balloon, Is.Not.Null, "TweeqBalloon could not be resolved from UXML");
             Assert.That(balloon.ArrowSide, Is.EqualTo(TweeqArrowSide.Bottom));
             Assert.That(balloon.ArrowOffset, Is.EqualTo(12f).Within(0.01f));
         }
