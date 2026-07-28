@@ -496,6 +496,36 @@ namespace Tweeq.UIToolkit.Tests
 
         #endregion
 
+        #region Playhead
+
+        [Test]
+        public void Playhead_IsHiddenByDefault()
+        {
+            TweeqTimeline timeline = Arrange();
+
+            Assert.IsNull(timeline.PlayheadFrame);
+            Assert.IsFalse(timeline.HasPlayhead);
+        }
+
+        [Test]
+        public void Playhead_IsDrawnOnlyWhileSetAndFinite()
+        {
+            TweeqTimeline timeline = Arrange();
+
+            timeline.PlayheadFrame = 60.0;
+            Assert.IsTrue(timeline.HasPlayhead);
+            Assert.AreEqual(60.0, timeline.PlayheadFrame);
+
+            timeline.PlayheadFrame = double.NaN;
+            Assert.IsFalse(timeline.HasPlayhead, "a non-finite frame must be ignored, never thrown on");
+
+            timeline.PlayheadFrame = null;
+            Assert.IsFalse(timeline.HasPlayhead);
+            Assert.IsNull(timeline.PlayheadFrame);
+        }
+
+        #endregion
+
         #region In / Out
 
         [Test]

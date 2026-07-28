@@ -72,7 +72,8 @@ namespace TweeqDemo
 
         // 10 seconds at the initial 24fps, so the timecode ruler shows whole minutes and seconds
         const double TIMELINE_RANGE_END = 240.0;
-        const float TIMELINE_HEIGHT = 96f;
+        // A thin scrub strip: the demo carries no lane content, only the built-in playhead
+        const float TIMELINE_HEIGHT = 24f;
         const float RULER_HEIGHT = 16f;
 
         // The library default of 60px/frame only shows 6 frames in this 360px column, so the demo
@@ -86,14 +87,7 @@ namespace TweeqDemo
 
         const double RULER_LABEL_GAP = 64.0;
 
-        const float CLIP_TOP = 24f;
-        const float CLIP_HEIGHT = 40f;
-        const float PLAYHEAD_WIDTH = 1f;
-
         const double TIMELINE_PLAYHEAD_START = 60.0;
-
-        static readonly double[] ClipStarts = { 12.0, 72.0, 150.0 };
-        static readonly double[] ClipLengths = { 36.0, 48.0, 60.0 };
 
         static readonly string[] FrameRates = { "24", "30", "60" };
 
@@ -149,7 +143,6 @@ namespace TweeqDemo
         ButtonToggleInput _timecodeMode;
         TweeqTimeline _timeline;
         TweeqRuler _ruler;
-        VisualElement _playhead;
         StringInput _text;
         ColorInput _tint;
         CubicBezierInput _curve;
@@ -376,16 +369,8 @@ namespace TweeqDemo
             if (_timeline != null)
             {
                 _timeline.VisibleRangeChanged -= OnTimelineVisibleRangeChanged;
-
-                if (_playhead != null)
-                {
-                    _timeline.UnpinItem(_playhead);
-                }
-
                 _timeline = null;
             }
-
-            _playhead = null;
 
 
             if (_text != null)
@@ -871,19 +856,6 @@ namespace TweeqDemo
             _timeline.style.height = TIMELINE_HEIGHT;
             _timeline.VisibleRangeChanged += OnTimelineVisibleRangeChanged;
 
-            for (int index = 0; index < ClipStarts.Length; index++)
-            {
-                _timeline.Add(BuildClip(index));
-            }
-
-            _playhead = new VisualElement { name = "demo-playhead" };
-            _playhead.style.top = 0f;
-            _playhead.style.bottom = 0f;
-            _playhead.style.width = PLAYHEAD_WIDTH;
-            _playhead.style.backgroundColor = _theme.Accent;
-            _playhead.pickingMode = PickingMode.Ignore;
-            _timeline.Add(_playhead);
-
             VisualElement stack = new VisualElement { name = "demo-timeline-stack" };
             stack.style.flexDirection = FlexDirection.Column;
             stack.Add(_ruler);
@@ -897,24 +869,6 @@ namespace TweeqDemo
             return group;
         }
 
-        // A clip only declares its frame and length; the timeline owns the horizontal geometry
-        VisualElement BuildClip(int index)
-        {
-            VisualElement clip = new VisualElement { name = "demo-clip-" + index };
-            clip.style.top = CLIP_TOP;
-            clip.style.height = CLIP_HEIGHT;
-
-            // Surface resolves to almost the same value as the track in the dark theme, so the
-            // block borrows Neutral, the step meant to read as a raised surface
-            clip.style.backgroundColor = _theme.Neutral;
-            clip.style.borderTopLeftRadius = _theme.InputRadius;
-            clip.style.borderTopRightRadius = _theme.InputRadius;
-            clip.style.borderBottomLeftRadius = _theme.InputRadius;
-            clip.style.borderBottomRightRadius = _theme.InputRadius;
-
-            _timeline.PinItem(clip, ClipStarts[index], ClipLengths[index]);
-            return clip;
-        }
 
         ParameterGroup BuildDialogGroup()
         {
@@ -1332,9 +1286,9 @@ namespace TweeqDemo
         {
             _playheadFrame = frame;
 
-            if (_timeline != null && _playhead != null)
+            if (_timeline != null)
             {
-                _timeline.PinItem(_playhead, _playheadFrame);
+                _timeline.PlayheadFrame = _playheadFrame;
             }
 
             if (syncTimeInput)

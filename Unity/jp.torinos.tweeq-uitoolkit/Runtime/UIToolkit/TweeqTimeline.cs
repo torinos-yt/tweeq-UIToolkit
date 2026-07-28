@@ -44,6 +44,8 @@ namespace Tweeq.UIToolkit
         const float IN_OUT_DIM_ALPHA = 0.35f;
         const float IN_OUT_LINE_WIDTH = 1f;
 
+        const float PLAYHEAD_LINE_WIDTH = 1f;
+
         // FocusInOut leaves this fraction of the In/Out span as breathing room on each side.
         const float FOCUS_MARGIN_RATIO = 0.05f;
 
@@ -75,6 +77,7 @@ namespace Tweeq.UIToolkit
 
         double? _inPoint;
         double? _outPoint;
+        double? _playheadFrame;
 
         // Reused so a pan (which touches every pin every frame) never allocates.
         readonly List<PinnedItem> _pinned = new List<PinnedItem>();
@@ -280,6 +283,30 @@ namespace Tweeq.UIToolkit
                 InOutChanged?.Invoke();
             }
         }
+
+        /// <summary>
+        /// Frame the playhead line is drawn at, or null for no playhead (the default). The
+        /// timeline only draws it — driving it (from a ruler, transport controls, …) is the
+        /// host's job.
+        /// </summary>
+        public double? PlayheadFrame
+        {
+            get => _playheadFrame;
+            set
+            {
+                if (Nullable.Equals(_playheadFrame, value))
+                {
+                    return;
+                }
+
+                _playheadFrame = value;
+                _overlay.MarkDirtyRepaint();
+            }
+        }
+
+        /// <summary>Whether the playhead is drawn: set and finite. Misuse must never throw.</summary>
+        public bool HasPlayhead =>
+            _playheadFrame.HasValue && TweeqMath.IsFinite(_playheadFrame.Value);
 
         /// <summary>
         /// Whether the In/Out band is drawn at all: both ends set, finite, and In no later than
@@ -893,9 +920,9 @@ namespace Tweeq.UIToolkit
             ApplyPinned();
             UpdateKnob();
 
-            // The band is the only painted thing that moves with the range, so a timeline without
-            // In/Out never regenerates a mesh while panning.
-            if (this.HasInOut)
+            // The band and playhead are the only painted things that move with the range, so a
+            // timeline without either never regenerates a mesh while panning.
+            if (this.HasInOut || this.HasPlayhead)
             {
                 RepaintBands();
             }
@@ -981,7 +1008,7 @@ namespace Tweeq.UIToolkit
 
         void OnGenerateOverlay(MeshGenerationContext context)
         {
-            if (!this.HasInOut)
+            if (!this.HasInOut && !this.HasPlayhead)
             {
                 return;
             }
@@ -998,29 +1025,40 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            float inX = FrameToLocalX(_inPoint.Value);
-            float outX = FrameToLocalX(_outPoint.Value);
-
-            Color dim = _theme.Background;
-            dim.a = IN_OUT_DIM_ALPHA;
-
-            float leftEdge = Mathf.Min(inX, rect.width);
-            if (leftEdge > 0f)
+            if (this.HasInOut)
             {
-                FillRect(painter, dim, 0f, 0f, leftEdge, rect.height);
+                float inX = FrameToLocalX(_inPoint.Value);
+                float outX = FrameToLocalX(_outPoint.Value);
+
+                Color dim = _theme.Background;
+                dim.a = IN_OUT_DIM_ALPHA;
+
+                float leftEdge = Mathf.Min(inX, rect.width);
+                if (leftEdge > 0f)
+                {
+                    FillRect(painter, dim, 0f, 0f, leftEdge, rect.height);
+                }
+
+                float rightEdge = Mathf.Max(outX, 0f);
+                if (rightEdge < rect.width)
+                {
+                    FillRect(painter, dim, rightEdge, 0f, rect.width - rightEdge, rect.height);
+                }
+
+                painter.strokeColor = _theme.Accent;
+                painter.lineWidth = IN_OUT_LINE_WIDTH;
+                painter.lineCap = LineCap.Butt;
+                StrokeVerticalLine(painter, inX, rect);
+                StrokeVerticalLine(painter, outX, rect);
             }
 
-            float rightEdge = Mathf.Max(outX, 0f);
-            if (rightEdge < rect.width)
+            if (this.HasPlayhead)
             {
-                FillRect(painter, dim, rightEdge, 0f, rect.width - rightEdge, rect.height);
+                painter.strokeColor = _theme.Accent;
+                painter.lineWidth = PLAYHEAD_LINE_WIDTH;
+                painter.lineCap = LineCap.Butt;
+                StrokeVerticalLine(painter, FrameToLocalX(_playheadFrame.Value), rect);
             }
-
-            painter.strokeColor = _theme.Accent;
-            painter.lineWidth = IN_OUT_LINE_WIDTH;
-            painter.lineCap = LineCap.Butt;
-            StrokeVerticalLine(painter, inX, rect);
-            StrokeVerticalLine(painter, outX, rect);
         }
 
         static bool IsDrawable(Rect rect)
