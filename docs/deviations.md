@@ -45,6 +45,13 @@ Web capabilities without a Unity equivalent, replaced rather than emulated:
 - **Arrow-key focus navigation can be suppressed** via
   `TweeqNavigation.DisableArrowFocusNavigation(root)` (opt-in per app), since
   arrow keys are value-editing keys in tweeq widgets.
+- **`TimeInput` expressions use a reduced arithmetic grammar** (`+ - * /`,
+  parentheses) instead of the original's arbitrary JavaScript evaluation.
+  Timecode literals and unit suffixes (`1:00 + 10f`, `2s`) work the same.
+- **`TimeInput` display mode is a property** (`DisplayMode` /
+  UXML `display-mode`); the original toggles it from a context menu and
+  persists the choice app-wide. Clicking the field selects all for editing
+  (the original selects the clicked digit's range).
 
 ## Modals
 
@@ -91,5 +98,7 @@ appears unintended:
   is added per WAI-ARIA.
 - **Tab indicator transition** uses the intended `ActiveTransitionDuration`
   (64 ms) — the original references a token that doesn't resolve.
+- **Timecode literals honor the field's frame rate** — the original parses
+  colon literals with a hard-coded 24 fps regardless of the `frameRate` prop.
 - **Color presets** emit a confirmed edit session when clicked, like every
   other one-shot edit.

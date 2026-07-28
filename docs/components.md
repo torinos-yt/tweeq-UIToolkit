@@ -23,6 +23,7 @@ preserved at the git tag [`vue-final`](https://github.com/torinos-yt/tweeq-UIToo
 | `InputRadio` | `RadioInput` | Sliding indicator, drag selection, arrow-key wrap |
 | `InputDropdown` | `DropdownInput<T>`, `StringDropdownInput` | Fuzzy filtering included |
 | `InputShuffle` | `ShuffleInput<T>`, `StringShuffleInput` | |
+| `InputTime` | `TimeInput` | Frame-count value, SMPTE timecode display, per-digit scrub, clock overlay; expressions use a reduced arithmetic grammar |
 | `InputGroup` | `InputGroup` | Corner-radius fusion, stretch layout |
 | `ParameterGrid` | `ParameterGrid` / `Parameter` / `ParameterHeading` / `ParameterGroup` | Shared label column, collapsible groups with persistence |
 | `Popover` | `TweeqPopover` | 12 placements, flip/shift, light dismiss |
@@ -43,7 +44,9 @@ All widgets are `[UxmlElement]`s and can be placed from UXML/UI Builder
 | Original | Status |
 | --- | --- |
 | `PaneSplit`, `PaneFloating` | Planned as a separate workspace assembly (split/floating panes + layout persistence). Will be designed against concrete host-app use cases. |
-| `InputDrum`, `InputTime` | Ported when a concrete need appears. |
+| `Timeline`, `Ruler` | Planned: generic zoom/pan frame viewport and ruler. |
+| `InputCubicBezier` | Planned. |
+| `InputDrum` | Ported when a concrete need appears. |
 
 ## Not ported (out of scope)
 
