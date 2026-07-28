@@ -1,0 +1,23 @@
+/*
+    TweeqRoot が読むテーマのシード。ここを書き換えるだけで配下の
+    ウィジェット全部の配色が変わる（Radix スケールを再生成して配布する）。
+
+    --tq-color-mode は文字列なので引用符が必要。
+    指定しなかったトークンは TweeqTheme の既定値（dark / #0000ff / #8b8d98 / #111111）になる。
+*/
+.demo-root {
+    --tq-color-mode: "dark";
+    --tq-accent: #0000ff;
+    --tq-gray: #8b8d98;
+    --tq-background: #111111;
+
+    flex-grow: 1;
+    padding: 18px;
+}
+
+/* ライトに切り替えたい場合は demo-root の代わりにこちらを付ける
+.demo-root--light {
+    --tq-color-mode: "light";
+    --tq-background: #ffffff;
+}
+*/

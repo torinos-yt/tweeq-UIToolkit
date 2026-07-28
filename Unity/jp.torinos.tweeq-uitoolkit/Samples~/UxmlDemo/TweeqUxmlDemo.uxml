@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML
+    xmlns:ui="UnityEngine.UIElements"
+    xmlns:tq="Tweeq.UIToolkit"
+    editor-extension-mode="False">
+
+    <!--
+        Lays out tweeq widgets without a single line of C#.
+        TweeqRoot builds the theme from USS custom properties
+        and distributes it to everything below.
+    -->
+    <Style src="TweeqUxmlDemo.uss" />
+
+    <tq:TweeqRoot name="tweeq-root" class="demo-root">
+
+        <tq:ParameterHeading text="Transform" />
+
+        <tq:ParameterGrid name="transform-grid">
+
+            <tq:Parameter label="Amount">
+                <tq:NumberInput value="0.5" min="0" max="1" step="0.01" precision="2" />
+            </tq:Parameter>
+
+            <tq:Parameter label="Speed" hint="in m/s">
+                <tq:NumberInput value="12" min="0" max="100" step="1" precision="0" suffix=" m/s" />
+            </tq:Parameter>
+
+            <tq:Parameter label="Angle">
+                <tq:RotaryInput value="45" snap="15" step="1" />
+            </tq:Parameter>
+
+            <tq:Parameter label="Offset">
+                <tq:Vec2Input precision="2" />
+            </tq:Parameter>
+
+        </tq:ParameterGrid>
+
+        <tq:ParameterHeading text="Appearance" />
+
+        <tq:ParameterGrid name="appearance-grid">
+
+            <tq:Parameter label="Name">
+                <tq:StringInput value="cue-01" />
+            </tq:Parameter>
+
+            <tq:Parameter label="Blend">
+                <tq:StringDropdownInput value="normal" options="normal,multiply,screen,overlay" />
+            </tq:Parameter>
+
+            <tq:Parameter label="Tint">
+                <tq:ColorInput />
+            </tq:Parameter>
+
+            <tq:Parameter label="Visible">
+                <tq:CheckboxInput value="true" label="Show" />
+            </tq:Parameter>
+
+            <tq:Parameter label="Locked">
+                <tq:SwitchInput value="false" />
+            </tq:Parameter>
+
+        </tq:ParameterGrid>
+
+        <tq:ParameterHeading text="Disabled / Invalid" />
+
+        <tq:ParameterGrid name="state-grid">
+
+            <tq:Parameter label="Disabled">
+                <tq:NumberInput value="1" disabled="true" />
+            </tq:Parameter>
+
+            <tq:Parameter label="Invalid">
+                <tq:StringInput value="???" invalid="true" />
+            </tq:Parameter>
+
+            <tq:Parameter label="Action">
+                <tq:ButtonInput text="Apply" chevron="false" />
+            </tq:Parameter>
+
+        </tq:ParameterGrid>
+
+    </tq:TweeqRoot>
+
+</ui:UXML>
