@@ -14,6 +14,19 @@ namespace Tweeq.UIToolkit
     /// </remarks>
     public static class TweeqInputBoxStyles
     {
+        #region Constants
+
+        /// <summary>入力欄のテキストサイズ（px）。</summary>
+        public const float TEXT_FONT_SIZE = 12f;
+
+        /// <summary>disabled 時のインセット枠の太さ（px）。</summary>
+        public const float DISABLED_BORDER_WIDTH = 1f;
+
+        // TextField の内側要素。背景・枠を消して 24px の高さを使い切るために触る
+        const string TEXT_INPUT_NAME = "unity-text-input";
+
+        #endregion
+
         #region Edge helpers
 
         /// <summary>4 辺の border 幅を一括で設定する。</summary>
@@ -159,9 +172,129 @@ namespace Tweeq.UIToolkit
             return hovered ? theme.InputHover : theme.Input;
         }
 
+        /// <summary>
+        /// disabled 表現の付け外し（仕様 §5: 背景透明 + 1px Border のインセット枠）。
+        /// </summary>
+        /// <remarks>
+        /// 解除側で通常の背景色を塗り直さないのは、hover 状態を知っているのが呼び出し側だから。
+        /// 解除後は <see cref="ResolveBackground"/> の結果を背景へ入れること。
+        /// </remarks>
+        public static void ApplyDisabledChrome(VisualElement element, TweeqTheme theme, bool disabled)
+        {
+            if (element == null)
+            {
+                return;
+            }
+
+            if (!disabled)
+            {
+                SetBorderWidth(element, 0f);
+                return;
+            }
+
+            element.style.backgroundColor = Color.clear;
+            SetBorderWidth(element, DISABLED_BORDER_WIDTH);
+
+            if (theme != null)
+            {
+                SetBorderColor(element, theme.Border);
+            }
+        }
+
+        #endregion
+
+        #region Text field
+
+        /// <summary>
+        /// 常時表示の <see cref="TextField" /> を入力欄の 24px 枠に収める正規化一式。
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// UI Toolkit 既定の USS は上下 padding と auto 高さを入れてくるので、
+        /// そのままだと 24px の枠内で行が潰れて読めなくなる（feedback-fixes-01.md A-6）。
+        /// 高さ・余白・文字サイズを明示し、背景と枠は外側の箱に任せる。
+        /// </para>
+        /// <para>
+        /// 左右 padding は 0 に倒す。値の中央寄せ幅は widget ごとに違うので、
+        /// 必要な側が呼び出し後に上書きする（NumberInput / StringInput は 0.5em ぶん入れる）。
+        /// </para>
+        /// </remarks>
+        public static void ApplyTextField(TextField field, TweeqTheme theme)
+        {
+            if (field == null)
+            {
+                return;
+            }
+
+            field.style.fontSize = TEXT_FONT_SIZE;
+            field.style.paddingLeft = 0f;
+            field.style.paddingRight = 0f;
+            field.style.paddingTop = 0f;
+            field.style.paddingBottom = 0f;
+            field.style.marginLeft = 0f;
+            field.style.marginRight = 0f;
+            field.style.marginTop = 0f;
+            field.style.marginBottom = 0f;
+            field.style.minHeight = 0f;
+            field.style.alignItems = Align.Stretch;
+
+            ApplyTextSelectionColors(field, theme);
+
+            VisualElement textInput = field.Q(TEXT_INPUT_NAME);
+            if (textInput != null)
+            {
+                textInput.style.backgroundColor = Color.clear;
+                SetBorderWidth(textInput, 0f);
+                SetBorderColor(textInput, Color.clear);
+                textInput.style.paddingLeft = 0f;
+                textInput.style.paddingRight = 0f;
+                textInput.style.paddingTop = 0f;
+                textInput.style.paddingBottom = 0f;
+                textInput.style.marginLeft = 0f;
+                textInput.style.marginRight = 0f;
+                textInput.style.marginTop = 0f;
+                textInput.style.marginBottom = 0f;
+                textInput.style.height = Length.Percent(100f);
+                textInput.style.minHeight = 0f;
+                textInput.style.fontSize = TEXT_FONT_SIZE;
+                textInput.style.whiteSpace = WhiteSpace.NoWrap;
+            }
+
+            // 実際に字を描くのは unity-text-input の中の TextElement。
+            // 縦潰れは input 側だけ直しても残るのでこちらにも同じ指定を掛ける
+            TextElement textElement = textInput != null ? textInput.Q<TextElement>() : null;
+            if (textElement != null)
+            {
+                textElement.style.height = Length.Percent(100f);
+                textElement.style.minHeight = 0f;
+                textElement.style.paddingTop = 0f;
+                textElement.style.paddingBottom = 0f;
+                textElement.style.marginTop = 0f;
+                textElement.style.marginBottom = 0f;
+                textElement.style.fontSize = TEXT_FONT_SIZE;
+            }
+        }
+
         #endregion
 
         #region Internals
+
+        // キャレット・選択色は USS 既定（黒）のままだと暗背景で見えない。
+        // selectionColor は obsolete だが、推奨の --unity-selection-color は C# から
+        // インスタンス単位で設定できない（テーマは TweeqTheme 駆動）ため使い続ける。
+        // 警告の抑止をこの 1 メソッドに閉じ込めるのが公開 API 化の目的の一つ
+        static void ApplyTextSelectionColors(TextField field, TweeqTheme theme)
+        {
+            if (theme == null)
+            {
+                return;
+            }
+
+#pragma warning disable 618
+            field.textSelection.cursorColor = theme.Text;
+            field.textSelection.selectionColor = theme.AccentSoft;
+#pragma warning restore 618
+        }
 
         static void SetCornerRadius(
             VisualElement element,

@@ -32,16 +32,10 @@ namespace Tweeq.UIToolkit
     {
         #region Constants
 
-        // 編集中のテキストの文字サイズ。NumberInput A-6 と同じく明示指定する
-        const float TEXT_FONT_SIZE = 12f;
-
         // 仕様: 左右パディング 0.5em。fontSize 12px 基準で 6px
         const float TEXT_PADDING = 6f;
 
-        const float FOCUS_RING_WIDTH = 1f;
-        const float DISABLED_BORDER_WIDTH = 1f;
-
-        // TextField の内側要素（背景・枠を消して高さを使い切るために触る）
+        // TextField の内側要素（整列だけは widget 固有なのでここから触る）
         const string TEXT_INPUT_NAME = "unity-text-input";
 
         #endregion
@@ -82,7 +76,7 @@ namespace Tweeq.UIToolkit
         TextField _textField;
         VisualElement _textInput;
         TextElement _textElement;
-        VisualElement _focusRing;
+        TweeqFocusRing _focusRing;
 
         #endregion
 
@@ -501,19 +495,8 @@ namespace Tweeq.UIToolkit
 
             // フォーカスリングは別レイヤの border で描く。ルート側に border を足すと
             // 絶対配置の子が 1px 内側へずれてしまう
-            _focusRing = new VisualElement
-            {
-                name = "tweeq-string-focus-ring",
-                pickingMode = PickingMode.Ignore,
-            };
-            _focusRing.style.position = Position.Absolute;
-            _focusRing.style.left = 0f;
-            _focusRing.style.top = 0f;
-            _focusRing.style.right = 0f;
-            _focusRing.style.bottom = 0f;
-            _focusRing.style.display = DisplayStyle.None;
-            TweeqInputBoxStyles.SetBorderWidth(_focusRing, FOCUS_RING_WIDTH);
-            this.hierarchy.Add(_focusRing);
+            _focusRing = TweeqFocusRing.Attach(this);
+            _focusRing.name = "tweeq-string-focus-ring";
         }
 
         void ApplyStaticStyles()
@@ -532,65 +515,14 @@ namespace Tweeq.UIToolkit
             // EaseInOutCubic で近似する（NumberInput / RotaryInput と同じ判断）
             TweeqInputBoxStyles.ApplyBackgroundTransition(this, _theme);
 
-            if (_focusRing != null)
-            {
-                TweeqInputBoxStyles.SetBorderColor(_focusRing, _theme.Accent);
-            }
+            // 高さ・余白・キャレット色の正規化は公開ヘルパへ寄せた（EXT-03-A）
+            TweeqInputBoxStyles.ApplyTextField(_textField, _theme);
 
             if (_textInput != null)
             {
-                _textInput.style.backgroundColor = Color.clear;
-                TweeqInputBoxStyles.SetBorderWidth(_textInput, 0f);
-                TweeqInputBoxStyles.SetBorderColor(_textInput, Color.clear);
+                // ヘルパは左右 0 に倒すので、仕様の 0.5em をここで入れ直す
                 _textInput.style.paddingLeft = TEXT_PADDING;
                 _textInput.style.paddingRight = TEXT_PADDING;
-                _textInput.style.marginLeft = 0f;
-                _textInput.style.marginRight = 0f;
-
-                // NumberInput A-6: 既定 USS の上下 padding／auto 高さのままだと 24px の枠内で
-                // 行が潰れて読めなくなる。高さと文字サイズを明示して 24px を使い切る
-                _textInput.style.height = Length.Percent(100f);
-                _textInput.style.minHeight = 0f;
-                _textInput.style.paddingTop = 0f;
-                _textInput.style.paddingBottom = 0f;
-                _textInput.style.marginTop = 0f;
-                _textInput.style.marginBottom = 0f;
-                _textInput.style.fontSize = TEXT_FONT_SIZE;
-                _textInput.style.whiteSpace = WhiteSpace.NoWrap;
-            }
-
-            if (_textElement != null)
-            {
-                _textElement.style.height = Length.Percent(100f);
-                _textElement.style.minHeight = 0f;
-                _textElement.style.paddingTop = 0f;
-                _textElement.style.paddingBottom = 0f;
-                _textElement.style.marginTop = 0f;
-                _textElement.style.marginBottom = 0f;
-                _textElement.style.fontSize = TEXT_FONT_SIZE;
-            }
-
-            if (_textField != null)
-            {
-                _textField.style.fontSize = TEXT_FONT_SIZE;
-
-                // キャレット・選択色は USS 既定（黒）のままだと暗背景で見えない。
-                // selectionColor は obsolete だが、推奨の --unity-selection-color は
-                // C# からインスタンス単位で設定できない（テーマは TweeqTheme 駆動）ため使い続ける
-#pragma warning disable 618
-                _textField.textSelection.cursorColor = _theme.Text;
-                _textField.textSelection.selectionColor = _theme.AccentSoft;
-#pragma warning restore 618
-
-                // A-6: root の inset 0 いっぱいに置く。BaseField 既定の余白を残さない
-                _textField.style.paddingTop = 0f;
-                _textField.style.paddingBottom = 0f;
-                _textField.style.paddingLeft = 0f;
-                _textField.style.paddingRight = 0f;
-                _textField.style.minHeight = 0f;
-
-                // Align プロパティ（TweeqTextAlign）が同名を先に解決してしまうので完全修飾する
-                _textField.style.alignItems = UnityEngine.UIElements.Align.Stretch;
             }
 
             ApplyAlign();
@@ -646,8 +578,10 @@ namespace Tweeq.UIToolkit
             TweeqInputBoxStyles.ApplyCornerRadius(this, _theme, _inlinePosition, _blockPosition);
 
             // フォーカスリングは別レイヤなので同じ角丸を掛け直す
-            TweeqInputBoxStyles.ApplyCornerRadius(
-                _focusRing, _theme, _inlinePosition, _blockPosition);
+            if (_focusRing != null)
+            {
+                _focusRing.Apply(_theme, _inlinePosition, _blockPosition);
+            }
         }
 
         #endregion
@@ -836,24 +770,19 @@ namespace Tweeq.UIToolkit
 
             if (_focusRing != null)
             {
-                _focusRing.style.display = _editing && !_disabled
-                    ? DisplayStyle.Flex
-                    : DisplayStyle.None;
+                _focusRing.Visible = _editing && !_disabled;
             }
         }
 
         void UpdateBackground()
         {
+            TweeqInputBoxStyles.ApplyDisabledChrome(this, _theme, _disabled);
+
             if (_disabled)
             {
-                // 背景透明 + 1px Border のインセット枠（NumberInput と同じ）
-                this.style.backgroundColor = Color.clear;
-                TweeqInputBoxStyles.SetBorderWidth(this, DISABLED_BORDER_WIDTH);
-                TweeqInputBoxStyles.SetBorderColor(this, _theme.Border);
                 return;
             }
 
-            TweeqInputBoxStyles.SetBorderWidth(this, 0f);
             this.style.backgroundColor = TweeqInputBoxStyles.ResolveBackground(_theme, _hovered);
         }
 

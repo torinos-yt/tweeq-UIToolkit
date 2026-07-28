@@ -1,97 +1,11 @@
-using System;
 using System.Collections.Generic;
 using NUnit.Framework;
-using UnityEditor;
+using Tweeq.UIToolkit.TestSupport;
 using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace Tweeq.UIToolkit.Tests
 {
-    /// <summary>
-    /// 合成ポインタイベントを流すための使い捨て UIDocument。
-    ///
-    /// Manipulator は「イベントが来たら何をするか」が全てなので、panel 無しでは契約を
-    /// 観測できない。倍率が絡むと閾値の px が意味を変えてしまうため、
-    /// ConstantPixelSize / scale=1 に固定して 1px = 1px を保証する。
-    /// </summary>
-    public sealed class TweeqScrubTestPanel : IDisposable
-    {
-        readonly GameObject _gameObject;
-        readonly PanelSettings _settings;
-        readonly UIDocument _document;
-
-        /// <summary>パネルに載ったルート要素。ここへ被験要素を Add する。</summary>
-        public VisualElement Root { get; }
-
-        TweeqScrubTestPanel()
-        {
-            _settings = ScriptableObject.CreateInstance<PanelSettings>();
-            _settings.name = "TweeqScrubTestPanelSettings";
-            _settings.scaleMode = PanelScaleMode.ConstantPixelSize;
-            _settings.scale = 1f;
-
-            // テーマ未設定の PanelSettings は「テーマ無し」の警告を出す。
-            // 見た目は検証しないので、プロジェクトにある物を何でも 1 枚借りて黙らせる
-            ThemeStyleSheet theme = FindAnyTheme();
-            if (theme != null)
-            {
-                _settings.themeStyleSheet = theme;
-            }
-
-            _gameObject = new GameObject("tweeq-scrub-test-panel")
-            {
-                hideFlags = HideFlags.HideAndDontSave,
-            };
-
-            _document = _gameObject.AddComponent<UIDocument>();
-            _document.panelSettings = _settings;
-
-            Root = _document.rootVisualElement;
-        }
-
-        /// <summary>パネルを 1 枚用意する。作れなかった場合はテストを Ignore にする。</summary>
-        public static TweeqScrubTestPanel Create()
-        {
-            TweeqScrubTestPanel panel = new TweeqScrubTestPanel();
-            if (panel.Root == null || panel.Root.panel == null)
-            {
-                panel.Dispose();
-                Assert.Ignore("EditMode でランタイムパネルを作れなかった（この契約は Play Mode 側で検証する）");
-            }
-
-            return panel;
-        }
-
-        public void Dispose()
-        {
-            if (_gameObject != null)
-            {
-                UnityEngine.Object.DestroyImmediate(_gameObject);
-            }
-
-            if (_settings != null)
-            {
-                UnityEngine.Object.DestroyImmediate(_settings);
-            }
-        }
-
-        static ThemeStyleSheet FindAnyTheme()
-        {
-            string[] guids = AssetDatabase.FindAssets("t:ThemeStyleSheet");
-            for (int index = 0; index < guids.Length; index++)
-            {
-                string path = AssetDatabase.GUIDToAssetPath(guids[index]);
-                ThemeStyleSheet sheet = AssetDatabase.LoadAssetAtPath<ThemeStyleSheet>(path);
-                if (sheet != null)
-                {
-                    return sheet;
-                }
-            }
-
-            return null;
-        }
-    }
-
     /// <summary>
     /// TweeqScrubManipulator の契約（ext-custom-widgets-spec.md EXT-01-B「テスト契約」）を
     /// 合成イベントで検証する。
@@ -101,7 +15,7 @@ namespace Tweeq.UIToolkit.Tests
     /// </summary>
     public class TweeqScrubManipulatorTests
     {
-        TweeqScrubTestPanel _panel;
+        TweeqRuntimeTestPanel _panel;
         VisualElement _target;
         TweeqScrubManipulator _manipulator;
         List<string> _log;
@@ -118,7 +32,7 @@ namespace Tweeq.UIToolkit.Tests
 
         void Arrange()
         {
-            _panel = TweeqScrubTestPanel.Create();
+            _panel = TweeqRuntimeTestPanel.Create();
 
             _target = new VisualElement { focusable = true };
             _target.style.width = 200f;

@@ -220,8 +220,6 @@ namespace TweeqDemo.CustomWidgets
         const float BOX_PADDING = 6f;
         const float OCTET_WIDTH = 26f;
         const float PORT_WIDTH = 38f;
-        const float FOCUS_RING_WIDTH = 1f;
-        const float DISABLED_BORDER_WIDTH = 1f;
         const float DISABLED_OPACITY = 0.4f;
 
         #endregion
@@ -231,7 +229,7 @@ namespace TweeqDemo.CustomWidgets
         readonly EndpointSegment[] _segments = new EndpointSegment[MAX_SEGMENT_COUNT];
         readonly Label[] _separators = new Label[OCTET_COUNT];
 
-        VisualElement _focusRing;
+        TweeqFocusRing _focusRing;
 
         TweeqTheme _theme = TweeqTheme.Dark();
         TweeqBoxPosition _inlinePosition = TweeqBoxPosition.None;
@@ -730,19 +728,8 @@ namespace TweeqDemo.CustomWidgets
 
             // フォーカスリングは別レイヤの border で描く。ルート側に border を足すと
             // 中身が 1px ずれるため（StringInput と同じ理由）
-            _focusRing = new VisualElement
-            {
-                name = "tweeq-endpoint-focus-ring",
-                pickingMode = PickingMode.Ignore,
-            };
-            _focusRing.style.position = Position.Absolute;
-            _focusRing.style.left = 0f;
-            _focusRing.style.top = 0f;
-            _focusRing.style.right = 0f;
-            _focusRing.style.bottom = 0f;
-            _focusRing.style.display = DisplayStyle.None;
-            TweeqInputBoxStyles.SetBorderWidth(_focusRing, FOCUS_RING_WIDTH);
-            this.hierarchy.Add(_focusRing);
+            _focusRing = TweeqFocusRing.Attach(this);
+            _focusRing.name = "tweeq-endpoint-focus-ring";
         }
 
         void ApplyStaticStyles()
@@ -753,11 +740,6 @@ namespace TweeqDemo.CustomWidgets
             ApplyCornerRadius();
             TweeqInputBoxStyles.SetBorderColor(this, _theme.Border);
             TweeqInputBoxStyles.ApplyBackgroundTransition(this, _theme);
-
-            if (_focusRing != null)
-            {
-                TweeqInputBoxStyles.SetBorderColor(_focusRing, _theme.Accent);
-            }
 
             for (int index = 0; index < _separators.Length; index++)
             {
@@ -782,8 +764,10 @@ namespace TweeqDemo.CustomWidgets
             TweeqInputBoxStyles.ApplyCornerRadius(this, _theme, _inlinePosition, _blockPosition);
 
             // フォーカスリングは別レイヤなので同じ角丸を掛け直す
-            TweeqInputBoxStyles.ApplyCornerRadius(
-                _focusRing, _theme, _inlinePosition, _blockPosition);
+            if (_focusRing != null)
+            {
+                _focusRing.Apply(_theme, _inlinePosition, _blockPosition);
+            }
         }
 
         void ApplyPortVisibility()
@@ -990,24 +974,19 @@ namespace TweeqDemo.CustomWidgets
 
             if (_focusRing != null)
             {
-                _focusRing.style.display = _sessionActive && !_disabled
-                    ? DisplayStyle.Flex
-                    : DisplayStyle.None;
+                _focusRing.Visible = _sessionActive && !_disabled;
             }
         }
 
         void UpdateBackground()
         {
+            TweeqInputBoxStyles.ApplyDisabledChrome(this, _theme, _disabled);
+
             if (_disabled)
             {
-                // 背景透明 + 1px Border のインセット枠（NumberInput / StringInput と同じ）
-                this.style.backgroundColor = Color.clear;
-                TweeqInputBoxStyles.SetBorderWidth(this, DISABLED_BORDER_WIDTH);
-                TweeqInputBoxStyles.SetBorderColor(this, _theme.Border);
                 return;
             }
 
-            TweeqInputBoxStyles.SetBorderWidth(this, 0f);
             this.style.backgroundColor = TweeqInputBoxStyles.ResolveBackground(_theme, _hovered);
         }
 
@@ -1039,7 +1018,6 @@ namespace TweeqDemo.CustomWidgets
         #region Constants
 
         const string TEXT_INPUT_NAME = "unity-text-input";
-        const float TEXT_FONT_SIZE = 12f;
 
         #endregion
 
@@ -1263,65 +1241,26 @@ namespace TweeqDemo.CustomWidgets
                 return;
             }
 
-            // ここは EXT-01 で公開されていない領域。TextField の既定 USS を 24px の枠に
-            // 収める処理は NumberInput / StringInput と同じ手当てを踏襲している
+            // TextField を 24px の枠に収める正規化とキャレット色は公開ヘルパ任せ（EXT-03-A）
+            TweeqInputBoxStyles.ApplyTextField(_field, theme);
+
+            // 区画の数字は中央寄せ。整列は widget 固有なのでヘルパの後に足す
             if (_textInput != null)
             {
-                _textInput.style.backgroundColor = Color.clear;
-                TweeqInputBoxStyles.SetBorderWidth(_textInput, 0f);
-                TweeqInputBoxStyles.SetBorderColor(_textInput, Color.clear);
-                _textInput.style.paddingLeft = 0f;
-                _textInput.style.paddingRight = 0f;
-                _textInput.style.paddingTop = 0f;
-                _textInput.style.paddingBottom = 0f;
-                _textInput.style.marginLeft = 0f;
-                _textInput.style.marginRight = 0f;
-                _textInput.style.marginTop = 0f;
-                _textInput.style.marginBottom = 0f;
-                _textInput.style.height = Length.Percent(100f);
-                _textInput.style.minHeight = 0f;
-                _textInput.style.fontSize = TEXT_FONT_SIZE;
-                _textInput.style.whiteSpace = WhiteSpace.NoWrap;
                 _textInput.style.unityTextAlign = TextAnchor.MiddleCenter;
             }
 
             if (_textElement != null)
             {
-                _textElement.style.height = Length.Percent(100f);
-                _textElement.style.minHeight = 0f;
-                _textElement.style.paddingTop = 0f;
-                _textElement.style.paddingBottom = 0f;
-                _textElement.style.marginTop = 0f;
-                _textElement.style.marginBottom = 0f;
-                _textElement.style.fontSize = TEXT_FONT_SIZE;
                 _textElement.style.unityTextAlign = TextAnchor.MiddleCenter;
             }
 
-            _field.style.fontSize = TEXT_FONT_SIZE;
-            _field.style.paddingTop = 0f;
-            _field.style.paddingBottom = 0f;
-            _field.style.paddingLeft = 0f;
-            _field.style.paddingRight = 0f;
-            _field.style.marginLeft = 0f;
-            _field.style.marginRight = 0f;
-            _field.style.marginTop = 0f;
-            _field.style.marginBottom = 0f;
-            _field.style.minHeight = 0f;
-            _field.style.alignItems = Align.Stretch;
             _field.style.unityTextAlign = TextAnchor.MiddleCenter;
 
             // 数値欄なので Geist（fontNumeric）を当てる
             TweeqFonts.Apply(_field, TweeqFonts.NumericFont);
             TweeqFonts.Apply(_textInput, TweeqFonts.NumericFont);
             TweeqFonts.Apply(_textElement, TweeqFonts.NumericFont);
-
-            // キャレット・選択色は USS 既定（黒）のままだと暗背景で見えない。
-            // selectionColor は obsolete だが、推奨の --unity-selection-color は
-            // C# からインスタンス単位で設定できない
-#pragma warning disable 618
-            _field.textSelection.cursorColor = theme.Text;
-            _field.textSelection.selectionColor = theme.AccentSoft;
-#pragma warning restore 618
         }
 
         /// <summary>文字色を差し替える（Invalid 表示）。</summary>

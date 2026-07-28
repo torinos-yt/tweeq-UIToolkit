@@ -1,112 +1,23 @@
-using System;
 using System.Collections.Generic;
 using NUnit.Framework;
 using Tweeq.UIToolkit;
-using UnityEditor;
+using Tweeq.UIToolkit.TestSupport;
 using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace TweeqDemo.CustomWidgets.Tests
 {
-    #region Test panel
-
-    /// <summary>
-    /// 合成ポインタイベントと ChangeEvent を観測するための使い捨て UIDocument。
-    /// </summary>
-    /// <remarks>
-    /// パッケージ側テストの TweeqScrubTestPanel と同じ構成。テストアセンブリは
-    /// 互いに参照できないので、外部プロジェクトからはこの土台を自前で持つことになる
-    /// （EXT-03 で「テスト用パネルの公開」を検討する材料）。
-    /// スケールが混ざると閾値の px が意味を変えるので、ConstantPixelSize / scale=1 に固定する。
-    /// </remarks>
-    public sealed class EndpointTestPanel : IDisposable
-    {
-        readonly GameObject _gameObject;
-        readonly PanelSettings _settings;
-        readonly UIDocument _document;
-
-        /// <summary>パネルに載ったルート要素。</summary>
-        public VisualElement Root { get; }
-
-        EndpointTestPanel()
-        {
-            _settings = ScriptableObject.CreateInstance<PanelSettings>();
-            _settings.name = "EndpointTestPanelSettings";
-            _settings.scaleMode = PanelScaleMode.ConstantPixelSize;
-            _settings.scale = 1f;
-
-            ThemeStyleSheet theme = FindAnyTheme();
-            if (theme != null)
-            {
-                _settings.themeStyleSheet = theme;
-            }
-
-            _gameObject = new GameObject("endpoint-test-panel")
-            {
-                hideFlags = HideFlags.HideAndDontSave,
-            };
-
-            _document = _gameObject.AddComponent<UIDocument>();
-            _document.panelSettings = _settings;
-
-            Root = _document.rootVisualElement;
-        }
-
-        /// <summary>パネルを 1 枚用意する。作れなかった場合はテストを Ignore にする。</summary>
-        public static EndpointTestPanel Create()
-        {
-            EndpointTestPanel panel = new EndpointTestPanel();
-            if (panel.Root == null || panel.Root.panel == null)
-            {
-                panel.Dispose();
-                Assert.Ignore("EditMode でランタイムパネルを作れなかった（Play Mode 側で検証する）");
-            }
-
-            return panel;
-        }
-
-        public void Dispose()
-        {
-            if (_gameObject != null)
-            {
-                UnityEngine.Object.DestroyImmediate(_gameObject);
-            }
-
-            if (_settings != null)
-            {
-                UnityEngine.Object.DestroyImmediate(_settings);
-            }
-        }
-
-        static ThemeStyleSheet FindAnyTheme()
-        {
-            string[] guids = AssetDatabase.FindAssets("t:ThemeStyleSheet");
-            for (int index = 0; index < guids.Length; index++)
-            {
-                string path = AssetDatabase.GUIDToAssetPath(guids[index]);
-                ThemeStyleSheet sheet = AssetDatabase.LoadAssetAtPath<ThemeStyleSheet>(path);
-                if (sheet != null)
-                {
-                    return sheet;
-                }
-            }
-
-            return null;
-        }
-    }
-
-    #endregion
-
     /// <summary>
     /// EndpointInput（ext-custom-widgets-spec.md EXT-02）の契約検証。
     ///
     /// 状態機械は panel 非依存なので大半はパネル無しで完結する。
     /// ポインタ配線（TweeqScrubManipulator との結線）と ChangeEvent の送出だけ
-    /// <see cref="EndpointTestPanel"/> を使う。
+    /// パッケージが公開する <see cref="TweeqRuntimeTestPanel"/> を使う
+    /// （外部プロジェクトが testables 経由でテスト土台を借りられることの実証）。
     /// </summary>
     public class EndpointInputTests
     {
-        EndpointTestPanel _panel;
+        TweeqRuntimeTestPanel _panel;
 
         [TearDown]
         public void TearDown()
@@ -644,6 +555,61 @@ namespace TweeqDemo.CustomWidgets.Tests
             Assert.AreEqual(input.Theme.Error, field.style.color.value);
         }
 
+        [Test]
+        public void FocusRing_IsThePackageComponent()
+        {
+            // 外部 asmdef から TweeqFocusRing を採用できることの実証（EXT-03-C）
+            TweeqFocusRing ring = Make().Q<TweeqFocusRing>();
+
+            Assert.IsNotNull(ring);
+            Assert.AreEqual("tweeq-endpoint-focus-ring", ring.name);
+            Assert.IsFalse(ring.Visible);
+        }
+
+        [Test]
+        public void FocusRing_ShowsWhileTheSessionIsOpen()
+        {
+            EndpointInput input = Make();
+            TweeqFocusRing ring = input.Q<TweeqFocusRing>();
+
+            input.BeginSession();
+            Assert.IsTrue(ring.Visible);
+
+            input.EndSession();
+            Assert.IsFalse(ring.Visible);
+        }
+
+        [Test]
+        public void Segments_UseTheSharedTextFieldNormalization()
+        {
+            // ApplyTextField（EXT-03-A）が効いていれば、区画の TextField は
+            // 24px の枠を使い切り、内側の既定クロームが消えている
+            EndpointInput input = Make();
+            TextField field = input.Q<TextField>("tweeq-endpoint-segment-text");
+            VisualElement textInput = field.Q("unity-text-input");
+
+            Assert.AreEqual(12f, field.style.fontSize.value.value);
+            Assert.AreEqual(100f, textInput.style.height.value.value);
+            Assert.AreEqual(LengthUnit.Percent, textInput.style.height.value.unit);
+            Assert.AreEqual(Color.clear, textInput.style.backgroundColor.value);
+            Assert.AreEqual(0f, textInput.style.borderTopWidth.value);
+            Assert.AreEqual(0f, textInput.style.paddingLeft.value.value);
+        }
+
+        [Test]
+        public void Disabled_KeepsTheInsetBorderChrome()
+        {
+            EndpointInput input = Make();
+
+            input.Disabled = true;
+            Assert.AreEqual(Color.clear, input.style.backgroundColor.value);
+            Assert.AreEqual(1f, input.style.borderTopWidth.value);
+
+            input.Disabled = false;
+            Assert.AreEqual(0f, input.style.borderTopWidth.value);
+            Assert.AreEqual(input.Theme.Input, input.style.backgroundColor.value);
+        }
+
         #endregion
 
         #region Panel wiring
@@ -687,7 +653,7 @@ namespace TweeqDemo.CustomWidgets.Tests
 
         EndpointInput Mounted()
         {
-            _panel = EndpointTestPanel.Create();
+            _panel = TweeqRuntimeTestPanel.Create();
 
             EndpointInput input = new EndpointInput();
             input.SetValueWithoutNotify("0.0.0.0");

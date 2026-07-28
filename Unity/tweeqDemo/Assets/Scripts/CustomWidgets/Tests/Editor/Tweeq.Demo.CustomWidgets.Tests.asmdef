@@ -4,6 +4,7 @@
     "references": [
         "Tweeq.Core",
         "Tweeq.UIToolkit",
+        "Tweeq.UIToolkit.TestSupport",
         "Tweeq.Demo.CustomWidgets",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"

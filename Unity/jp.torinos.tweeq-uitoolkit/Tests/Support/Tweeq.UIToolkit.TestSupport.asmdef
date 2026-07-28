@@ -1,14 +1,11 @@
 {
-    "name": "Tweeq.UIToolkit.Tests",
-    "rootNamespace": "Tweeq.UIToolkit.Tests",
+    "name": "Tweeq.UIToolkit.TestSupport",
+    "rootNamespace": "Tweeq.UIToolkit.TestSupport",
     "references": [
         "Tweeq.Core",
-        "Tweeq.UIToolkit",
-        "Tweeq.UIToolkit.TestSupport"
+        "Tweeq.UIToolkit"
     ],
-    "includePlatforms": [
-        "Editor"
-    ],
+    "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": true,

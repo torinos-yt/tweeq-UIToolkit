@@ -292,5 +292,189 @@ namespace Tweeq.UIToolkit.Tests
         }
 
         #endregion
+
+        #region Disabled chrome
+
+        [Test]
+        public void ApplyDisabledChrome_Disabled_ClearsBackgroundAndDrawsTheInsetBorder()
+        {
+            VisualElement element = new VisualElement();
+            TweeqTheme theme = TweeqTheme.Dark();
+            element.style.backgroundColor = Color.red;
+
+            TweeqInputBoxStyles.ApplyDisabledChrome(element, theme, true);
+
+            Assert.AreEqual(Color.clear, element.style.backgroundColor.value);
+            Assert.AreEqual(1f, element.style.borderTopWidth.value);
+            Assert.AreEqual(1f, element.style.borderLeftWidth.value);
+            Assert.AreEqual(1f, element.style.borderRightWidth.value);
+            Assert.AreEqual(1f, element.style.borderBottomWidth.value);
+            Assert.AreEqual(theme.Border, element.style.borderTopColor.value);
+        }
+
+        [Test]
+        public void ApplyDisabledChrome_Enabled_DropsTheBorderOnly()
+        {
+            VisualElement element = new VisualElement();
+            TweeqTheme theme = TweeqTheme.Dark();
+
+            TweeqInputBoxStyles.ApplyDisabledChrome(element, theme, true);
+            TweeqInputBoxStyles.ApplyDisabledChrome(element, theme, false);
+
+            Assert.AreEqual(0f, element.style.borderTopWidth.value);
+            Assert.AreEqual(0f, element.style.borderBottomWidth.value);
+
+            // 通常時の背景は hover を知っている呼び出し側の責務。helper は塗り直さない
+            Assert.AreEqual(Color.clear, element.style.backgroundColor.value);
+        }
+
+        [Test]
+        public void ApplyDisabledChrome_NullTheme_StillClearsTheBackground()
+        {
+            VisualElement element = new VisualElement();
+            element.style.backgroundColor = Color.red;
+
+            TweeqInputBoxStyles.ApplyDisabledChrome(element, null, true);
+
+            Assert.AreEqual(Color.clear, element.style.backgroundColor.value);
+            Assert.AreEqual(1f, element.style.borderTopWidth.value);
+        }
+
+        [Test]
+        public void ApplyDisabledChrome_NullElement_DoesNotThrow()
+        {
+            Assert.DoesNotThrow(
+                () => TweeqInputBoxStyles.ApplyDisabledChrome(null, TweeqTheme.Dark(), true));
+            Assert.DoesNotThrow(
+                () => TweeqInputBoxStyles.ApplyDisabledChrome(null, TweeqTheme.Dark(), false));
+        }
+
+        #endregion
+
+        #region Text field
+
+        static TextField NormalizedField(TweeqTheme theme)
+        {
+            TextField field = new TextField();
+            TweeqInputBoxStyles.ApplyTextField(field, theme);
+            return field;
+        }
+
+        static VisualElement TextInputOf(TextField field)
+        {
+            return field.Q("unity-text-input");
+        }
+
+        [Test]
+        public void ApplyTextField_FlattensTheFieldItself()
+        {
+            TextField field = NormalizedField(TweeqTheme.Dark());
+
+            Assert.AreEqual(12f, field.style.fontSize.value.value);
+            Assert.AreEqual(0f, field.style.paddingLeft.value.value);
+            Assert.AreEqual(0f, field.style.paddingRight.value.value);
+            Assert.AreEqual(0f, field.style.paddingTop.value.value);
+            Assert.AreEqual(0f, field.style.paddingBottom.value.value);
+            Assert.AreEqual(0f, field.style.marginLeft.value.value);
+            Assert.AreEqual(0f, field.style.marginRight.value.value);
+            Assert.AreEqual(0f, field.style.marginTop.value.value);
+            Assert.AreEqual(0f, field.style.marginBottom.value.value);
+            Assert.AreEqual(0f, field.style.minHeight.value.value);
+            Assert.AreEqual(Align.Stretch, field.style.alignItems.value);
+        }
+
+        [Test]
+        public void ApplyTextField_MakesTheInnerInputFillTheBoxWithoutChrome()
+        {
+            VisualElement textInput = TextInputOf(NormalizedField(TweeqTheme.Dark()));
+
+            Assert.IsNotNull(textInput);
+            Assert.AreEqual(Color.clear, textInput.style.backgroundColor.value);
+            Assert.AreEqual(0f, textInput.style.borderTopWidth.value);
+            Assert.AreEqual(Color.clear, textInput.style.borderTopColor.value);
+            Assert.AreEqual(100f, textInput.style.height.value.value);
+            Assert.AreEqual(LengthUnit.Percent, textInput.style.height.value.unit);
+            Assert.AreEqual(0f, textInput.style.minHeight.value.value);
+            Assert.AreEqual(12f, textInput.style.fontSize.value.value);
+            Assert.AreEqual(WhiteSpace.NoWrap, textInput.style.whiteSpace.value);
+            Assert.AreEqual(0f, textInput.style.paddingLeft.value.value);
+            Assert.AreEqual(0f, textInput.style.paddingRight.value.value);
+            Assert.AreEqual(0f, textInput.style.paddingTop.value.value);
+            Assert.AreEqual(0f, textInput.style.paddingBottom.value.value);
+            Assert.AreEqual(0f, textInput.style.marginTop.value.value);
+            Assert.AreEqual(0f, textInput.style.marginBottom.value.value);
+        }
+
+        [Test]
+        public void ApplyTextField_AlsoUncrushesTheInnerTextElement()
+        {
+            VisualElement textInput = TextInputOf(NormalizedField(TweeqTheme.Dark()));
+            TextElement textElement = textInput.Q<TextElement>();
+
+            Assert.IsNotNull(textElement);
+            Assert.AreEqual(100f, textElement.style.height.value.value);
+            Assert.AreEqual(LengthUnit.Percent, textElement.style.height.value.unit);
+            Assert.AreEqual(0f, textElement.style.minHeight.value.value);
+            Assert.AreEqual(0f, textElement.style.paddingTop.value.value);
+            Assert.AreEqual(0f, textElement.style.paddingBottom.value.value);
+            Assert.AreEqual(12f, textElement.style.fontSize.value.value);
+        }
+
+        [Test]
+        public void ApplyTextField_TakesTheCaretAndSelectionColoursFromTheTheme()
+        {
+            TweeqTheme theme = TweeqTheme.Dark();
+            TextField field = NormalizedField(theme);
+
+            // 推奨 API（--unity-selection-color）は C# からインスタンス単位で設定できないので、
+            // 検証側も obsolete なプロパティを読む
+#pragma warning disable 618
+            Assert.AreEqual(theme.Text, field.textSelection.cursorColor);
+            Assert.AreEqual(theme.AccentSoft, field.textSelection.selectionColor);
+#pragma warning restore 618
+        }
+
+        [Test]
+        public void ApplyTextField_NullTheme_StillNormalizesTheLayout()
+        {
+            TextField field = NormalizedField(null);
+
+            Assert.AreEqual(12f, field.style.fontSize.value.value);
+            Assert.AreEqual(100f, TextInputOf(field).style.height.value.value);
+        }
+
+        [Test]
+        public void ApplyTextField_NullField_DoesNotThrow()
+        {
+            Assert.DoesNotThrow(
+                () => TweeqInputBoxStyles.ApplyTextField(null, TweeqTheme.Dark()));
+        }
+
+        [Test]
+        public void AdoptingWidgets_KeepTheirOwnHorizontalPadding()
+        {
+            // ヘルパは左右 padding を 0 に倒すので、各 widget が呼び出し後に入れ直せているか
+            // （＝置換で見た目が痩せていないか）を固定する
+            VisualElement numberInput = new NumberInput().Q("unity-text-input");
+            VisualElement stringInput = new StringInput().Q("unity-text-input");
+
+            Assert.AreEqual(4f, numberInput.style.paddingLeft.value.value);
+            Assert.AreEqual(4f, numberInput.style.paddingRight.value.value);
+            Assert.AreEqual(6f, stringInput.style.paddingLeft.value.value);
+            Assert.AreEqual(6f, stringInput.style.paddingRight.value.value);
+        }
+
+        [Test]
+        public void AdoptingWidgets_KeepTheirOwnTextAlignment()
+        {
+            VisualElement numberInput = new NumberInput().Q("unity-text-input");
+            VisualElement stringInput =
+                new StringInput { Align = TweeqTextAlign.Right }.Q("unity-text-input");
+
+            Assert.AreEqual(TextAnchor.MiddleCenter, numberInput.style.unityTextAlign.value);
+            Assert.AreEqual(TextAnchor.MiddleRight, stringInput.style.unityTextAlign.value);
+        }
+
+        #endregion
     }
 }

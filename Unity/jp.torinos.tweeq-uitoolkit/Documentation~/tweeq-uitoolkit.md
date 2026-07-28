@@ -112,6 +112,27 @@ assigning a custom `ITweeqTabStorage` to `TweeqTabs.Storage`.
 | --- | --- |
 | `Tweeq.Core` | Pure C# logic (gesture math, validation, color science). No UnityEngine reference. |
 | `Tweeq.UIToolkit` | The widgets, theming, overlays. |
+| `Tweeq.UIToolkit.TestSupport` | Test-only helpers, notably `TweeqRuntimeTestPanel`. |
+
+### Testing your own widgets
+
+Widgets built on `TweeqInputBoxStyles`, `TweeqFocusRing` and
+`TweeqScrubManipulator` need a live panel before synthesized pointer and focus
+events reach them. `Tweeq.UIToolkit.TestSupport` ships
+`TweeqRuntimeTestPanel.Create()`, a disposable `UIDocument` pinned to
+`ConstantPixelSize` at scale 1 so that one synthetic pixel stays one pixel —
+drag thresholds mean nothing otherwise. The assembly lives under the package's
+`Tests` folder, so Unity only compiles it for projects that opt in: add the
+package to `testables` in `Packages/manifest.json`, then reference
+`Tweeq.UIToolkit.TestSupport` from your own test asmdef.
+
+```json
+{
+  "testables": [
+    "jp.torinos.tweeq-uitoolkit"
+  ]
+}
+```
 
 ## Licenses
 

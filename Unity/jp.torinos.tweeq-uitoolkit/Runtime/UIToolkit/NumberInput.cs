@@ -101,17 +101,11 @@ namespace Tweeq.UIToolkit
         const float STRIP_MIN_HEIGHT = 4f;
         const float FALLBACK_FONT_SIZE = 12f;
 
-        // 編集中のテキストの文字サイズ。A-6 で明示指定するため定数にする
-        const float TEXT_FONT_SIZE = 12f;
-
         // grip のヒントアイコン。18px アイコンを scale 0.8 で描く前提のガイド幅
         const float ICON_SIZE = 18f;
         const float ICON_SCALE = 0.8f;
         const float GRIP_HINT_OPACITY = 0.5f;
         const float GRIP_HINT_HEAD = 3f;
-
-        const float FOCUS_RING_WIDTH = 1f;
-        const float DISABLED_BORDER_WIDTH = 1f;
 
         const float TEXT_PADDING = 4f;
 
@@ -164,7 +158,7 @@ namespace Tweeq.UIToolkit
 
         VisualElement _barFill;
         VisualElement _backLayer;
-        VisualElement _focusRing;
+        TweeqFocusRing _focusRing;
         VisualElement _displayOverlay;
         VisualElement _scaleLabelLayer;
         Label _prefixLabel;
@@ -668,19 +662,8 @@ namespace Tweeq.UIToolkit
 
             // フォーカスリングは要素の border で描く。ルート側に border を足すと
             // 絶対配置の子（＝バーとハンドル）が 1px 内側へずれてしまうため、別レイヤに分ける
-            _focusRing = new VisualElement
-            {
-                name = "tweeq-number-focus-ring",
-                pickingMode = PickingMode.Ignore,
-            };
-            _focusRing.style.position = Position.Absolute;
-            _focusRing.style.left = 0f;
-            _focusRing.style.top = 0f;
-            _focusRing.style.right = 0f;
-            _focusRing.style.bottom = 0f;
-            _focusRing.style.display = DisplayStyle.None;
-            TweeqInputBoxStyles.SetBorderWidth(_focusRing, FOCUS_RING_WIDTH);
-            this.hierarchy.Add(_focusRing);
+            _focusRing = TweeqFocusRing.Attach(this);
+            _focusRing.name = "tweeq-number-focus-ring";
         }
 
         static Label CreateOverlayLabel()
@@ -717,69 +700,27 @@ namespace Tweeq.UIToolkit
                 TweeqInputBoxStyles.ApplyBackgroundTransition(_barFill, _theme);
             }
 
-            if (_focusRing != null)
-            {
-                TweeqInputBoxStyles.SetBorderColor(_focusRing, _theme.Accent);
-            }
-
             ApplyLeftLabelLayout();
 
+            // 高さ・余白・キャレット色の正規化は公開ヘルパへ寄せた（EXT-03-A）
+            TweeqInputBoxStyles.ApplyTextField(_textField, _theme);
+
+            // 数値欄は中央寄せ。整列と左右パディングだけは widget 固有なのでここで足す
             if (_textInput != null)
             {
-                _textInput.style.backgroundColor = Color.clear;
-                TweeqInputBoxStyles.SetBorderWidth(_textInput, 0f);
-                TweeqInputBoxStyles.SetBorderColor(_textInput, Color.clear);
                 _textInput.style.paddingLeft = TEXT_PADDING;
                 _textInput.style.paddingRight = TEXT_PADDING;
-                _textInput.style.marginLeft = 0f;
-                _textInput.style.marginRight = 0f;
                 _textInput.style.unityTextAlign = TextAnchor.MiddleCenter;
-
-                // feedback-fixes-01.md A-6: 既定の USS が入れる上下 padding／auto 高さのままだと
-                // 24px の枠内で行が潰れて読めなくなる。高さと文字サイズを明示して 24px を使い切る
-                _textInput.style.height = Length.Percent(100f);
-                _textInput.style.minHeight = 0f;
-                _textInput.style.paddingTop = 0f;
-                _textInput.style.paddingBottom = 0f;
-                _textInput.style.marginTop = 0f;
-                _textInput.style.marginBottom = 0f;
-                _textInput.style.fontSize = TEXT_FONT_SIZE;
-                _textInput.style.whiteSpace = WhiteSpace.NoWrap;
             }
 
             if (_textElement != null)
             {
-                // A-6: input の中の TextElement も同じ扱いにする
-                _textElement.style.height = Length.Percent(100f);
-                _textElement.style.minHeight = 0f;
-                _textElement.style.paddingTop = 0f;
-                _textElement.style.paddingBottom = 0f;
-                _textElement.style.marginTop = 0f;
-                _textElement.style.marginBottom = 0f;
-                _textElement.style.fontSize = TEXT_FONT_SIZE;
                 _textElement.style.unityTextAlign = TextAnchor.MiddleCenter;
             }
 
             if (_textField != null)
             {
                 _textField.style.unityTextAlign = TextAnchor.MiddleCenter;
-                _textField.style.fontSize = TEXT_FONT_SIZE;
-
-                // キャレット・選択色は USS 既定（黒）のままだと暗背景で見えない。
-                // selectionColor は obsolete だが、推奨の --unity-selection-color は
-                // C# からインスタンス単位で設定できない（テーマは TweeqTheme 駆動）ため使い続ける
-#pragma warning disable 618
-                _textField.textSelection.cursorColor = _theme.Text;
-                _textField.textSelection.selectionColor = _theme.AccentSoft;
-#pragma warning restore 618
-
-                // A-6: root の inset 0 いっぱいに置く。BaseField 既定の余白を残さない
-                _textField.style.paddingTop = 0f;
-                _textField.style.paddingBottom = 0f;
-                _textField.style.paddingLeft = 0f;
-                _textField.style.paddingRight = 0f;
-                _textField.style.minHeight = 0f;
-                _textField.style.alignItems = Align.Stretch;
             }
 
             ApplyFonts();
@@ -826,8 +767,10 @@ namespace Tweeq.UIToolkit
             TweeqInputBoxStyles.ApplyCornerRadius(this, _theme, _inlinePosition, _blockPosition);
 
             // フォーカスリングは別レイヤなので同じ角丸を掛け直す
-            TweeqInputBoxStyles.ApplyCornerRadius(
-                _focusRing, _theme, _inlinePosition, _blockPosition);
+            if (_focusRing != null)
+            {
+                _focusRing.Apply(_theme, _inlinePosition, _blockPosition);
+            }
         }
 
         // 軸ラベルを置いた分だけ、テキストと表示オーバーレイを左から逃がす
@@ -1745,9 +1688,7 @@ namespace Tweeq.UIToolkit
 
             if (_focusRing != null)
             {
-                _focusRing.style.display = _editing && !_disabled
-                    ? DisplayStyle.Flex
-                    : DisplayStyle.None;
+                _focusRing.Visible = _editing && !_disabled;
             }
 
             _backLayer?.MarkDirtyRepaint();
@@ -1755,16 +1696,13 @@ namespace Tweeq.UIToolkit
 
         void UpdateBackground()
         {
+            TweeqInputBoxStyles.ApplyDisabledChrome(this, _theme, _disabled);
+
             if (_disabled)
             {
-                // 仕様 §5: 背景透明 + 1px Border のインセット枠
-                this.style.backgroundColor = Color.clear;
-                TweeqInputBoxStyles.SetBorderWidth(this, DISABLED_BORDER_WIDTH);
-                TweeqInputBoxStyles.SetBorderColor(this, _theme.Border);
                 return;
             }
 
-            TweeqInputBoxStyles.SetBorderWidth(this, 0f);
             this.style.backgroundColor = TweeqInputBoxStyles.ResolveBackground(_theme, _hovered);
         }
 

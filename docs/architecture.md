@@ -103,7 +103,10 @@ widget author needs are public:
 - **`ITweeqInputBox`** — implement it to participate in `InputGroup`'s
   corner fusion like any built-in widget.
 - **`TweeqInputBoxStyles`** — the shared input-box chrome: fused corner radii,
-  border helpers, hover background resolution, background transitions.
+  border helpers, hover background resolution, background transitions, text
+  field normalization (`ApplyTextField`), and the disabled look
+  (`ApplyDisabledChrome`).
+- **`TweeqFocusRing`** — the focus indicator layer, corner-fusion aware.
 - **`TweeqScrubManipulator`** — drag-to-scrub pointer wiring with the standard
   drag thresholds (3 px mouse / 5 px pen+touch), Escape cancel, and
   click-vs-scrub discrimination. Pair it with `Tweeq.Core.TweakGesture` for
@@ -114,3 +117,8 @@ A complete worked example — `EndpointInput`, an IPv4 endpoint field with four
 scrubbable octet segments and an optional port — lives in the demo project
 (`Unity/tweeqDemo/Assets/Scripts/CustomWidgets/`) in its own assembly,
 built against the public API only.
+
+For testing custom widgets, the `Tweeq.UIToolkit.TestSupport` assembly ships
+`TweeqRuntimeTestPanel` — a disposable, pixel-exact runtime panel for driving
+synthesized pointer events (see the package documentation for the `testables`
+setup).
