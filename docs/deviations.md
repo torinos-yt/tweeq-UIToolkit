@@ -65,10 +65,11 @@ Web capabilities without a Unity equivalent, replaced rather than emulated:
   original. `WheelSensitivity` (default 1 = faithful coefficients) compensates
   for Unity's much smaller wheel deltas.
 - **Middle-mouse drag pans** — a DCC convention the original doesn't have.
-- **Optional In/Out band built in** (`InPoint` / `OutPoint` / `FocusInOut()`):
-  highlight between the points, dimming outside, accent edge lines. Display and
-  focus only — setting the points is the host's job. The original has no such
-  concept.
+- **Experimental: an In/Out band** (`InPoint` / `OutPoint` / `FocusInOut()`)
+  exists behind the API — highlight between the points, dimming outside, focus
+  navigation. The original has no such concept, and range semantics are really
+  an application concern, so treat this as experimental: it may be removed in
+  favor of host-side composition, and the demo intentionally does not use it.
 - **`TweeqRuler` labels**: a `RulerScale` without a label draws a tick only
   (the original prints the value), and `TweeqRulerScales.Build` /
   `BuildTimecode` provide zoom-aware label thinning the original leaves to the

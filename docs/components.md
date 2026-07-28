@@ -31,7 +31,7 @@ preserved at the git tag [`vue-final`](https://github.com/torinos-yt/tweeq-UIToo
 | `Balloon` | `TweeqBalloon` | |
 | `Tooltip` | `TweeqTooltip` | Single instance, show/move delays |
 | `TweakOverlay` | per-widget overlays | Drawn on the shared `TweeqOverlayLayer` |
-| `Timeline` | `TweeqTimeline` | Zoom/pan frame viewport; hosts pin content via `PinItem`; optional In/Out band |
+| `Timeline` | `TweeqTimeline` | Zoom/pan frame viewport; hosts pin content via `PinItem` |
 | `Ruler` | `TweeqRuler` | Ticks + labels, drag-to-value; `TweeqRulerScales` adds numeric/timecode label thinning |
 | `PaneModal` | `TweeqModal` | Centered balloon, emphasize bounce, non-dismissing |
 | `PaneModalComplex` / `PaneModalTabs` | `TweeqModalDialog` (+ `TweeqTabs`) | Title, scrolling body, Cancel/Confirm footer, Escape/Enter |

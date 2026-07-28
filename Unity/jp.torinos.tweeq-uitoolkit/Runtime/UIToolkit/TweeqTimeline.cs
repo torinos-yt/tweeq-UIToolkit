@@ -243,9 +243,10 @@ namespace Tweeq.UIToolkit
         public event Action InOutChanged;
 
         /// <summary>
-        /// Start of the marked range, or null when unset. Not in the original; added for the DCC
-        /// style use case. The timeline only stores, draws and focuses it — setting it from keys
-        /// or drags is the host's job.
+        /// Start of the marked range, or null when unset. Experimental: not in the original, and
+        /// range semantics lean toward being an application concern, so this may move to host-side
+        /// composition. The timeline only stores, draws and focuses it — setting it from keys or
+        /// drags is the host's job.
         /// </summary>
         public double? InPoint
         {
@@ -263,7 +264,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        /// <summary>End of the marked range, or null when unset.</summary>
+        /// <summary>End of the marked range, or null when unset. Experimental — see <see cref="InPoint"/>.</summary>
         public double? OutPoint
         {
             get => _outPoint;
