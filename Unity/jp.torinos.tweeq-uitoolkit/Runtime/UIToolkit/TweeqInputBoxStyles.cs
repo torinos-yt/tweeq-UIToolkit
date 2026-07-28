@@ -145,6 +145,13 @@ namespace Tweeq.UIToolkit
         /// UI Toolkit has no identical curve, so this approximates it with EaseInOutCubic
         /// (the same call made for NumberInput / RotaryInput).
         /// </remarks>
+        /// <summary>
+        /// Marks elements whose transition is muted for one frame after every panel attach.
+        /// Doubles as the "already registered" guard so repeated theme applications don't stack
+        /// callbacks.
+        /// </summary>
+        public const string ATTACH_GUARD_USS_CLASS = "tweeq-attach-transition-guard";
+
         public static void ApplyBackgroundTransition(VisualElement element, TweeqTheme theme)
         {
             if (element == null || theme == null)
@@ -158,6 +165,29 @@ namespace Tweeq.UIToolkit
                 new List<TimeValue> { new TimeValue(theme.HoverTransitionDuration, TimeUnit.Second) });
             element.style.transitionTimingFunction = new StyleList<EasingFunction>(
                 new List<EasingFunction> { new EasingFunction(EasingMode.EaseInOutCubic) });
+
+            // On (re)attach the first style resolution transitions from the default value, not
+            // the inline one, so a freshly mounted element (e.g. modal content moving onto the
+            // overlay layer) briefly animates from transparent — read as a black flash. Muting
+            // the transition for that one frame makes the first paint land on the final color.
+            if (!element.ClassListContains(ATTACH_GUARD_USS_CLASS))
+            {
+                element.AddToClassList(ATTACH_GUARD_USS_CLASS);
+                element.RegisterCallback<AttachToPanelEvent>(MuteTransitionForFirstFrame);
+            }
+        }
+
+        static void MuteTransitionForFirstFrame(AttachToPanelEvent evt)
+        {
+            if (!(evt.currentTarget is VisualElement element))
+            {
+                return;
+            }
+
+            StyleList<TimeValue> restored = element.style.transitionDuration;
+            element.style.transitionDuration = new StyleList<TimeValue>(
+                new List<TimeValue> { new TimeValue(0f, TimeUnit.Second) });
+            element.schedule.Execute(() => element.style.transitionDuration = restored);
         }
 
         /// <summary>Returns the input field's background color according to hover state.</summary>

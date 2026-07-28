@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using NUnit.Framework;
+using Tweeq.UIToolkit.TestSupport;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -200,6 +201,42 @@ namespace Tweeq.UIToolkit.Tests
         public void ResolveBackground_NullTheme_ReturnsClear()
         {
             Assert.AreEqual(Color.clear, TweeqInputBoxStyles.ResolveBackground(null, true));
+        }
+
+        [Test]
+        public void ApplyBackgroundTransition_MutesTheTransitionOnAttach()
+        {
+            TweeqTheme theme = TweeqTheme.Dark();
+            VisualElement element = new VisualElement();
+            TweeqInputBoxStyles.ApplyBackgroundTransition(element, theme);
+
+            Assert.IsTrue(element.ClassListContains(TweeqInputBoxStyles.ATTACH_GUARD_USS_CLASS));
+            Assert.AreEqual(
+                theme.HoverTransitionDuration,
+                element.style.transitionDuration.value[0].value,
+                1e-4f,
+                "before any attach the theme duration must be in effect");
+
+            using (TweeqRuntimeTestPanel panel = TweeqRuntimeTestPanel.Create())
+            {
+                panel.Root.Add(element);
+
+                // The attach frame must resolve styles without a transition so the first paint
+                // lands on the final color instead of animating from the default (black flash).
+                Assert.AreEqual(0f, element.style.transitionDuration.value[0].value, 1e-4f);
+            }
+        }
+
+        [Test]
+        public void ApplyBackgroundTransition_RegistersTheAttachGuardOnlyOnce()
+        {
+            TweeqTheme theme = TweeqTheme.Dark();
+            VisualElement element = new VisualElement();
+
+            TweeqInputBoxStyles.ApplyBackgroundTransition(element, theme);
+            TweeqInputBoxStyles.ApplyBackgroundTransition(element, theme);
+
+            Assert.IsTrue(element.ClassListContains(TweeqInputBoxStyles.ATTACH_GUARD_USS_CLASS));
         }
 
         [Test]
