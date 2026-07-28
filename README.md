@@ -37,9 +37,13 @@ Add the package to your project via the Unity Package Manager
 https://github.com/torinos-yt/tweeq-UIToolkit.git?path=Unity/jp.torinos.tweeq-uitoolkit
 ```
 
-Requires Unity 6000.3+. No dependencies beyond UI Toolkit.
+Requires Unity 6000.3+ and no dependencies beyond UI Toolkit.
 [ZString](https://github.com/Cysharp/ZString) is picked up automatically if
 present (optional, reduces per-gesture allocations).
+
+This repository stores binary assets (bundled fonts, demo scene) with Git LFS,
+so `git` and `git-lfs` must be available on your machine when installing via
+git URL.
 
 ## Quick start
 
