@@ -4,9 +4,6 @@
   "displayName": "tweeq UIToolkit",
   "description": "Parameter-tuning GUI widgets for UI Toolkit - a Unity port of Tweeq by Baku Hashimoto. Drag-to-tweak inputs (number, rotary, vector, color, time, ...), parameter layout, popovers/modals/tabs, a timeline viewport, and Radix-scale theming.",
   "unity": "6000.3",
-  "author": {
-    "name": "torinos"
-  },
   "samples": [
     {
       "displayName": "UXML Demo",
