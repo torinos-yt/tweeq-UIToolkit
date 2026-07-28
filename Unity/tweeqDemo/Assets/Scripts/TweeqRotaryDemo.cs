@@ -7,8 +7,8 @@ using UnityEngine.UIElements;
 namespace TweeqDemo
 {
     /// <summary>
-    /// tweeq 本家 index.html デモの移植。RotaryInput 1 個と、
-    /// ParameterGrid に載せた NumberInput 3 種 + 折りたたみグループの PositionInput / SizeInput を並べる。
+    /// Port of the tweeq index.html demo: one RotaryInput plus three kinds of NumberInput on a
+    /// ParameterGrid, with PositionInput / SizeInput inside collapsible groups.
     /// </summary>
     public class TweeqRotaryDemo : MonoBehaviour
     {
@@ -23,49 +23,58 @@ namespace TweeqDemo
 
         const double VECTOR_STEP = 0.1;
 
-        // AngleInput の確認用。±180 は数値欄側のレンジで、ノブは多回転のまま回せる
+        // For AngleInput: the +/-180 range belongs to the number field, the knob still spins past it
         const float INITIAL_ANGLE = 30f;
         const double ANGLE_LIMIT = 180.0;
         const double ANGLE_STEP = 0.1;
         const double ANGLE_SNAP = 45.0;
 
-        // 比率ロックの追従が一目で分かるよう、初期値は 16:9 にしておく
+        // 16:9 up front so the ratio lock is obvious at a glance
         static readonly Vector2 INITIAL_SIZE = new Vector2(320f, 180f);
 
-        // feedback-fixes-01.md D-4: 範囲外矢印の確認用。両側 Clamp を切って [0,1] の外へ出せる行
+        // feedback-fixes-01.md D-4: both clamps off, so this row can leave [0,1] and raise the arrows
         const float OVERSHOOT_INITIAL = 0.5f;
 
-        // ParameterGroup の開閉状態はこの名前で PlayerPrefs に残る
+        // ParameterGroup persists its open state in PlayerPrefs under these names
         const string VECTOR_GROUP_NAME = "tweeqDemo.vector";
         const string BOOLEAN_GROUP_NAME = "tweeqDemo.boolean";
         const string SELECT_GROUP_NAME = "tweeqDemo.select";
+        const string TIME_GROUP_NAME = "tweeqDemo.time";
         const string DIALOG_GROUP_NAME = "tweeqDemo.dialog";
         const string CUSTOM_GROUP_NAME = "tweeqDemo.custom";
 
-        // 外部 asmdef 製ウィジェット（EndpointInput）の実演用の初期値
+        // Initial values for the widget built in an external asmdef (EndpointInput)
         const string INITIAL_ENDPOINT = "192.168.0.1";
         const string INITIAL_ENDPOINT_PORT = "10.0.0.8:8080";
 
-        // Vue PaneModalTabs の width:44rem は root font-size 依存の曖昧値なので、
-        // デザイン単位 rem=12 換算の 528px を採用（m8-modal-tabs-spec.md §E）
+        // The Vue PaneModalTabs width:44rem depends on the root font size, which is ambiguous, so
+        // 528px is used instead (rem = 12 in design units; m8-modal-tabs-spec.md section E)
         const float DIALOG_WIDTH = 528f;
 
-        // アクティブタブは "tweeq.demo-settings.active" に永続化される
+        // The active tab persists under "tweeq.demo-settings.active"
         const string SETTINGS_TABS_NAME = "demo-settings";
 
-        const string OPACITY_TOOLTIP = "0〜1 の不透明度。左右ドラッグでスクラブ、上下で感度";
+        const string OPACITY_TOOLTIP = "Opacity from 0 to 1. Drag sideways to scrub, up and down for sensitivity";
 
         const string INITIAL_TEXT = "Hello, tweeq";
 
-        // ColorInput の初期値はテーマの accent から作る。α を落としてあるのは、
-        // スウォッチのチェッカーボード（α 可視化）が一目で分かるようにするため
+        // The ColorInput starts from the theme accent. Alpha is lowered so the swatch checkerboard
+        // (the alpha visualisation) reads at a glance
         const float TINT_ALPHA = 0.8f;
+
+        // Initial TimeInput value. It reads 01:30:12 at 24fps and 00:36:12 at 60fps, so switching
+        // the rate shows that the value itself stays at 2172 frames and only the display moves
+        const float INITIAL_TIME_FRAMES = 2172f;
+
+        const double INITIAL_FRAME_RATE = 24.0;
+
+        static readonly string[] FrameRates = { "24", "30", "60" };
 
         static readonly string[] Fruits = { "Apple", "Banana", "Cherry" };
 
         static readonly string[] Easings = { "Linear", "Ease In", "Ease Out", "Ease In Out" };
 
-        // ファジー検索の動作確認用に多めの候補（"eio" → Elastic In Out などのサブシーケンス確認）
+        // A long option list to exercise the fuzzy search (e.g. "eio" -> Elastic In Out)
         static readonly string[] SearchEasings =
         {
             "Linear",
@@ -108,6 +117,9 @@ namespace TweeqDemo
         DropdownInput<string> _search;
         ShuffleInput<string> _shuffle;
         AngleInput _angle;
+        TimeInput _time;
+        StringDropdownInput _frameRate;
+        ButtonToggleInput _timecodeMode;
         StringInput _text;
         ColorInput _tint;
         ButtonInput _flashButton;
@@ -120,17 +132,17 @@ namespace TweeqDemo
         NumberInput _dialogVolume;
         ColorInput _dialogAccent;
 
-        // ModalComplex 風（本文=フォーム・Save/Cancel 均等割）のサンプル
+        // ModalComplex-style sample: a form body with an evenly split Save / Cancel footer
         ButtonInput _openProfileButton;
         TweeqModalDialog _profileDialog;
         StringInput _profileName;
         NumberInput _profileAge;
 
-        // 外部 asmdef（Tweeq.Demo.CustomWidgets）で作ったカスタムウィジェットの実演
+        // Custom widgets built in an external asmdef (Tweeq.Demo.CustomWidgets)
         EndpointInput _endpoint;
         EndpointInput _endpointWithPort;
 
-        // 素の PaneModal 風（閉じる責務は所有者・外側クリックはバウンスのみ）のサンプル
+        // Plain PaneModal-style sample: the owner closes it, an outside click only bounces
         ButtonInput _openAboutButton;
         TweeqModal _aboutModal;
         ButtonInput _aboutCloseButton;
@@ -149,13 +161,15 @@ namespace TweeqDemo
         string _easingConfirmed = Easings[0];
         string _searchConfirmed = SearchEasings[0];
         float _angleConfirmed = INITIAL_ANGLE;
+        float _timeConfirmed = INITIAL_TIME_FRAMES;
+        float _timeLive = INITIAL_TIME_FRAMES;
         string _textConfirmed = INITIAL_TEXT;
         Color _tintConfirmed = Color.white;
         int _flashClicks;
         int _plusClicks;
 
-        // ダイアログの Cancel ロールバックは Scheme が無いので利用者責務（m8 仕様 §B）。
-        // その実演として、開いた瞬間の値をここへ退避して Cancelled で書き戻す
+        // There is no Scheme, so rolling a dialog back on Cancel is the caller's job (m8 spec B).
+        // This demonstrates it: the values at open time are stashed here and restored on Cancelled
         bool _dialogVsyncAtOpen;
         float _dialogVolumeAtOpen;
         Color _dialogAccentAtOpen;
@@ -176,19 +190,20 @@ namespace TweeqDemo
         {
             if (_document == null)
             {
-                Debug.LogError($"{nameof(TweeqRotaryDemo)}: UIDocument が未設定。", this);
+                Debug.LogError($"{nameof(TweeqRotaryDemo)}: UIDocument is not assigned.", this);
                 return;
             }
 
             _root = _document.rootVisualElement;
             if (_root == null)
             {
-                Debug.LogError($"{nameof(TweeqRotaryDemo)}: rootVisualElement が取得できない。", this);
+                Debug.LogError($"{nameof(TweeqRotaryDemo)}: rootVisualElement could not be resolved.", this);
                 return;
             }
 
-            // Vue デモは accentColor '#0000ff' だが light モード前提の色。dark 背景では
-            // Radix が seed をそのまま step9 に据えるため暗すぎる → 明るめの青へ変更（2026-07-27 ユーザー裁定）
+            // The Vue demo uses accentColor '#0000ff', but that assumes light mode. On a dark
+            // background Radix keeps the seed as step9, which reads far too dark, so a brighter
+            // blue was chosen instead (user decision, 2026-07-27)
             _theme = TweeqTheme.Dark().WithAccent(new Color32(0x4a, 0x76, 0xff, 0xff));
 
             BuildUi();
@@ -204,7 +219,7 @@ namespace TweeqDemo
 
             if (_opacity != null)
             {
-                // ツールチップは共有インスタンスに参照が残るので、必ず外す
+                // The tooltip is a shared instance that would keep a reference, so always detach
                 TweeqTooltip.Detach(_opacity);
                 _opacity.Confirmed -= OnOpacityConfirmed;
                 _opacity = null;
@@ -281,7 +296,7 @@ namespace TweeqDemo
             {
                 _shuffle.Confirmed -= OnShuffleConfirmed;
 
-                // Generate はデモ側のデリゲートなので、参照を残さず切っておく
+                // Generate is a demo-side delegate, so drop that reference as well
                 _shuffle.Generate = null;
                 _shuffle = null;
             }
@@ -290,6 +305,25 @@ namespace TweeqDemo
             {
                 _angle.Confirmed -= OnAngleConfirmed;
                 _angle = null;
+            }
+
+            if (_time != null)
+            {
+                _time.UnregisterValueChangedCallback(OnTimeChanged);
+                _time.Confirmed -= OnTimeConfirmed;
+                _time = null;
+            }
+
+            if (_frameRate != null)
+            {
+                _frameRate.Confirmed -= OnFrameRateConfirmed;
+                _frameRate = null;
+            }
+
+            if (_timecodeMode != null)
+            {
+                _timecodeMode.Confirmed -= OnTimecodeModeConfirmed;
+                _timecodeMode = null;
             }
 
             if (_text != null)
@@ -324,8 +358,8 @@ namespace TweeqDemo
 
             if (_settingsDialog != null)
             {
-                // backdrop はオーバーレイ層（rootVisualElement の外）に居るので、
-                // _root.Clear() では降りない。明示的に閉じてから手放す
+                // The backdrop lives on the overlay layer (outside rootVisualElement), so
+                // _root.Clear() does not take it down: close explicitly before letting go
                 _settingsDialog.Open = false;
                 _settingsDialog.Confirmed -= OnDialogConfirmed;
                 _settingsDialog.Cancelled -= OnDialogCancelled;
@@ -391,7 +425,7 @@ namespace TweeqDemo
 
             if (_root != null)
             {
-                // rootVisualElement は UIDocument が使い回すので、C-3 の抑止も自分で外す
+                // UIDocument reuses rootVisualElement, so the C-3 suppression is undone here too
                 TweeqNavigation.EnableArrowFocusNavigation(_root);
                 _root.Clear();
                 _root = null;
@@ -411,8 +445,8 @@ namespace TweeqDemo
             _root.style.alignItems = Align.Center;
             _root.style.backgroundColor = _theme.Background;
 
-            // feedback-fixes-01.md C-3: このパネルでは矢印キーを値操作専用にする。
-            // ライブラリ既定ではないので、アプリ側でオプトインする
+            // feedback-fixes-01.md C-3: arrow keys drive values only on this panel. That is not
+            // the library default, so the application opts in
             TweeqNavigation.DisableArrowFocusNavigation(_root);
 
             _rotary = new RotaryInput
@@ -431,7 +465,7 @@ namespace TweeqDemo
 
             _root.Add(BuildParameterSection());
 
-            // モーダル本体。ツリー内では何も描かず、Open でオーバーレイ層に載る
+            // The modal bodies draw nothing in the tree; Open moves them onto the overlay layer
             _root.Add(BuildSettingsDialog());
             _root.Add(BuildProfileDialog());
             _root.Add(BuildAboutModal());
@@ -461,7 +495,7 @@ namespace TweeqDemo
             _opacity.SetValueWithoutNotify(1f);
             _opacity.Confirmed += OnOpacityConfirmed;
 
-            // ツールチップの動作確認用。アプリ全体で 1 インスタンスを使い回す（popover-spec.md）
+            // Exercises the tooltip, which reuses a single instance app-wide (popover-spec.md)
             TweeqTooltip.Attach(_opacity, OPACITY_TOOLTIP);
             grid.Add(BuildRow("Opacity", _opacity));
 
@@ -478,7 +512,7 @@ namespace TweeqDemo
             _rotation.Confirmed += OnRotationConfirmed;
             grid.Add(BuildRow("Rotation", _rotation));
 
-            // Min/Max を無限のままにすると unranged（バー無し・grip でスクラブ）になる
+            // Leaving Min/Max infinite makes the field unranged (no bar; scrub from the grips)
             _offsetX = new NumberInput
             {
                 Theme = _theme,
@@ -490,8 +524,8 @@ namespace TweeqDemo
             _offsetX.Confirmed += OnOffsetConfirmed;
             grid.Add(BuildRow("Offset X", _offsetX));
 
-            // feedback-fixes-01.md D-4: Clamp を両側とも切ったバー付き。
-            // レンジ外へ出ると範囲外矢印が出る（D-3 でクランプ有効側は畳まれるので、その対比にもなる）
+            // feedback-fixes-01.md D-4: a bar with both clamps off. Leaving the range raises the
+            // out-of-range arrows, which also contrasts with D-3 folding the clamped sides
             _overshoot = new NumberInput
             {
                 Theme = _theme,
@@ -510,10 +544,11 @@ namespace TweeqDemo
             grid.Add(BuildVectorGroup());
             grid.Add(BuildBooleanGroup());
             grid.Add(BuildSelectGroup());
+            grid.Add(BuildTimeGroup());
             grid.Add(BuildDialogGroup());
             grid.Add(BuildCustomGroup());
 
-            // Theme は Grid が配下の Parameter / Heading / Group へ配る
+            // The Grid hands the theme down to every Parameter / Heading / Group below it
             grid.Theme = _theme;
 
             _confirmedLabel = new Label(FormatConfirmed());
@@ -539,7 +574,7 @@ namespace TweeqDemo
             _position.Confirmed += OnPositionConfirmed;
             group.Content.Add(BuildRow("Position", _position));
 
-            // keepRatio は既定 on。両軸を同時に別比率へ書き換えると自動で外れる
+            // keepRatio starts on and releases itself when both axes move to a new ratio at once
             _size = new SizeInput
             {
                 Theme = _theme,
@@ -549,7 +584,7 @@ namespace TweeqDemo
             _size.SetValueWithoutNotify(INITIAL_SIZE);
             _size.Confirmed += OnSizeConfirmed;
 
-            // 自動解除は「気付いたら外れている」挙動なので、ラベル側にも出す
+            // That release is easy to miss, so the label reports it as well
             _size.KeepRatioChanged += OnSizeKeepRatioChanged;
             group.Content.Add(BuildRow("Size", _size));
 
@@ -614,7 +649,7 @@ namespace TweeqDemo
             _easing.Confirmed += OnEasingConfirmed;
             group.Content.Add(BuildRow("Easing", _easing));
 
-            // 開いて文字を打つとファジー検索で絞り込まれる（例: "eio" → Elastic In Out）
+            // Typing while open filters through the fuzzy search (e.g. "eio" -> Elastic In Out)
             _search = new DropdownInput<string>(SearchEasings)
             {
                 Theme = _theme,
@@ -622,7 +657,7 @@ namespace TweeqDemo
             _search.SetValueWithoutNotify(SearchEasings[0]);
             _search.Confirmed += OnSearchConfirmed;
 
-            // 押すたびに候補からランダムで 1 つ引く。Dropdown と 1 つながりの箱に見せる
+            // Draws a random option on each press and reads as one box with the dropdown
             _shuffle = new ShuffleInput<string>
             {
                 Theme = _theme,
@@ -636,7 +671,7 @@ namespace TweeqDemo
             searchGroup.Add(_shuffle);
             group.Content.Add(BuildRow("Search", searchGroup));
 
-            // ノブと数値欄の複合。欄側は ±180 だが、ノブは多回転でその外へも回せる
+            // Knob plus number field: the field is capped at +/-180, the knob spins past it
             _angle = new AngleInput
             {
                 Theme = _theme,
@@ -668,6 +703,46 @@ namespace TweeqDemo
             _tint.Confirmed += OnTintConfirmed;
             _tintConfirmed = tint;
             group.Content.Add(BuildRow("Tint", _tint));
+
+            group.RefreshContentGaps();
+            return group;
+        }
+
+        // Demonstrates the variable frame rate: changing it leaves the TimeInput value (a frame
+        // count) alone and only rebuilds the printed form
+        ParameterGroup BuildTimeGroup()
+        {
+            ParameterGroup group = new ParameterGroup(TIME_GROUP_NAME, "Time");
+
+            _time = new TimeInput
+            {
+                Theme = _theme,
+                FrameRate = INITIAL_FRAME_RATE,
+                DisplayMode = TimeDisplayMode.Timecode,
+                DefaultValue = 0.0,
+            };
+            _time.SetValueWithoutNotify(INITIAL_TIME_FRAMES);
+            _time.RegisterValueChangedCallback(OnTimeChanged);
+            _time.Confirmed += OnTimeConfirmed;
+            group.Content.Add(BuildRow("Time", _time));
+
+            _frameRate = new StringDropdownInput(FrameRates)
+            {
+                Theme = _theme,
+                Suffix = " fps",
+            };
+            _frameRate.SetValueWithoutNotify(FrameRates[0]);
+            _frameRate.Confirmed += OnFrameRateConfirmed;
+            group.Content.Add(BuildRow("Frame rate", _frameRate));
+
+            _timecodeMode = new ButtonToggleInput
+            {
+                Theme = _theme,
+                Label = "SMPTE Timecode",
+            };
+            _timecodeMode.SetValueWithoutNotify(true);
+            _timecodeMode.Confirmed += OnTimecodeModeConfirmed;
+            group.Content.Add(BuildRow("Display", _timecodeMode));
 
             group.RefreshContentGaps();
             return group;
@@ -705,7 +780,7 @@ namespace TweeqDemo
             return group;
         }
 
-        // 外部 asmdef のカスタムウィジェットがライブラリ製の行と同じ見た目・操作感で並ぶことの実演
+        // Shows that a custom widget from an external asmdef sits in line with the library rows
         ParameterGroup BuildCustomGroup()
         {
             ParameterGroup group = new ParameterGroup(CUSTOM_GROUP_NAME, "Custom");
@@ -733,7 +808,7 @@ namespace TweeqDemo
             return group;
         }
 
-        // PaneModalTabs 相当の構成: タイトル + 縦タブ + 右寄せフッター（Done）
+        // PaneModalTabs layout: title, vertical tabs and a right-aligned footer (Done)
         TweeqModalDialog BuildSettingsDialog()
         {
             _settingsDialog = new TweeqModalDialog
@@ -770,7 +845,7 @@ namespace TweeqDemo
             general.Add(generalGrid);
             _settingsTabs.Add(general);
 
-            // モーダルの上にピッカー（ポップオーバー）が重なる構成の確認も兼ねる
+            // Also checks a picker (popover) stacking on top of the modal
             TweeqTab appearance = new TweeqTab("Appearance");
             _dialogAccent = new ColorInput();
             _dialogAccent.SetValueWithoutNotify(_theme.Accent);
@@ -780,18 +855,18 @@ namespace TweeqDemo
             appearance.Add(appearanceGrid);
             _settingsTabs.Add(appearance);
 
-            // disabled タブの見た目とスキップ（キーボード移動・既定解決）の確認用。
-            // 選択できないのはデモの意図（IsDisabled=true）で、名前でそれが伝わるようにする
+            // Checks how a disabled tab looks and how it is skipped (keyboard moves, default
+            // resolution). It is unselectable on purpose, which the label spells out
             _settingsTabs.Add(new TweeqTab("Advanced (disabled)") { Id = "advanced", IsDisabled = true });
 
             _settingsDialog.Add(_settingsTabs);
 
-            // Theme は最後に。ダイアログが backdrop / balloon / タブ配下まで配る
+            // Theme goes last: the dialog hands it to the backdrop, balloon and tab contents
             _settingsDialog.Theme = _theme;
             return _settingsDialog;
         }
 
-        // PaneModalComplex 相当の構成: フォーム本文 + Save/Cancel 均等割フッター
+        // PaneModalComplex layout: a form body with an evenly split Save / Cancel footer
         TweeqModalDialog BuildProfileDialog()
         {
             _profileDialog = new TweeqModalDialog
@@ -822,13 +897,13 @@ namespace TweeqDemo
             return _profileDialog;
         }
 
-        // 素の PaneModal 相当: キーもフッターも無く、閉じるのは所有者（この OK ボタン）だけ。
-        // 外側クリックで閉じずにバウンスする「閉じないモーダル」の体験用
+        // Plain PaneModal: no keys, no footer, and only the owner (this OK button) closes it.
+        // An outside click bounces instead of closing, which is the point of the sample
         TweeqModal BuildAboutModal()
         {
             _aboutModal = new TweeqModal();
 
-            // 素の Label は ITweeqThemed ではなくテーマ配布が当たらないので、文字色は自分で塗る
+            // A plain Label is not ITweeqThemed, so the theme never reaches it: paint text here
             Label text = new Label(
                 "tweeq UI Toolkit port\n\noriginal tweeq by Baku Hashimoto (MIT)")
             {
@@ -849,7 +924,7 @@ namespace TweeqDemo
             return _aboutModal;
         }
 
-        // 「Flash me」と narrow な「+」を 1 つの InputContainer に並べる
+        // Puts "Flash me" and the narrow "+" into one InputContainer
         Parameter BuildActionRow()
         {
             Parameter parameter = new Parameter("Action")
@@ -865,7 +940,7 @@ namespace TweeqDemo
             _flashButton.Clicked += OnFlashClicked;
             parameter.InputContainer.Add(_flashButton);
 
-            // narrow は自前の詰まった幅が持ち味なので伸ばさない
+            // narrow exists for its tight width, so it is never stretched
             _plusButton = new ButtonInput("+")
             {
                 Theme = _theme,
@@ -981,7 +1056,7 @@ namespace TweeqDemo
         {
             _searchConfirmed = value ?? string.Empty;
 
-            // 次のシャッフルは「今の値」を種に取るので、こちらにも現在値を持たせておく
+            // The next shuffle seeds from the current value, so keep this side in sync
             _shuffle?.SetValueWithoutNotify(_searchConfirmed);
             RefreshConfirmedLabel();
         }
@@ -990,7 +1065,7 @@ namespace TweeqDemo
         {
             _searchConfirmed = value ?? string.Empty;
 
-            // Dropdown 側は結果を映すだけ。通知し返すと同じ確定が 2 周する
+            // The dropdown only mirrors the result; notifying back would confirm twice
             _search?.SetValueWithoutNotify(_searchConfirmed);
             RefreshConfirmedLabel();
         }
@@ -1001,7 +1076,49 @@ namespace TweeqDemo
             RefreshConfirmedLabel();
         }
 
-        // 同じ値を引くと「押しても変わらない」ように見えるので、その時だけ隣へずらす
+        void OnTimeChanged(ChangeEvent<float> evt)
+        {
+            if (evt == null)
+            {
+                return;
+            }
+
+            _timeLive = evt.newValue;
+            RefreshConfirmedLabel();
+        }
+
+        void OnTimeConfirmed(float value)
+        {
+            _timeConfirmed = value;
+            RefreshConfirmedLabel();
+        }
+
+        // Only swaps the rate. The value is untouched, so the frame count survives the switch
+        void OnFrameRateConfirmed(string value)
+        {
+            if (_time == null
+                || !double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture,
+                    out double frameRate))
+            {
+                return;
+            }
+
+            _time.FrameRate = frameRate;
+            RefreshConfirmedLabel();
+        }
+
+        void OnTimecodeModeConfirmed(bool timecode)
+        {
+            if (_time == null)
+            {
+                return;
+            }
+
+            _time.DisplayMode = timecode ? TimeDisplayMode.Timecode : TimeDisplayMode.Frames;
+            RefreshConfirmedLabel();
+        }
+
+        // Drawing the same option looks like a dead button, so nudge to the neighbour then
         static string PickRandomEasing(string previous)
         {
             if (SearchEasings.Length == 0)
@@ -1034,7 +1151,7 @@ namespace TweeqDemo
         {
             _flashClicks++;
 
-            // 自分自身を光らせる（仕様 §3 の命令的 Flash）
+            // Flashes itself (the imperative Flash of spec section 3)
             _flashButton?.Flash();
             RefreshConfirmedLabel();
         }
@@ -1052,7 +1169,7 @@ namespace TweeqDemo
                 return;
             }
 
-            // Cancel ロールバック用の退避（m8 仕様 §B: 値の復元は利用者責務）
+            // Stash for the Cancel rollback (m8 spec B: restoring values is the caller's job)
             _dialogVsyncAtOpen = _dialogVsync != null && _dialogVsync.value;
             _dialogVolumeAtOpen = _dialogVolume != null ? _dialogVolume.value : 0f;
             _dialogAccentAtOpen = _dialogAccent != null ? _dialogAccent.value : Color.white;
@@ -1191,6 +1308,8 @@ namespace TweeqDemo
                 + " / easing " + _easingConfirmed
                 + " / search " + _searchConfirmed
                 + " / angle " + Format(_angleConfirmed) + "°"
+                + " / time " + Format(_timeConfirmed) + "F"
+                + " (live " + Format(_timeLive) + "F, " + TimeDisplay() + ")"
                 + " / text \"" + _textConfirmed + "\""
                 + " / tint #" + ColorUtility.ToHtmlStringRGBA(_tintConfirmed)
                 + " / flash " + _flashClicks
@@ -1199,6 +1318,12 @@ namespace TweeqDemo
                 + " / endpoint " + _endpointConfirmed
                 + " (live " + _endpointLive + ")"
                 + " / endpoint:port " + _endpointPortConfirmed;
+        }
+
+        // Shows how the value reads at the current rate, not the value itself
+        string TimeDisplay()
+        {
+            return _time != null ? _time.DisplayText : "-";
         }
 
         static string FruitLabel(int index)
