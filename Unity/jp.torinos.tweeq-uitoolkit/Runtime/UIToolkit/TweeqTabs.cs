@@ -87,16 +87,19 @@ namespace Tweeq.UIToolkit
 
         #region Storage
 
-        static ITweeqTabStorage _storage = TweeqTabPlayerPrefsStorage.Instance;
+        static ITweeqStorage _storage = TweeqMemoryStorage.Instance;
 
         /// <summary>
         /// Where the active tab id is persisted (shared across all <see cref="TweeqTabs"/>).
-        /// Assigning null reverts to the default <see cref="TweeqTabPlayerPrefsStorage.Instance"/>.
+        /// Defaults to the session-only <see cref="TweeqMemoryStorage.Instance"/> so nothing
+        /// hits disk unless the host opts in (assign
+        /// <see cref="TweeqPlayerPrefsStorage.Instance"/> for cross-run persistence).
+        /// Assigning null reverts to the default.
         /// </summary>
-        public static ITweeqTabStorage Storage
+        public static ITweeqStorage Storage
         {
             get => _storage;
-            set => _storage = value ?? TweeqTabPlayerPrefsStorage.Instance;
+            set => _storage = value ?? TweeqMemoryStorage.Instance;
         }
 
         /// <summary>

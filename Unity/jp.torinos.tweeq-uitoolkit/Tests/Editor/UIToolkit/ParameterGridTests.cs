@@ -16,19 +16,21 @@ namespace Tweeq.UIToolkit.Tests
         const string TEST_GROUP_NAME = "tweeq.tests.parameterGridTests.group";
 
         string _prefsKey;
+        TweeqMemoryStorage _storage;
 
         [SetUp]
         public void SetUp()
         {
             _prefsKey = ParameterGroup.PrefsKey(TEST_GROUP_NAME);
-            PlayerPrefs.DeleteKey(_prefsKey);
+            _storage = new TweeqMemoryStorage();
+            ParameterGroup.Storage = _storage;
         }
 
         [TearDown]
         public void TearDown()
         {
-            PlayerPrefs.DeleteKey(_prefsKey);
-            PlayerPrefs.Save();
+            // The swap is static, so failing to restore it would leak into other tests or the real project
+            ParameterGroup.Storage = null;
         }
 
         static Label LabelOf(Parameter parameter)
@@ -150,7 +152,7 @@ namespace Tweeq.UIToolkit.Tests
             Assume.That(
                 TweeqFonts.IsEmpty(theme.FontHeading),
                 Is.False,
-                "既定テーマの FontHeading が空。同梱フォントが Resources から読めていない");
+                "default theme's FontHeading is empty; the bundled font could not be read from Resources");
 
             ParameterHeading heading = new ParameterHeading("Vector");
             heading.Theme = theme;
@@ -194,7 +196,7 @@ namespace Tweeq.UIToolkit.Tests
             ParameterGroup group = new ParameterGroup(TEST_GROUP_NAME, "Vector");
 
             Assert.That(group.Expanded, Is.True);
-            Assert.That(PlayerPrefs.HasKey(_prefsKey), Is.False);
+            Assert.That(_storage.Get(_prefsKey, null), Is.Null);
         }
 
         [Test]
@@ -204,11 +206,11 @@ namespace Tweeq.UIToolkit.Tests
 
             group.Expanded = false;
             Assert.That(group.Expanded, Is.False);
-            Assert.That(PlayerPrefs.GetInt(_prefsKey, 1), Is.EqualTo(0));
+            Assert.That(_storage.Get(_prefsKey, "1"), Is.EqualTo("0"));
 
             group.Expanded = true;
             Assert.That(group.Expanded, Is.True);
-            Assert.That(PlayerPrefs.GetInt(_prefsKey, 0), Is.EqualTo(1));
+            Assert.That(_storage.Get(_prefsKey, "0"), Is.EqualTo("1"));
         }
 
         [Test]
@@ -234,7 +236,15 @@ namespace Tweeq.UIToolkit.Tests
 
             Assert.That(group.Expanded, Is.False);
             Assert.That(ParameterGroup.PrefsKey(string.Empty), Is.EqualTo(string.Empty));
-            Assert.That(PlayerPrefs.HasKey(_prefsKey), Is.False);
+            Assert.That(_storage.Get(_prefsKey, null), Is.Null);
+        }
+
+        [Test]
+        public void GroupStorageDefaultsToTheSessionOnlyImplementation()
+        {
+            ParameterGroup.Storage = null;
+
+            Assert.That(ParameterGroup.Storage, Is.SameAs(TweeqMemoryStorage.Instance));
         }
 
         [Test]

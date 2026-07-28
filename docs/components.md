@@ -30,9 +30,11 @@ preserved at the git tag [`vue-final`](https://github.com/torinos-yt/tweeq-UIToo
 | `Balloon` | `TweeqBalloon` | |
 | `Tooltip` | `TweeqTooltip` | Single instance, show/move delays |
 | `TweakOverlay` | per-widget overlays | Drawn on the shared `TweeqOverlayLayer` |
+| `Timeline` | `TweeqTimeline` | Zoom/pan frame viewport; hosts pin content via `PinItem`; optional In/Out band |
+| `Ruler` | `TweeqRuler` | Ticks + labels, drag-to-value; `TweeqRulerScales` adds numeric/timecode label thinning |
 | `PaneModal` | `TweeqModal` | Centered balloon, emphasize bounce, non-dismissing |
 | `PaneModalComplex` / `PaneModalTabs` | `TweeqModalDialog` (+ `TweeqTabs`) | Title, scrolling body, Cancel/Confirm footer, Escape/Enter |
-| `Tabs` | `TweeqTabs` / `TweeqTab` | Keyboard navigation, persistence via `ITweeqTabStorage` |
+| `Tabs` | `TweeqTabs` / `TweeqTab` | Keyboard navigation, persistence via `ITweeqStorage` (session-only by default) |
 | `TweeqProvider` / `useTweeq` / `theme` | `TweeqRoot` + `TweeqTheme` | Theme generation and distribution; USS `--tq-*` seeds |
 | `validator` | `NumberValidator` (`Tweeq.Core`) | clamp → quantize composition |
 
@@ -44,7 +46,6 @@ All widgets are `[UxmlElement]`s and can be placed from UXML/UI Builder
 | Original | Status |
 | --- | --- |
 | `PaneSplit`, `PaneFloating` | Planned as a separate workspace assembly (split/floating panes + layout persistence). Will be designed against concrete host-app use cases. |
-| `Timeline`, `Ruler` | Planned: generic zoom/pan frame viewport and ruler. |
 | `InputCubicBezier` | Planned. |
 | `InputDrum` | Ported when a concrete need appears. |
 

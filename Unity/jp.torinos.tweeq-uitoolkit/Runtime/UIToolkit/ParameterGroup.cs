@@ -18,10 +18,10 @@ namespace Tweeq.UIToolkit
     {
         #region Constants
 
-        /// <summary>PlayerPrefs key prefix for the expanded/collapsed state.</summary>
+        /// <summary>Storage key prefix for the expanded/collapsed state.</summary>
         public const string PREFS_PREFIX = "tweeq.";
 
-        /// <summary>PlayerPrefs key suffix for the expanded/collapsed state.</summary>
+        /// <summary>Storage key suffix for the expanded/collapsed state.</summary>
         public const string PREFS_SUFFIX = ".expanded";
 
         const float CHEVRON_SIZE = 12f;
@@ -37,6 +37,25 @@ namespace Tweeq.UIToolkit
         // Tolerance (px) for treating "the pinned height" as already at the target height. A transition
         // under 1px isn't visible, so rather than waiting on a transition that won't run, open fully at once
         const float PIN_EPSILON = 0.5f;
+
+        #endregion
+
+        #region Storage
+
+        static ITweeqStorage _storage = TweeqMemoryStorage.Instance;
+
+        /// <summary>
+        /// Where the expanded/collapsed state is persisted (shared across all
+        /// <see cref="ParameterGroup"/>s). Defaults to the session-only
+        /// <see cref="TweeqMemoryStorage.Instance"/> so nothing hits disk unless the host opts in
+        /// (assign <see cref="TweeqPlayerPrefsStorage.Instance"/> for cross-run persistence).
+        /// Assigning null reverts to the default.
+        /// </summary>
+        public static ITweeqStorage Storage
+        {
+            get => _storage;
+            set => _storage = value ?? TweeqMemoryStorage.Instance;
+        }
 
         #endregion
 
@@ -509,16 +528,15 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // PlayerPrefs can be unavailable in batch mode or a sandbox.
+            // The backing store can be unavailable in batch mode or a sandbox.
             // It isn't worth throwing an exception that halts the caller just to save the collapsed state
             try
             {
-                PlayerPrefs.SetInt(key, _expanded ? 1 : 0);
-                PlayerPrefs.Save();
+                _storage.Set(key, _expanded ? "1" : "0");
             }
             catch (Exception exception)
             {
-                Debug.LogWarning($"{nameof(ParameterGroup)}: 開閉状態を保存できない（{key}）: {exception.Message}");
+                Debug.LogWarning($"{nameof(ParameterGroup)}: could not save the expanded state ({key}): {exception.Message}");
             }
         }
 
@@ -533,17 +551,18 @@ namespace Tweeq.UIToolkit
 
             try
             {
-                if (!PlayerPrefs.HasKey(key))
+                string stored = _storage.Get(key, null);
+                if (stored == null)
                 {
                     return false;
                 }
 
-                expanded = PlayerPrefs.GetInt(key, 1) != 0;
+                expanded = stored != "0";
                 return true;
             }
             catch (Exception exception)
             {
-                Debug.LogWarning($"{nameof(ParameterGroup)}: 開閉状態を読めない（{key}）: {exception.Message}");
+                Debug.LogWarning($"{nameof(ParameterGroup)}: could not read the expanded state ({key}): {exception.Message}");
                 return false;
             }
         }

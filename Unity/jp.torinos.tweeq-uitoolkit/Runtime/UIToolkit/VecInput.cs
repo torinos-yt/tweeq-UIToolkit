@@ -108,14 +108,14 @@ namespace Tweeq.UIToolkit
         {
             if (value == null)
             {
-                Debug.LogWarning("VecInput: null は設定できないため無視した。");
+                Debug.LogWarning("VecInput: ignored a null value assignment.");
                 return false;
             }
 
             if (value.Length != this.Dimensions)
             {
                 Debug.LogWarning(
-                    $"VecInput: 長さ {value.Length} は軸数 {this.Dimensions} と一致しないため無視した。");
+                    $"VecInput: ignored a value of length {value.Length} (expected {this.Dimensions} axes).");
                 return false;
             }
 

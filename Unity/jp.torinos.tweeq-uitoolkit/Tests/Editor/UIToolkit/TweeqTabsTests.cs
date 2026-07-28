@@ -21,7 +21,7 @@ namespace Tweeq.UIToolkit.Tests
         #region Helpers
 
         /// <summary>In-memory storage for tests. Never touches real PlayerPrefs.</summary>
-        sealed class MemoryStorage : ITweeqTabStorage
+        sealed class MemoryStorage : ITweeqStorage
         {
             public readonly Dictionary<string, string> Values = new Dictionary<string, string>();
             public readonly List<string> Deleted = new List<string>();
@@ -119,7 +119,7 @@ namespace Tweeq.UIToolkit.Tests
             Assert.IsTrue(tabs.Tabs[0].IsActive);
             Assert.IsFalse(tabs.Tabs[1].IsActive);
             Assert.AreEqual(DisplayStyle.None, tabs.Tabs[1].style.display.value,
-                "非アクティブは display:none（意図的逸脱）");
+                "inactive tabs use display:none (intentional deviation)");
         }
 
         [Test]
@@ -149,7 +149,7 @@ namespace Tweeq.UIToolkit.Tests
             Assert.AreEqual("same", tabs.ActiveId);
             Assert.IsNull(dropped.Owner);
             Assert.AreEqual(DisplayStyle.None, dropped.style.display.value,
-                "弾いたパネルが重なって見えないこと");
+                "the rejected panel must not overlap and show through");
         }
 
         [Test]
@@ -161,7 +161,7 @@ namespace Tweeq.UIToolkit.Tests
             tabs.Add(first);
             tabs.Add(second);
 
-            Assert.AreEqual(0, tabs.Tabs.Count, "Add だけでは登録されない");
+            Assert.AreEqual(0, tabs.Tabs.Count, "Add alone does not register");
 
             tabs.SyncTabsFromHierarchy();
 
@@ -178,7 +178,7 @@ namespace Tweeq.UIToolkit.Tests
             first.DisconnectFromTabs();
 
             Assert.AreEqual(2, tabs.Tabs.Count);
-            Assert.AreEqual("second", tabs.ActiveId, "消えたアクティブタブの次が選ばれる");
+            Assert.AreEqual("second", tabs.ActiveId, "the tab after the removed active tab gets selected");
         }
 
         [Test]
@@ -192,7 +192,7 @@ namespace Tweeq.UIToolkit.Tests
             third.DisconnectFromTabs();
 
             Assert.IsNull(third.Owner);
-            Assert.IsTrue(third.IsActive, "親から外れたら単独の可視要素へ戻る");
+            Assert.IsTrue(third.IsActive, "detaching from the parent reverts it to a standalone visible element");
             Assert.AreEqual(DisplayStyle.Flex, third.style.display.value);
         }
 
@@ -248,7 +248,7 @@ namespace Tweeq.UIToolkit.Tests
 
             only.Id = "after";
 
-            Assert.AreEqual("after", tabs.ActiveId, "id が変わっても選択を失わない");
+            Assert.AreEqual("after", tabs.ActiveId, "the selection is not lost when the id changes");
         }
 
         #endregion
@@ -323,7 +323,7 @@ namespace Tweeq.UIToolkit.Tests
 
             Attach(tabs, MakeTab("Fourth"));
 
-            Assert.AreEqual("third", tabs.ActiveId, "有効な選択は増減で動かさない");
+            Assert.AreEqual("third", tabs.ActiveId, "a valid selection is not moved by additions or removals");
         }
 
         #endregion
@@ -400,13 +400,13 @@ namespace Tweeq.UIToolkit.Tests
             Attach(tabs, MakeTab("First"), MakeTab("Blocked", disabled: true), MakeTab("Last"));
 
             tabs.MoveSelection(1);
-            Assert.AreEqual("last", tabs.ActiveId, "disabled を飛ばす");
+            Assert.AreEqual("last", tabs.ActiveId, "skips the disabled tab");
 
             tabs.MoveSelection(1);
-            Assert.AreEqual("first", tabs.ActiveId, "末尾から先頭へラップ");
+            Assert.AreEqual("first", tabs.ActiveId, "wraps from the end to the start");
 
             tabs.MoveSelection(-1);
-            Assert.AreEqual("last", tabs.ActiveId, "先頭から末尾へラップ");
+            Assert.AreEqual("last", tabs.ActiveId, "wraps from the start to the end");
         }
 
         [Test]
@@ -488,7 +488,7 @@ namespace Tweeq.UIToolkit.Tests
             Assert.IsTrue(tabs.GetHeader(0).focusable);
 
             Assert.AreEqual(PickingMode.Ignore, tabs.GetHeader(1).pickingMode,
-                "hover に反応させない");
+                "must not respond to hover");
             Assert.IsFalse(tabs.GetHeader(1).focusable);
         }
 
@@ -560,7 +560,7 @@ namespace Tweeq.UIToolkit.Tests
 
             Assert.AreEqual("third", tabs.ActiveId);
             Assert.AreEqual("third", _storage.Values[key]);
-            Assert.AreEqual(0, _storage.SetCount, "解決による暫定選択は永続化しない");
+            Assert.AreEqual(0, _storage.SetCount, "a provisional selection from resolution is not persisted");
         }
 
         [Test]
@@ -626,7 +626,42 @@ namespace Tweeq.UIToolkit.Tests
         {
             TweeqTabs.Storage = null;
 
-            Assert.AreSame(TweeqTabPlayerPrefsStorage.Instance, TweeqTabs.Storage);
+            Assert.AreSame(TweeqMemoryStorage.Instance, TweeqTabs.Storage);
+        }
+
+        [Test]
+        public void MemoryStorage_KeepsValuesOnlyInMemory()
+        {
+            TweeqMemoryStorage storage = new TweeqMemoryStorage();
+
+            Assert.AreEqual("fallback", storage.Get("tweeq.test.key", "fallback"));
+
+            storage.Set("tweeq.test.key", "general");
+            Assert.AreEqual("general", storage.Get("tweeq.test.key", "fallback"));
+
+            storage.Delete("tweeq.test.key");
+            Assert.AreEqual("fallback", storage.Get("tweeq.test.key", "fallback"));
+
+            storage.Set("tweeq.test.key", "general");
+            storage.Clear();
+            Assert.AreEqual("fallback", storage.Get("tweeq.test.key", "fallback"));
+        }
+
+        [Test]
+        public void MemoryStorage_IgnoresEmptyKeysAndNullValues()
+        {
+            TweeqMemoryStorage storage = new TweeqMemoryStorage();
+
+            storage.Set(null, "x");
+            storage.Set(string.Empty, "x");
+            Assert.AreEqual("d", storage.Get(null, "d"));
+            Assert.AreEqual("d", storage.Get(string.Empty, "d"));
+
+            storage.Set("k", null);
+            Assert.AreEqual(string.Empty, storage.Get("k", "d"));
+
+            storage.Delete(null);
+            storage.Delete(string.Empty);
         }
 
         #endregion
@@ -645,7 +680,7 @@ namespace Tweeq.UIToolkit.Tests
             Assert.DoesNotThrow(() => tab.DisconnectFromTabs());
 
             Assert.IsNull(tab.Owner);
-            Assert.IsTrue(tab.IsActive, "単独でも見えたまま");
+            Assert.IsTrue(tab.IsActive, "stays visible even standalone");
         }
 
         [Test]
@@ -686,7 +721,7 @@ namespace Tweeq.UIToolkit.Tests
             // parent returns the logical parent (the owner of contentContainer, i.e. TweeqTabs
             // itself), so we check the actual storage location via hierarchy.parent
             Assert.AreEqual("tweeq-tabs-panels", tab.hierarchy.parent.name,
-                "UXML の子はパネル層へ入る（ヘッダーとは混ざらない）");
+                "a UXML child goes into the panel layer (not mixed in with the header)");
         }
 
         [Test]
@@ -717,7 +752,7 @@ namespace Tweeq.UIToolkit.Tests
             Assert.AreEqual(2, tabs.hierarchy.childCount);
             Assert.IsInstanceOf<ScrollView>(tabs.hierarchy.ElementAt(1));
             Assert.AreEqual("tweeq-tabs-panels", tabs.Tabs[0].hierarchy.parent.name,
-                "ScrollView を噛ませてもパネル層の中身は動かない");
+                "inserting a ScrollView doesn't move the contents of the panel layer");
         }
 
         [Test]
@@ -730,7 +765,7 @@ namespace Tweeq.UIToolkit.Tests
 
             Assert.AreEqual(FlexDirection.Column, tabs.style.flexDirection.value);
             Assert.AreEqual("tweeq-tabs-panels", tabs.Tabs[0].hierarchy.parent.name);
-            Assert.AreEqual(2, tabs.hierarchy.childCount, "ScrollView は外れている");
+            Assert.AreEqual(2, tabs.hierarchy.childCount, "the ScrollView has been removed");
         }
 
         [Test]
@@ -743,8 +778,8 @@ namespace Tweeq.UIToolkit.Tests
             TweeqTheme custom = TweeqTheme.Light();
             tabs.Theme = custom;
 
-            Assert.AreSame(custom, tabs.Tabs[0].Theme, "TweeqTab は ITweeqThemed として受け取る");
-            Assert.AreSame(custom, probe.Theme, "そこから中身へ転送する");
+            Assert.AreSame(custom, tabs.Tabs[0].Theme, "TweeqTab receives it as an ITweeqThemed");
+            Assert.AreSame(custom, probe.Theme, "and forwards it to its content from there");
         }
 
         [Test]
@@ -785,21 +820,21 @@ namespace Tweeq.UIToolkit.Tests
         static void AssertUxmlElement(Type type)
         {
             Assert.IsNotEmpty(type.GetCustomAttributes(typeof(UxmlElementAttribute), false),
-                $"{type.Name}: [UxmlElement] が無いと UXML から使えない");
+                $"{type.Name}: without [UxmlElement] it can't be used from UXML");
             Assert.IsNotNull(
                 type.GetNestedType("UxmlSerializedData", BindingFlags.Public | BindingFlags.NonPublic),
-                $"{type.Name}: UxmlSerializedData が生成されていない（partial 宣言漏れ）");
+                $"{type.Name}: UxmlSerializedData was not generated (missing partial declaration)");
             Assert.IsNotNull(type.GetConstructor(Type.EmptyTypes),
-                $"{type.Name}: UXML からの生成にはパラメータなしコンストラクタが必要");
+                $"{type.Name}: construction from UXML requires a parameterless constructor");
         }
 
         static void AssertUxmlAttribute(Type type, string propertyName)
         {
             PropertyInfo property = type.GetProperty(propertyName);
 
-            Assert.IsNotNull(property, $"{type.Name}.{propertyName} が無い");
+            Assert.IsNotNull(property, $"{type.Name}.{propertyName} is missing");
             Assert.IsNotEmpty(property.GetCustomAttributes(typeof(UxmlAttributeAttribute), false),
-                $"{type.Name}.{propertyName} に [UxmlAttribute] が無い");
+                $"{type.Name}.{propertyName} has no [UxmlAttribute]");
         }
 
         #endregion

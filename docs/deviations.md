@@ -53,6 +53,27 @@ Web capabilities without a Unity equivalent, replaced rather than emulated:
   persists the choice app-wide. Clicking the field selects all for editing
   (the original selects the clicked digit's range).
 
+## Timeline
+
+- **Vue's slot composition becomes `contentContainer` + `PinItem`.** Hosts add
+  arbitrary elements and pin them to a frame (optionally with a length in
+  frames); the timeline keeps them positioned across pan/zoom. Self-positioning
+  via `VisibleRangeChanged` + `FrameToLocalX` still works like the original's
+  slot props.
+- **Vertical wheel pans horizontally** (the original expects trackpad
+  horizontal scroll); `Alt` + wheel zooms, anchored at the cursor, as in the
+  original. `WheelSensitivity` (default 1 = faithful coefficients) compensates
+  for Unity's much smaller wheel deltas.
+- **Middle-mouse drag pans** — a DCC convention the original doesn't have.
+- **Optional In/Out band built in** (`InPoint` / `OutPoint` / `FocusInOut()`):
+  highlight between the points, dimming outside, accent edge lines. Display and
+  focus only — setting the points is the host's job. The original has no such
+  concept.
+- **`TweeqRuler` labels**: a `RulerScale` without a label draws a tick only
+  (the original prints the value), and `TweeqRulerScales.Build` /
+  `BuildTimecode` provide zoom-aware label thinning the original leaves to the
+  host.
+
 ## Modals
 
 - **The backdrop dims (background @ 50 %) and blocks pointers.** The original
@@ -75,8 +96,12 @@ Web capabilities without a Unity equivalent, replaced rather than emulated:
 - `VecInput` (`float[]`) uses **copy semantics** on get/set to avoid exposing a
   mutable internal buffer; the typed `Vec2/3/4Input` variants use structs and
   are allocation-free during gestures.
-- Persistence (collapsed groups, active tabs) goes through **`PlayerPrefs`** by
-  default, replaceable via `ITweeqTabStorage`.
+- **Persistence is session-only by default.** Active tabs and collapsed
+  parameter groups are remembered in memory (`TweeqMemoryStorage`) — the
+  library writes nothing to disk unless the host opts in by assigning
+  `TweeqPlayerPrefsStorage.Instance` (or a custom `ITweeqStorage`) to
+  `TweeqTabs.Storage` / `ParameterGroup.Storage`. The original persists to
+  `localStorage` unconditionally.
 
 ## Visual details
 

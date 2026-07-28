@@ -102,9 +102,15 @@ Nested `TweeqRoot`s form independent theme boundaries.
 
 ## Persistence
 
-Collapsible `ParameterGroup`s and `TweeqTabs` remember their state via
-`PlayerPrefs` under `tweeq.*` keys. Tab persistence can be redirected by
-assigning a custom `ITweeqTabStorage` to `TweeqTabs.Storage`.
+`TweeqTabs` (active tab) and `ParameterGroup` (expanded state) remember their
+state under `tweeq.*` keys — in memory only by default: the state survives for
+the current session and nothing is written to disk. To persist across runs,
+opt in:
+
+```csharp
+TweeqTabs.Storage = TweeqPlayerPrefsStorage.Instance;        // or your own ITweeqStorage
+ParameterGroup.Storage = TweeqPlayerPrefsStorage.Instance;
+```
 
 ## Assemblies
 
