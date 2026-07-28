@@ -120,6 +120,6 @@ If you find the original project useful, consider
 
 ## License
 
-MIT — original work © Baku Hashimoto, Unity port © torinos.
+MIT — original work © Baku Hashimoto.
 Bundled third-party assets (Geist font, Radix color scales) are listed in the
 package's `Third Party Notices.md`.
