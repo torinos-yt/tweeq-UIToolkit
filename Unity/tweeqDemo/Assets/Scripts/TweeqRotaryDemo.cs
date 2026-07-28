@@ -1,5 +1,6 @@
 using System.Globalization;
 using Tweeq.UIToolkit;
+using TweeqDemo.CustomWidgets;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -39,6 +40,11 @@ namespace TweeqDemo
         const string BOOLEAN_GROUP_NAME = "tweeqDemo.boolean";
         const string SELECT_GROUP_NAME = "tweeqDemo.select";
         const string DIALOG_GROUP_NAME = "tweeqDemo.dialog";
+        const string CUSTOM_GROUP_NAME = "tweeqDemo.custom";
+
+        // 外部 asmdef 製ウィジェット（EndpointInput）の実演用の初期値
+        const string INITIAL_ENDPOINT = "192.168.0.1";
+        const string INITIAL_ENDPOINT_PORT = "10.0.0.8:8080";
 
         // Vue PaneModalTabs の width:44rem は root font-size 依存の曖昧値なので、
         // デザイン単位 rem=12 換算の 528px を採用（m8-modal-tabs-spec.md §E）
@@ -120,6 +126,10 @@ namespace TweeqDemo
         StringInput _profileName;
         NumberInput _profileAge;
 
+        // 外部 asmdef（Tweeq.Demo.CustomWidgets）で作ったカスタムウィジェットの実演
+        EndpointInput _endpoint;
+        EndpointInput _endpointWithPort;
+
         // 素の PaneModal 風（閉じる責務は所有者・外側クリックはバウンスのみ）のサンプル
         ButtonInput _openAboutButton;
         TweeqModal _aboutModal;
@@ -153,6 +163,10 @@ namespace TweeqDemo
 
         string _profileNameAtOpen = string.Empty;
         float _profileAgeAtOpen;
+
+        string _endpointConfirmed = INITIAL_ENDPOINT;
+        string _endpointPortConfirmed = INITIAL_ENDPOINT_PORT;
+        string _endpointLive = INITIAL_ENDPOINT;
 
         #endregion
 
@@ -358,6 +372,20 @@ namespace TweeqDemo
                 _aboutModal = null;
             }
 
+            if (_endpoint != null)
+            {
+                _endpoint.UnregisterValueChangedCallback(OnEndpointChanged);
+                _endpoint.Confirmed -= OnEndpointConfirmed;
+                _endpoint = null;
+            }
+
+            if (_endpointWithPort != null)
+            {
+                _endpointWithPort.UnregisterValueChangedCallback(OnEndpointPortChanged);
+                _endpointWithPort.Confirmed -= OnEndpointPortConfirmed;
+                _endpointWithPort = null;
+            }
+
             _valueLabel = null;
             _confirmedLabel = null;
 
@@ -483,6 +511,7 @@ namespace TweeqDemo
             grid.Add(BuildBooleanGroup());
             grid.Add(BuildSelectGroup());
             grid.Add(BuildDialogGroup());
+            grid.Add(BuildCustomGroup());
 
             // Theme は Grid が配下の Parameter / Heading / Group へ配る
             grid.Theme = _theme;
@@ -671,6 +700,34 @@ namespace TweeqDemo
             _openAboutButton.style.flexGrow = 1f;
             _openAboutButton.Clicked += OnOpenAboutClicked;
             group.Content.Add(BuildRow("About", _openAboutButton));
+
+            group.RefreshContentGaps();
+            return group;
+        }
+
+        // 外部 asmdef のカスタムウィジェットがライブラリ製の行と同じ見た目・操作感で並ぶことの実演
+        ParameterGroup BuildCustomGroup()
+        {
+            ParameterGroup group = new ParameterGroup(CUSTOM_GROUP_NAME, "Custom");
+
+            _endpoint = new EndpointInput
+            {
+                Theme = _theme,
+            };
+            _endpoint.SetValueWithoutNotify(INITIAL_ENDPOINT);
+            _endpoint.RegisterValueChangedCallback(OnEndpointChanged);
+            _endpoint.Confirmed += OnEndpointConfirmed;
+            group.Content.Add(BuildRow("Endpoint", _endpoint));
+
+            _endpointWithPort = new EndpointInput
+            {
+                Theme = _theme,
+                PortEnabled = true,
+            };
+            _endpointWithPort.SetValueWithoutNotify(INITIAL_ENDPOINT_PORT);
+            _endpointWithPort.RegisterValueChangedCallback(OnEndpointPortChanged);
+            _endpointWithPort.Confirmed += OnEndpointPortConfirmed;
+            group.Content.Add(BuildRow("Endpoint:Port", _endpointWithPort));
 
             group.RefreshContentGaps();
             return group;
@@ -1065,6 +1122,39 @@ namespace TweeqDemo
             }
         }
 
+        void OnEndpointChanged(ChangeEvent<string> evt)
+        {
+            if (evt == null)
+            {
+                return;
+            }
+
+            _endpointLive = evt.newValue;
+            RefreshConfirmedLabel();
+        }
+
+        void OnEndpointConfirmed(string value)
+        {
+            _endpointConfirmed = value;
+            RefreshConfirmedLabel();
+        }
+
+        void OnEndpointPortChanged(ChangeEvent<string> evt)
+        {
+            if (evt == null)
+            {
+                return;
+            }
+
+            RefreshConfirmedLabel();
+        }
+
+        void OnEndpointPortConfirmed(string value)
+        {
+            _endpointPortConfirmed = value;
+            RefreshConfirmedLabel();
+        }
+
         void RefreshConfirmedLabel()
         {
             if (_confirmedLabel == null)
@@ -1105,7 +1195,10 @@ namespace TweeqDemo
                 + " / tint #" + ColorUtility.ToHtmlStringRGBA(_tintConfirmed)
                 + " / flash " + _flashClicks
                 + " / plus " + _plusClicks
-                + " / dialog " + _dialogResult;
+                + " / dialog " + _dialogResult
+                + " / endpoint " + _endpointConfirmed
+                + " (live " + _endpointLive + ")"
+                + " / endpoint:port " + _endpointPortConfirmed;
         }
 
         static string FruitLabel(int index)

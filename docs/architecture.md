@@ -89,3 +89,28 @@ theme boundaries.
 to numeric fields, headings, and code/hex text. The general UI font is left
 unset on purpose, falling back to the panel's default — the Unity analogue of
 the original's `system-ui` stack.
+
+## Extending
+
+Custom widgets living in a host project's own assembly are supported as
+first-class citizens — the package has no `internal` gates, and the pieces a
+widget author needs are public:
+
+- **`ITweeqThemed`** — implement it and the widget receives its `TweeqTheme`
+  automatically wherever it sits under a `TweeqRoot`, `Parameter`, modal, or
+  any other tweeq container (`TweeqThemeDistribution` walks the tree
+  structurally, not by concrete type).
+- **`ITweeqInputBox`** — implement it to participate in `InputGroup`'s
+  corner fusion like any built-in widget.
+- **`TweeqInputBoxStyles`** — the shared input-box chrome: fused corner radii,
+  border helpers, hover background resolution, background transitions.
+- **`TweeqScrubManipulator`** — drag-to-scrub pointer wiring with the standard
+  drag thresholds (3 px mouse / 5 px pen+touch), Escape cancel, and
+  click-vs-scrub discrimination. Pair it with `Tweeq.Core.TweakGesture` for
+  the sensitivity math and `NumberValidator` for clamp/quantize.
+- **`ITweeqConfirmable<T>`** — the one-commit-per-edit-session event contract.
+
+A complete worked example — `EndpointInput`, an IPv4 endpoint field with four
+scrubbable octet segments and an optional port — lives in the demo project
+(`Unity/tweeqDemo/Assets/Scripts/CustomWidgets/`) in its own assembly,
+built against the public API only.

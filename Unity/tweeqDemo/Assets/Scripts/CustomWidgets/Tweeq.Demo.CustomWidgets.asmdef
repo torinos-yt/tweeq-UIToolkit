@@ -1,0 +1,17 @@
+{
+    "name": "Tweeq.Demo.CustomWidgets",
+    "rootNamespace": "TweeqDemo.CustomWidgets",
+    "references": [
+        "Tweeq.Core",
+        "Tweeq.UIToolkit"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

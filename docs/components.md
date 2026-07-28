@@ -61,3 +61,9 @@ have no sensible Unity equivalent:
 - `InputCubicBezier`, `InputComplex`
 - `PaneExpandable` — collapsible groups are covered by `ParameterGroup`
 - `stores` (application state) — out of a widget library's responsibility
+
+## Custom widgets
+
+Anything missing can be built outside the package with the same look and
+feel — see [Extending](architecture.md#extending) and the `EndpointInput`
+sample in the demo project.
