@@ -521,13 +521,24 @@ namespace TweeqDemo
             _root.Clear();
             _root.style.flexGrow = 1f;
             _root.style.flexDirection = FlexDirection.Column;
-            _root.style.justifyContent = Justify.Center;
-            _root.style.alignItems = Align.Center;
             _root.style.backgroundColor = _theme.Background;
 
             // feedback-fixes-01.md C-3: arrow keys drive values only on this panel. That is not
             // the library default, so the application opts in
             TweeqNavigation.DisableArrowFocusNavigation(_root);
+
+            // The demo outgrew a single screen; a vertical ScrollView keeps every group reachable.
+            // Content centers itself horizontally; the safe padding keeps focus rings (inset -3px)
+            // clear of the viewport clip (the ScrollView-clipping lesson from the modal work).
+            ScrollView scroll = new ScrollView(ScrollViewMode.Vertical);
+            scroll.style.flexGrow = 1f;
+            scroll.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            scroll.contentContainer.style.alignItems = Align.Center;
+            scroll.contentContainer.style.paddingTop = GAP * 2f;
+            scroll.contentContainer.style.paddingBottom = GAP * 2f;
+            scroll.contentContainer.style.paddingLeft = GAP;
+            scroll.contentContainer.style.paddingRight = GAP;
+            _root.Add(scroll);
 
             _rotary = new RotaryInput
             {
@@ -536,14 +547,14 @@ namespace TweeqDemo
             };
             _rotary.SetValueWithoutNotify(INITIAL_VALUE);
             _rotary.RegisterValueChangedCallback(OnValueChanged);
-            _root.Add(_rotary);
+            scroll.Add(_rotary);
 
             _valueLabel = new Label(FormatAngle(_rotary.value));
             _valueLabel.style.marginTop = GAP;
             _valueLabel.style.color = _theme.Text;
-            _root.Add(_valueLabel);
+            scroll.Add(_valueLabel);
 
-            _root.Add(BuildParameterSection());
+            scroll.Add(BuildParameterSection());
 
             // The modal bodies draw nothing in the tree; Open moves them onto the overlay layer
             _root.Add(BuildSettingsDialog());
