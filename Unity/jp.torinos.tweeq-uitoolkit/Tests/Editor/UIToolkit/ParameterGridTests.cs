@@ -263,6 +263,20 @@ namespace Tweeq.UIToolkit.Tests
             Assert.That(clip.style.maxHeight.value.value, Is.EqualTo(0f).Within(0.01f));
         }
 
+        [Test]
+        public void GroupContentLeavesRenderingWhileCollapsed()
+        {
+            ParameterGroup group = new ParameterGroup(TEST_GROUP_NAME, "Vector");
+
+            // Clipping is not enough under a GroupTransform ancestor (ScrollView content),
+            // so the collapsed end state must remove the content from rendering entirely
+            group.Expanded = false;
+            Assert.That(group.Content.style.display.value, Is.EqualTo(DisplayStyle.None));
+
+            group.Expanded = true;
+            Assert.That(group.Content.style.display.keyword, Is.EqualTo(StyleKeyword.Null));
+        }
+
         #endregion
     }
 }

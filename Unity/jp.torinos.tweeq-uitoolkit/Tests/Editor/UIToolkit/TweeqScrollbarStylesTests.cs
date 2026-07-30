@@ -44,6 +44,24 @@ namespace Tweeq.UIToolkit.Tests
         }
 
         [Test]
+        public void ApplySlim_ClearsTheGroupTransformHintOnTheContentContainer()
+        {
+            ScrollView scroll = new ScrollView(ScrollViewMode.Vertical);
+            Assert.That(
+                scroll.contentContainer.usageHints & UsageHints.GroupTransform,
+                Is.EqualTo(UsageHints.GroupTransform),
+                "precondition: ScrollView tags its content container with GroupTransform");
+
+            TweeqScrollbarStyles.ApplySlim(scroll, TweeqTheme.Dark());
+
+            // Text and Painter2D content under a group-transform escapes descendant
+            // overflow:hidden clippers, which breaks ParameterGroup's collapse
+            Assert.That(
+                scroll.contentContainer.usageHints & UsageHints.GroupTransform,
+                Is.EqualTo(UsageHints.None));
+        }
+
+        [Test]
         public void ApplySlim_IgnoresNulls()
         {
             Assert.DoesNotThrow(() => TweeqScrollbarStyles.ApplySlim(null, TweeqTheme.Dark()));

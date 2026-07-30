@@ -270,6 +270,10 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
+            // The fully-collapsed end state removes content from rendering (see ApplyEndState),
+            // so bring it back before animating in either direction
+            _content.style.display = StyleKeyword.Null;
+
             // UI Toolkit transitions only interpolate from "the value resolved on the previous frame" to
             // "the new value". Writing the target value within the same frame skips interpolation, whether
             // starting from none(auto) or from a mid-transition value.
@@ -307,6 +311,10 @@ namespace Tweeq.UIToolkit
             {
                 _clip.style.paddingTop = 0f;
                 _clip.style.maxHeight = 0f;
+
+                // The closing side also needs a finisher: the end state hides the content,
+                // which mere clipping can't guarantee (see ApplyEndState)
+                ScheduleFinish();
                 return;
             }
 
@@ -334,7 +342,7 @@ namespace Tweeq.UIToolkit
             _clip.style.maxHeight = target;
 
             // The fallback counts from this moment the target value was written
-            ScheduleFinishExpand();
+            ScheduleFinish();
         }
 
         // The final state with no animation involved. If expanded, remove the max-height constraint
@@ -344,6 +352,7 @@ namespace Tweeq.UIToolkit
 
             if (_expanded)
             {
+                _content.style.display = StyleKeyword.Null;
                 _clip.style.paddingTop = gap;
                 _clip.style.maxHeight = StyleKeyword.None;
                 _clip.style.overflow = Overflow.Visible;
@@ -353,6 +362,15 @@ namespace Tweeq.UIToolkit
                 _clip.style.paddingTop = 0f;
                 _clip.style.maxHeight = 0f;
                 _clip.style.overflow = Overflow.Hidden;
+
+                // Clipping alone can't be trusted here: under an ancestor tagged with
+                // UsageHints.GroupTransform (ScrollView's content container) text and
+                // Painter2D content escapes this overflow:hidden, so the collapsed rows
+                // stayed readable. display:none removes them from rendering and picking
+                // regardless of the host hierarchy. visibility:hidden is not enough —
+                // children that set Visibility.Visible inline (NumberInput's bar) would
+                // override the inherited value
+                _content.style.display = DisplayStyle.None;
             }
         }
 
@@ -364,25 +382,22 @@ namespace Tweeq.UIToolkit
             _finishItem = null;
         }
 
-        void ScheduleFinishExpand()
+        void ScheduleFinish()
         {
             long delay = (long)(_theme.HoverTransitionDuration * 1000f) + FINISH_FALLBACK_MARGIN_MS;
-            _finishItem = this.schedule.Execute(FinishExpand).StartingIn(delay);
+            _finishItem = this.schedule.Execute(FinishTransition).StartingIn(delay);
         }
 
-        // Remove the max-height constraint once fully open, so growth of the content afterward is followed
-        void FinishExpand()
+        // Settle whichever direction is current: expanding removes the max-height constraint so
+        // later content growth is followed; collapsing hides the content. Applying the *current*
+        // state (rather than the direction that scheduled this) is safe because reversals cancel
+        // the pending item and schedule a fresh one
+        void FinishTransition()
         {
             _finishItem?.Pause();
             _finishItem = null;
 
-            if (!_expanded)
-            {
-                return;
-            }
-
-            _clip.style.maxHeight = StyleKeyword.None;
-            _clip.style.overflow = Overflow.Visible;
+            ApplyEndState();
         }
 
         float MeasuredContentHeight()
@@ -413,20 +428,20 @@ namespace Tweeq.UIToolkit
             // TransitionEndEvent bubbles, so this fires every time an input field inside content
             // (e.g. a background-color transition) finishes a transition. Check target so the
             // animation isn't cut short by those
-            if (evt == null || !ReferenceEquals(evt.target, _clip) || !_expanded)
+            if (evt == null || !ReferenceEquals(evt.target, _clip))
             {
                 return;
             }
 
-            // Ignore anything that isn't the end of the expand transition we started. If we opened
-            // fully right after cutting a close transition short with a pin, or at the end of the
-            // padding-top transition from an instant-open, the opening animation would appear skipped
+            // Ignore anything that isn't the end of a transition we started. If we settled
+            // right after cutting a transition short with a pin, or at the end of the
+            // padding-top transition from an instant-open, the animation would appear skipped
             if (_finishItem == null)
             {
                 return;
             }
 
-            FinishExpand();
+            FinishTransition();
         }
 
         void OnContentGeometryChanged(GeometryChangedEvent evt)

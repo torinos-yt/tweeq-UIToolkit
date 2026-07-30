@@ -28,6 +28,17 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
+            // ScrollView tags its content container with GroupTransform for cheap scrolling,
+            // but text and Painter2D content under a group-transform escapes descendant
+            // overflow:hidden clippers (ParameterGroup's collapse clip leaked its rows this
+            // way). tweeq panels rely on that nested clipping, so correctness wins over the
+            // scroll-mesh reuse. The hint is set in ScrollView's constructor, so clearing it
+            // here sticks.
+            if (scrollView.contentContainer != null)
+            {
+                scrollView.contentContainer.usageHints &= ~UsageHints.GroupTransform;
+            }
+
             Apply(scrollView.verticalScroller, theme, true);
             Apply(scrollView.horizontalScroller, theme, false);
         }
