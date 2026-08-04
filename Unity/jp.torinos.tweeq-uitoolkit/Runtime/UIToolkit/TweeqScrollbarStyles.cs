@@ -19,6 +19,7 @@ namespace Tweeq.UIToolkit
 
         const float THUMB_ALPHA = 0.35f;
         const float THUMB_HOVER_ALPHA = 0.7f;
+        const float OVERLAY_RIGHT_INSET = 2f;
 
         /// <summary>Applies the slim style to both scrollers. Null-safe on every part.</summary>
         public static void ApplySlim(ScrollView scrollView, TweeqTheme theme)
@@ -39,6 +40,17 @@ namespace Tweeq.UIToolkit
                 scrollView.contentContainer.usageHints &= ~UsageHints.GroupTransform;
             }
 
+            // The viewport and its vertical scroller are siblings inside this container. Keeping
+            // the scroller in normal flex flow reserves TRACK_SIZE pixels and moves every row when
+            // the bar appears; the tweeq chrome treats this bar as an overlay instead.
+            VisualElement contentViewport = scrollView.Q<VisualElement>("unity-content-viewport");
+            if (contentViewport != null)
+            {
+                contentViewport.style.marginRight = 0f;
+                contentViewport.style.paddingRight = 0f;
+                contentViewport.style.minWidth = 0f;
+            }
+
             Apply(scrollView.verticalScroller, theme, true);
             Apply(scrollView.horizontalScroller, theme, false);
         }
@@ -53,6 +65,12 @@ namespace Tweeq.UIToolkit
             if (vertical)
             {
                 scroller.style.width = TRACK_SIZE;
+                scroller.style.position = Position.Absolute;
+                scroller.style.top = 0f;
+                scroller.style.bottom = 0f;
+                scroller.style.right = OVERLAY_RIGHT_INSET;
+                scroller.style.flexGrow = 0f;
+                scroller.style.flexShrink = 0f;
             }
             else
             {

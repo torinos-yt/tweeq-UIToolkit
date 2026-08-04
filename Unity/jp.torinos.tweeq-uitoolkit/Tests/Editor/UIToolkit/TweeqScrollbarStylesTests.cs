@@ -44,6 +44,20 @@ namespace Tweeq.UIToolkit.Tests
         }
 
         [Test]
+        public void ApplySlim_OverlaysVerticalScrollerWithoutViewportReservation()
+        {
+            ScrollView scroll = new ScrollView(ScrollViewMode.Vertical);
+
+            TweeqScrollbarStyles.ApplySlim(scroll, TweeqTheme.Dark());
+
+            Assert.AreEqual(Position.Absolute, scroll.verticalScroller.style.position.value);
+            Assert.AreEqual(2f, scroll.verticalScroller.style.right.value.value);
+            VisualElement viewport = scroll.Q<VisualElement>("unity-content-viewport");
+            Assert.NotNull(viewport);
+            Assert.AreEqual(0f, viewport.style.marginRight.value.value);
+        }
+
+        [Test]
         public void ApplySlim_ClearsTheGroupTransformHintOnTheContentContainer()
         {
             ScrollView scroll = new ScrollView(ScrollViewMode.Vertical);
