@@ -144,6 +144,7 @@ namespace Tweeq.UIToolkit
         bool _clampMin = true;
         bool _clampMax = true;
         int _precision = 4;
+        int _displayPrecision = -1;
         string _prefix = string.Empty;
         string _suffix = string.Empty;
         bool _disabled;
@@ -338,6 +339,24 @@ namespace Tweeq.UIToolkit
             }
         }
 
+        /// <summary>Optional fixed minimum decimal digits for the display. -1 preserves the automatic precision rules.</summary>
+        [UxmlAttribute("display-precision")]
+        public int DisplayPrecision
+        {
+            get => _displayPrecision;
+            set
+            {
+                int next = value < 0 ? -1 : value;
+                if (_displayPrecision == next)
+                {
+                    return;
+                }
+
+                _displayPrecision = next;
+                Refresh();
+            }
+        }
+
         /// <summary>String prepended in the unfocused overlay.</summary>
         [UxmlAttribute]
         public string Prefix
@@ -386,6 +405,15 @@ namespace Tweeq.UIToolkit
                 Refresh();
             }
         }
+
+        /// <summary>Whether a pointer scrub is currently active.</summary>
+        public bool IsScrubbing => _scrubbing;
+
+        /// <summary>Whether the text editor is currently active.</summary>
+        public bool IsEditing => _editing;
+
+        /// <summary>The currently composed numeric display text, without Prefix or Suffix.</summary>
+        public string DisplayText => _display;
 
         /// <summary>
         /// The scale display shown during a scrub. Defaults to the row of dots faithful to the original; numeric labels are opt-in.
@@ -1683,9 +1711,11 @@ namespace Tweeq.UIToolkit
         {
             int precision = NumberLogic.GetDisplayPrecision(
                 _step, _display ?? string.Empty, _min, _max, Width,
-                BarVisible, _scrubbing, CurrentSpeed, _precision);
+                BarVisible, _scrubbing, CurrentSpeed, _precision, _displayPrecision);
 
-            // Only the display during a drag uses the raw value (trailing zeros preserved). The digit count itself becomes sensitivity feedback.
+            bool formatTweaking = _scrubbing || _displayPrecision >= 0;
+
+            // An explicit display precision is also kept while idle so a host can make a fixed-format readout without changing Step.
             double source = _scrubbing ? _local : _value;
 
             // Format is a pure function: the same input always gives the same result. Refresh still runs
@@ -1693,16 +1723,16 @@ namespace Tweeq.UIToolkit
             // _display also gets rewritten by text input, so the cache is kept in a separate field.
             if (_formatCache != null
                 && _formatCachePrecision == precision
-                && _formatCacheTweaking == _scrubbing
+                && _formatCacheTweaking == formatTweaking
                 && TweeqFormat.SameValueBits(_formatCacheSource, source))
             {
                 return _formatCache;
             }
 
-            _formatCache = TweeqFormat.Format(source, precision, _scrubbing);
+            _formatCache = TweeqFormat.Format(source, precision, formatTweaking);
             _formatCacheSource = source;
             _formatCachePrecision = precision;
-            _formatCacheTweaking = _scrubbing;
+            _formatCacheTweaking = formatTweaking;
             return _formatCache;
         }
 

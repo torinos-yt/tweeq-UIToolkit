@@ -48,14 +48,18 @@ namespace Tweeq.Core
         /// </summary>
         public static int GetDisplayPrecision(
             double step, string display, double min, double max, double width,
-            bool barVisible, bool tweaking, double speed, int precisionLimit)
+            bool barVisible, bool tweaking, double speed, int precisionLimit,
+            int displayPrecisionOverride = -1)
         {
+            int explicitPrecision = displayPrecisionOverride < 0 ? 0 : displayPrecisionOverride;
             if (step != 0.0 && TweeqMath.IsFinite(step))
             {
-                return TweeqMath.PrecisionOf(step);
+                return Math.Max(TweeqMath.PrecisionOf(step), explicitPrecision);
             }
 
-            int displayPrecision = PrecisionOfDisplay(display);
+            int displayPrecision = displayPrecisionOverride >= 0
+                ? displayPrecisionOverride
+                : PrecisionOfDisplay(display);
             int sliderPrecision = 0;
             if (barVisible && width > 0.0 && TweeqMath.IsFinite(min) && TweeqMath.IsFinite(max))
             {
@@ -68,7 +72,7 @@ namespace Tweeq.Core
                 return Math.Max(displayPrecision, Math.Max(sliderPrecision, TweeqMath.PrecisionOf(speed)));
             }
 
-            int limit = precisionLimit < 0 ? 0 : precisionLimit;
+            int limit = Math.Max(precisionLimit < 0 ? 0 : precisionLimit, explicitPrecision);
             return Math.Min(limit, Math.Max(displayPrecision, sliderPrecision));
         }
 

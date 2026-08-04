@@ -51,6 +51,15 @@ namespace Tweeq.Core.Tests
         }
 
         [Test]
+        public void DisplayPrecisionOverrideKeepsAtLeastRequestedDigits()
+        {
+            int precision = NumberLogic.GetDisplayPrecision(
+                0.1, "1", 0.0, 8.0, 75.0, false, false, 1.0, 4, 2);
+
+            Assert.That(precision, Is.EqualTo(2));
+        }
+
+        [Test]
         public void IdlePrecisionIsCappedByPrecisionLimit()
         {
             // display=4 digits, slider=precisionOf(1/100)=2 → max=4, but capped at limit=2
