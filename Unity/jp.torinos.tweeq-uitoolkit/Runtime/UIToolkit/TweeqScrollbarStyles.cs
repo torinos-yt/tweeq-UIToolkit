@@ -20,6 +20,7 @@ namespace Tweeq.UIToolkit
         const float THUMB_ALPHA = 0.35f;
         const float THUMB_HOVER_ALPHA = 0.7f;
         const float OVERLAY_RIGHT_INSET = 2f;
+        const float OVERLAY_VERTICAL_INSET = 3f;
 
         /// <summary>Applies the slim style to both scrollers. Null-safe on every part.</summary>
         public static void ApplySlim(ScrollView scrollView, TweeqTheme theme)
@@ -66,8 +67,8 @@ namespace Tweeq.UIToolkit
             {
                 scroller.style.width = TRACK_SIZE;
                 scroller.style.position = Position.Absolute;
-                scroller.style.top = 0f;
-                scroller.style.bottom = 0f;
+                scroller.style.top = OVERLAY_VERTICAL_INSET;
+                scroller.style.bottom = OVERLAY_VERTICAL_INSET;
                 scroller.style.right = OVERLAY_RIGHT_INSET;
                 scroller.style.flexGrow = 0f;
                 scroller.style.flexShrink = 0f;

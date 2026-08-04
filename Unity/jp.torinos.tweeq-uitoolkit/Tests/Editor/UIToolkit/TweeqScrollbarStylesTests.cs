@@ -51,6 +51,8 @@ namespace Tweeq.UIToolkit.Tests
             TweeqScrollbarStyles.ApplySlim(scroll, TweeqTheme.Dark());
 
             Assert.AreEqual(Position.Absolute, scroll.verticalScroller.style.position.value);
+            Assert.AreEqual(3f, scroll.verticalScroller.style.top.value.value);
+            Assert.AreEqual(3f, scroll.verticalScroller.style.bottom.value.value);
             Assert.AreEqual(2f, scroll.verticalScroller.style.right.value.value);
             VisualElement viewport = scroll.Q<VisualElement>("unity-content-viewport");
             Assert.NotNull(viewport);
