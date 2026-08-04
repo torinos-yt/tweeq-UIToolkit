@@ -118,6 +118,10 @@ Web capabilities without a Unity equivalent, replaced rather than emulated:
 - The demo seeds its accent with `#4a76ff` instead of pure blue — a demo-side
   choice for legibility on dark backgrounds; the theme engine itself stays
   faithful to the Radix pipeline.
+- **Compact hosts can override shared metrics through `TweeqTheme`.** `InputHeight`
+  and the `FontSizeInput` / `FontSizeLabel` / `FontSizeHeading` / `FontSizeRuler`
+  knobs retain the library defaults, while a host may choose a coordinated set
+  such as 20px controls and 11/11/11/8px text without editing widget constants.
 
 ## Fixes to inherited quirks
 

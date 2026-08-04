@@ -50,6 +50,18 @@ namespace Tweeq.UIToolkit.Tests
             AssertBundledDefaults(new TweeqTheme(), "new TweeqTheme()");
         }
 
+        [Test]
+        public void PlainConstructor_HasDefaultMetricKnobs()
+        {
+            TweeqTheme theme = new TweeqTheme();
+
+            Assert.AreEqual(24f, theme.InputHeight);
+            Assert.AreEqual(12f, theme.FontSizeInput);
+            Assert.AreEqual(11f, theme.FontSizeLabel);
+            Assert.AreEqual(14f, theme.FontSizeHeading);
+            Assert.AreEqual(9f, theme.FontSizeRuler);
+        }
+
         #endregion
 
         #region Propagation
@@ -67,6 +79,56 @@ namespace Tweeq.UIToolkit.Tests
             Assert.AreEqual(TweeqFonts.NumericFont.font, copy.FontNumeric.font);
             Assert.AreEqual(TweeqFonts.HeadingFont.font, copy.FontHeading.font);
             Assert.AreEqual(TweeqFonts.CodeFont.font, copy.FontCode.font);
+        }
+
+        [Test]
+        public void Copy_PreservesMetricKnobs()
+        {
+            TweeqTheme theme = TweeqTheme.Dark();
+            theme.InputHeight = 20f;
+            theme.FontSizeInput = 11f;
+            theme.FontSizeLabel = 10f;
+            theme.FontSizeHeading = 13f;
+            theme.FontSizeRuler = 8f;
+
+            TweeqTheme copy = theme.Copy();
+
+            Assert.AreEqual(theme.InputHeight, copy.InputHeight);
+            Assert.AreEqual(theme.FontSizeInput, copy.FontSizeInput);
+            Assert.AreEqual(theme.FontSizeLabel, copy.FontSizeLabel);
+            Assert.AreEqual(theme.FontSizeHeading, copy.FontSizeHeading);
+            Assert.AreEqual(theme.FontSizeRuler, copy.FontSizeRuler);
+        }
+
+        [Test]
+        public void MetricKnobs_ApplyToNativeInputLabelsAndRuler()
+        {
+            TweeqTheme theme = TweeqTheme.Dark();
+            theme.InputHeight = 20f;
+            theme.FontSizeInput = 11f;
+            theme.FontSizeLabel = 10f;
+            theme.FontSizeHeading = 13f;
+            theme.FontSizeRuler = 8f;
+
+            NumberInput input = new NumberInput { Theme = theme };
+            Assert.AreEqual(20f, input.style.height.value.value);
+            TextField textField = input.Q<TextField>();
+            Assert.IsNotNull(textField);
+            Assert.AreEqual(11f, textField.style.fontSize.value.value);
+
+            Parameter parameter = new Parameter("Label") { Theme = theme };
+            Label label = parameter.Q<Label>(className: Parameter.LABEL_USS_CLASS_NAME);
+            Assert.IsNotNull(label);
+            Assert.AreEqual(10f, label.style.fontSize.value.value);
+
+            ParameterHeading heading = new ParameterHeading("Heading") { Theme = theme };
+            Assert.AreEqual(13f, heading.TextElement.style.fontSize.value.value);
+
+            TweeqRuler ruler = new TweeqRuler { Theme = theme };
+            ruler.Scales = new[] { new RulerScale(0.0, "0") };
+            Label rulerLabel = ruler.Q<Label>();
+            Assert.IsNotNull(rulerLabel);
+            Assert.AreEqual(8f, rulerLabel.style.fontSize.value.value);
         }
 
         [Test]

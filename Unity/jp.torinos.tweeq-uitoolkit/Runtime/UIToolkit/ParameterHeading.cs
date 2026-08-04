@@ -135,7 +135,7 @@ namespace Tweeq.UIToolkit
         void ApplyStaticStyles()
         {
             this.style.height = _theme.InputHeight;
-            _text.style.fontSize = FONT_SIZE;
+            _text.style.fontSize = _theme != null ? _theme.FontSizeHeading : FONT_SIZE;
             ApplyHeadingFont();
 
             if (!_hasCustomTextColor)

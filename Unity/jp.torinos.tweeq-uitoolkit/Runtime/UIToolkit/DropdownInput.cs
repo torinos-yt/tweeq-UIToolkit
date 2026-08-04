@@ -715,7 +715,7 @@ namespace Tweeq.UIToolkit
             _fieldLabel.style.marginBottom = 0f;
             _fieldLabel.style.paddingTop = 0f;
             _fieldLabel.style.paddingBottom = 0f;
-            _fieldLabel.style.fontSize = TEXT_FONT_SIZE;
+            _fieldLabel.style.fontSize = _theme != null ? _theme.FontSizeInput : TEXT_FONT_SIZE;
             _fieldLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
             _fieldLabel.style.whiteSpace = WhiteSpace.NoWrap;
             _fieldLabel.style.overflow = Overflow.Hidden;
@@ -776,6 +776,7 @@ namespace Tweeq.UIToolkit
                 // Inset from left and right by the chevron's width, keeping the text's center aligned with the box's center
                 _fieldLabel.style.paddingLeft = chevronWidth;
                 _fieldLabel.style.paddingRight = chevronWidth;
+                _fieldLabel.style.fontSize = _theme.FontSizeInput;
 
                 TweeqFonts.Apply(_fieldLabel, _theme.FontUi);
             }
@@ -923,7 +924,7 @@ namespace Tweeq.UIToolkit
                 _filterInput.style.paddingBottom = 0f;
                 _filterInput.style.marginTop = 0f;
                 _filterInput.style.marginBottom = 0f;
-                _filterInput.style.fontSize = TEXT_FONT_SIZE;
+                _filterInput.style.fontSize = _theme.FontSizeInput;
                 _filterInput.style.whiteSpace = WhiteSpace.NoWrap;
             }
 
@@ -935,12 +936,12 @@ namespace Tweeq.UIToolkit
                 _filterText.style.paddingBottom = 0f;
                 _filterText.style.marginTop = 0f;
                 _filterText.style.marginBottom = 0f;
-                _filterText.style.fontSize = TEXT_FONT_SIZE;
+                _filterText.style.fontSize = _theme.FontSizeInput;
                 _filterText.style.unityTextAlign = TextAnchor.MiddleCenter;
             }
 
             _filterField.style.unityTextAlign = TextAnchor.MiddleCenter;
-            _filterField.style.fontSize = TEXT_FONT_SIZE;
+            _filterField.style.fontSize = _theme.FontSizeInput;
 
             // TextField's internals declare their own fontSize, so inheritance alone can't be trusted here;
             // the font is pushed down to input / TextElement the same way NumberInput does it.
@@ -1307,7 +1308,7 @@ namespace Tweeq.UIToolkit
             row.style.marginRight = 0f;
             row.style.marginTop = 0f;
             row.style.marginBottom = 0f;
-            row.style.fontSize = TEXT_FONT_SIZE;
+            row.style.fontSize = _theme.FontSizeInput;
             row.style.unityTextAlign = TextAnchor.MiddleCenter;
             row.style.whiteSpace = WhiteSpace.NoWrap;
             row.style.overflow = Overflow.Hidden;

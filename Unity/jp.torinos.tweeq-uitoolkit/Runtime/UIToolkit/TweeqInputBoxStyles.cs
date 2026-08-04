@@ -265,7 +265,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            field.style.fontSize = TEXT_FONT_SIZE;
+            field.style.fontSize = theme != null ? theme.FontSizeInput : TEXT_FONT_SIZE;
             field.style.paddingLeft = 0f;
             field.style.paddingRight = 0f;
             field.style.paddingTop = 0f;
@@ -295,7 +295,7 @@ namespace Tweeq.UIToolkit
                 textInput.style.marginBottom = 0f;
                 textInput.style.height = Length.Percent(100f);
                 textInput.style.minHeight = 0f;
-                textInput.style.fontSize = TEXT_FONT_SIZE;
+                textInput.style.fontSize = theme != null ? theme.FontSizeInput : TEXT_FONT_SIZE;
                 textInput.style.whiteSpace = WhiteSpace.NoWrap;
             }
 
@@ -311,7 +311,7 @@ namespace Tweeq.UIToolkit
                 textElement.style.paddingBottom = 0f;
                 textElement.style.marginTop = 0f;
                 textElement.style.marginBottom = 0f;
-                textElement.style.fontSize = TEXT_FONT_SIZE;
+                textElement.style.fontSize = theme != null ? theme.FontSizeInput : TEXT_FONT_SIZE;
             }
         }
 

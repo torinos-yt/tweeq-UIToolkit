@@ -60,9 +60,6 @@ namespace Tweeq.UIToolkit
         const float DEFAULT_HEIGHT = 16f;
         const float LABEL_FONT_SIZE = 9f;
 
-        // The original's text-indent: 0.4em, resolved against the 9px label font.
-        const float LABEL_INDENT = LABEL_FONT_SIZE * 0.4f;
-
         const float TICK_WIDTH = 1f;
 
         // Below this the unit grid turns into a solid block, so it is dropped instead.
@@ -461,11 +458,11 @@ namespace Tweeq.UIToolkit
                 created.style.position = Position.Absolute;
                 created.style.left = 0f;
                 created.style.top = 0f;
-                created.style.marginLeft = LABEL_INDENT;
+                created.style.marginLeft = ResolveLabelIndent(_theme);
                 created.style.marginRight = 0f;
                 created.style.marginTop = 0f;
                 created.style.marginBottom = 0f;
-                created.style.fontSize = LABEL_FONT_SIZE;
+                created.style.fontSize = ResolveLabelFontSize(_theme);
                 created.style.color = _theme.TextSubtle;
                 TweeqFonts.Apply(created, _theme.FontNumeric);
 
@@ -478,11 +475,25 @@ namespace Tweeq.UIToolkit
 
         void ApplyLabelStyles()
         {
+            float fontSize = ResolveLabelFontSize(_theme);
+            float indent = ResolveLabelIndent(_theme);
             for (int index = 0; index < _labels.Count; index++)
             {
+                _labels[index].style.fontSize = fontSize;
+                _labels[index].style.marginLeft = indent;
                 _labels[index].style.color = _theme.TextSubtle;
                 TweeqFonts.Apply(_labels[index], _theme.FontNumeric);
             }
+        }
+
+        static float ResolveLabelFontSize(TweeqTheme theme)
+        {
+            return theme != null ? theme.FontSizeRuler : LABEL_FONT_SIZE;
+        }
+
+        static float ResolveLabelIndent(TweeqTheme theme)
+        {
+            return ResolveLabelFontSize(theme) * 0.4f;
         }
 
         #endregion

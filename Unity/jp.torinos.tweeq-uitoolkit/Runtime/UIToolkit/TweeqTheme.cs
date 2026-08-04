@@ -180,6 +180,18 @@ namespace Tweeq.UIToolkit
         /// <summary>Standard input field height (px).</summary>
         public float InputHeight { get; set; } = 24f;
 
+        /// <summary>Font size for input values and option rows (px).</summary>
+        public float FontSizeInput { get; set; } = 12f;
+
+        /// <summary>Font size for compact labels and value pills (px).</summary>
+        public float FontSizeLabel { get; set; } = 11f;
+
+        /// <summary>Font size for component headings and modal titles (px).</summary>
+        public float FontSizeHeading { get; set; } = 14f;
+
+        /// <summary>Font size for ruler labels (px).</summary>
+        public float FontSizeRuler { get; set; } = 9f;
+
         /// <summary>Standard input field corner radius (px).</summary>
         public float InputRadius { get; set; } = 4f;
 

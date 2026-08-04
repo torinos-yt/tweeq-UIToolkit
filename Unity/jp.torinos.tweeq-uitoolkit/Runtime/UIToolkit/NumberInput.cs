@@ -655,7 +655,7 @@ namespace Tweeq.UIToolkit
             _leftLabel.style.marginBottom = 0f;
             _leftLabel.style.paddingLeft = 0f;
             _leftLabel.style.paddingRight = 0f;
-            _leftLabel.style.fontSize = LEFT_LABEL_FONT_SIZE;
+            _leftLabel.style.fontSize = _theme != null ? _theme.FontSizeLabel : LEFT_LABEL_FONT_SIZE;
             _leftLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
             _leftLabel.style.display = DisplayStyle.None;
             this.hierarchy.Add(_leftLabel);
@@ -698,6 +698,11 @@ namespace Tweeq.UIToolkit
             if (_barFill != null)
             {
                 TweeqInputBoxStyles.ApplyBackgroundTransition(_barFill, _theme);
+            }
+
+            if (_leftLabel != null)
+            {
+                _leftLabel.style.fontSize = _theme.FontSizeLabel;
             }
 
             ApplyLeftLabelLayout();
@@ -1817,7 +1822,9 @@ namespace Tweeq.UIToolkit
         float FontSize()
         {
             float size = this.resolvedStyle.fontSize;
-            return float.IsNaN(size) || size <= 0f ? FALLBACK_FONT_SIZE : size;
+            return float.IsNaN(size) || size <= 0f
+                ? (_theme != null ? _theme.FontSizeInput : FALLBACK_FONT_SIZE)
+                : size;
         }
 
         // Spec §1/§5: the area where a drag can be started while editing.

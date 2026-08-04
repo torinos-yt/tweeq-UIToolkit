@@ -162,7 +162,7 @@ namespace Tweeq.UIToolkit
         void ApplyStaticStyles()
         {
             _label.style.height = _theme.InputHeight;
-            _label.style.fontSize = LABEL_FONT_SIZE;
+            _label.style.fontSize = _theme != null ? _theme.FontSizeLabel : LABEL_FONT_SIZE;
             _label.style.color = _theme.TextMuted;
             TweeqFonts.Apply(_label, _theme.FontUi);
 

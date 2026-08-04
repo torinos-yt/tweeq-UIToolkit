@@ -1328,6 +1328,7 @@ namespace Tweeq.UIToolkit
             {
                 _pill.style.backgroundColor = theme.SurfaceOpaque;
                 SetBorderColor(_pill, theme.Border);
+                _valueLabel.style.fontSize = theme != null ? theme.FontSizeLabel : PILL_FONT_SIZE;
                 _valueLabel.style.color = theme.Text;
                 _leftChevron.style.color = theme.Accent;
                 _rightChevron.style.color = theme.Accent;

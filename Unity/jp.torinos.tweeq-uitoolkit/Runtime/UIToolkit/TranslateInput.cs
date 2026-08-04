@@ -1159,6 +1159,11 @@ namespace Tweeq.UIToolkit
                 _labelRoot.style.backgroundColor = theme.SurfaceOpaque;
                 SetBorderColor(_labelRoot, theme.Border);
 
+                _xAxis.style.fontSize = theme.FontSizeLabel;
+                _yAxis.style.fontSize = theme.FontSizeLabel;
+                _xValue.Element.style.fontSize = theme.FontSizeLabel;
+                _yValue.Element.style.fontSize = theme.FontSizeLabel;
+
                 // Only the axis names get the muted color (same intent as Vue's :deep(i)).
                 _xAxis.style.color = theme.TextMuted;
                 _yAxis.style.color = theme.TextMuted;

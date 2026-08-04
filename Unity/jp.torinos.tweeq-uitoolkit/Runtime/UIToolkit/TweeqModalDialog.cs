@@ -381,6 +381,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
+            _title.style.fontSize = theme.FontSizeHeading;
             _title.style.color = theme.Text;
 
             // The heading font (Geist SemiBold) has a real weight, so we don't combine it with FontStyle.Bold.
