@@ -9,6 +9,14 @@ using UILabel = UnityEngine.UIElements.Label;
 
 namespace Tweeq.UIToolkit
 {
+    /// <summary>Vertical popup policy. Auto preserves the macOS-style placement used by default.</summary>
+    public enum DropdownPopupDirection
+    {
+        Auto,
+        Upward,
+        Downward,
+    }
+
     /// <summary>
     /// Dropdown selection (popover-spec.md "DropdownInput&lt;T&gt;").
     /// The closed state is a single input row; the open state pops up macOS-style, positioned so the
@@ -142,6 +150,8 @@ namespace Tweeq.UIToolkit
 
         // Don't commit when released over a scroll arrow (equivalent to Vue's @pointerup.stop)
         bool _pointerOverArrow;
+
+        DropdownPopupDirection _popupDirection = DropdownPopupDirection.Auto;
 
         // Outside-click/release detection attached to the panel root only while open
         VisualElement _dismissRoot;
@@ -365,6 +375,22 @@ namespace Tweeq.UIToolkit
 
         /// <summary>Whether the popup is open (logical state; advances even without a panel).</summary>
         public bool IsOpen => _open;
+
+        /// <summary>Controls the popup's vertical expansion while open. Auto keeps the existing placement algorithm.</summary>
+        public DropdownPopupDirection PopupDirection
+        {
+            get => _popupDirection;
+            set
+            {
+                if (_popupDirection == value)
+                {
+                    return;
+                }
+
+                _popupDirection = value;
+                RelayoutPopup();
+            }
+        }
 
         /// <summary>The string shown in the field (Prefix + label + Suffix). Hidden while filtering.</summary>
         public string DisplayText => _displayText;
@@ -1452,10 +1478,20 @@ namespace Tweeq.UIToolkit
             _listHeight = VisibleCount * itemHeight;
 
             double top;
-            if (_filtering)
+            bool forceUpward = _popupDirection == DropdownPopupDirection.Upward;
+            bool forceDownward = _popupDirection == DropdownPopupDirection.Downward;
+            if (forceUpward)
             {
-                // Spec §B: while narrowing down by typing, drop the macOS-style back-calculation and place it directly below the field.
-                // Overlapping "the selected item onto the field" every time candidates change would make the popup jump around (matches Vue)
+                top = DropdownLogic.GetDropdownTopUpward(
+                    fieldTop,
+                    itemHeight,
+                    VIEWPORT_MARGIN,
+                    chromeTop,
+                    _listHeight);
+            }
+            else if (_filtering || forceDownward)
+            {
+                // Filtering and explicit downward placement keep the list anchored below the field.
                 top = fieldTop + fieldHeight;
             }
             else
@@ -1475,7 +1511,9 @@ namespace Tweeq.UIToolkit
                     0.0);
             }
 
-            float available = viewportHeight - (float)top - VIEWPORT_MARGIN - chromeTop * 2f;
+            float available = forceUpward
+                ? fieldTop - (float)top - chromeTop * 2f
+                : viewportHeight - (float)top - VIEWPORT_MARGIN - chromeTop * 2f;
             _visibleHeight = Mathf.Max(itemHeight, Mathf.Min(_listHeight, available));
 
             // Row width should match the field, so widen outward by exactly the padding and border

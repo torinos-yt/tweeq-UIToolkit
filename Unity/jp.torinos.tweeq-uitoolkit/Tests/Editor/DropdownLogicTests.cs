@@ -83,6 +83,23 @@ namespace Tweeq.Core.Tests
         }
 
         [Test]
+        public void UpwardPlacementKeepsMeasuredListAboveField()
+        {
+            double top = DropdownLogic.GetDropdownTopUpward(780.0, ITEM_HEIGHT, MARGIN, CHROME, LIST_HEIGHT);
+
+            Assert.That(top + LIST_HEIGHT + CHROME * 2.0,
+                Is.EqualTo(780.0).Within(TOLERANCE));
+        }
+
+        [Test]
+        public void UpwardPlacementUsesViewportMarginForTallList()
+        {
+            double top = DropdownLogic.GetDropdownTopUpward(780.0, ITEM_HEIGHT, MARGIN, CHROME, 2000.0);
+
+            Assert.That(top, Is.EqualTo(MARGIN).Within(TOLERANCE));
+        }
+
+        [Test]
         public void MarginWinsWhenTheViewportIsShorterThanTheList()
         {
             // Preserves the top margin even in the extreme case where maxTop falls below margin (never returns a negative top)

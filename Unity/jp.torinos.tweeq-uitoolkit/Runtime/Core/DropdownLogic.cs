@@ -60,6 +60,25 @@ namespace Tweeq.Core
         }
 
         /// <summary>
+        /// Returns a top edge that keeps a measured popup above the field. If the list is taller than the available
+        /// space, the caller can reduce its viewport height and retain the top edge at the viewport margin.
+        /// </summary>
+        public static double GetDropdownTopUpward(
+            double fieldWorldY, double itemHeight,
+            double viewportMargin = DEFAULT_VIEWPORT_MARGIN,
+            double selectChrome = DEFAULT_SELECT_CHROME,
+            double listHeight = 0.0)
+        {
+            double minimumHeight = Math.Max(0.0, itemHeight);
+            double availableAbove = Math.Max(minimumHeight, fieldWorldY - viewportMargin - selectChrome * 2.0);
+            double popupHeight = listHeight > 0.0
+                ? Math.Min(listHeight, availableAbove)
+                : availableAbove;
+            double top = fieldWorldY - selectChrome * 2.0 - popupHeight;
+            return Math.Max(viewportMargin, top);
+        }
+
+        /// <summary>
         /// The popup's maximum height. Extends to the viewport's bottom edge, but never taller than the list itself
         /// (listHeight &lt;= 0 is treated as "unmeasured" and takes the full space down to the bottom edge).
         /// </summary>
