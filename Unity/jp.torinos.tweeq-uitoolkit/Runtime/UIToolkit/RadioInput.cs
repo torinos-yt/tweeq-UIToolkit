@@ -300,6 +300,8 @@ namespace Tweeq.UIToolkit
             segment.style.marginTop = 0f;
             segment.style.marginBottom = 0f;
             segment.style.marginRight = 0f;
+            segment.style.height = Length.Percent(100f);
+            segment.style.fontSize = _theme != null ? _theme.FontSizeInput : 12f;
 
             // UI Toolkit's inline styles have no flex gap, so build it from margins on everything but the first
             segment.style.marginLeft = index == 0 ? 0f : SEGMENT_GAP;

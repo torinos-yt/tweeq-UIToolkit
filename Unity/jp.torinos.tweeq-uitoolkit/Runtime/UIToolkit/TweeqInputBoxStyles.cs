@@ -276,6 +276,7 @@ namespace Tweeq.UIToolkit
             field.style.marginBottom = 0f;
             field.style.minHeight = 0f;
             field.style.alignItems = Align.Stretch;
+            field.style.unityTextAlign = TextAnchor.MiddleCenter;
 
             ApplyTextSelectionColors(field, theme);
 
@@ -295,6 +296,7 @@ namespace Tweeq.UIToolkit
                 textInput.style.marginBottom = 0f;
                 textInput.style.height = Length.Percent(100f);
                 textInput.style.minHeight = 0f;
+                textInput.style.unityTextAlign = TextAnchor.MiddleCenter;
                 textInput.style.fontSize = theme != null ? theme.FontSizeInput : TEXT_FONT_SIZE;
                 textInput.style.whiteSpace = WhiteSpace.NoWrap;
             }
@@ -311,6 +313,7 @@ namespace Tweeq.UIToolkit
                 textElement.style.paddingBottom = 0f;
                 textElement.style.marginTop = 0f;
                 textElement.style.marginBottom = 0f;
+                textElement.style.unityTextAlign = TextAnchor.MiddleCenter;
                 textElement.style.fontSize = theme != null ? theme.FontSizeInput : TEXT_FONT_SIZE;
             }
         }

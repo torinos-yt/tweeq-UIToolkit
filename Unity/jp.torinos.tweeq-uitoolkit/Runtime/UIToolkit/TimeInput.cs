@@ -1126,6 +1126,7 @@ namespace Tweeq.UIToolkit
             label.style.paddingRight = 0f;
             label.style.paddingTop = 0f;
             label.style.paddingBottom = 0f;
+            label.style.height = Length.Percent(100f);
             label.style.unityTextAlign = TextAnchor.MiddleCenter;
             label.style.flexShrink = 0f;
             return label;
