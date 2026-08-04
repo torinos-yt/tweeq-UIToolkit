@@ -675,6 +675,9 @@ namespace Tweeq.UIToolkit
             label.style.marginBottom = 0f;
             label.style.paddingLeft = 0f;
             label.style.paddingRight = 0f;
+            label.style.paddingTop = 0f;
+            label.style.paddingBottom = 0f;
+            label.style.height = Length.Percent(100f);
             label.style.unityTextAlign = TextAnchor.MiddleCenter;
             return label;
         }
@@ -747,6 +750,9 @@ namespace Tweeq.UIToolkit
             _prefixLabel.style.fontSize = displayFontSize;
             _valueLabel.style.fontSize = displayFontSize;
             _suffixLabel.style.fontSize = displayFontSize;
+            ResetDisplayLabelBox(_prefixLabel);
+            ResetDisplayLabelBox(_valueLabel);
+            ResetDisplayLabelBox(_suffixLabel);
 
             TweeqFonts.Apply(_valueLabel, numeric);
             TweeqFonts.Apply(_textField, numeric);
@@ -766,6 +772,20 @@ namespace Tweeq.UIToolkit
             TweeqFonts.Apply(_prefixLabel, ui);
             TweeqFonts.Apply(_suffixLabel, ui);
             TweeqFonts.Apply(_leftLabel, ui);
+        }
+
+        static void ResetDisplayLabelBox(Label label)
+        {
+            if (label == null)
+            {
+                return;
+            }
+
+            label.style.marginTop = 0f;
+            label.style.marginBottom = 0f;
+            label.style.paddingTop = 0f;
+            label.style.paddingBottom = 0f;
+            label.style.height = Length.Percent(100f);
         }
 
         void ApplyInteractivity()

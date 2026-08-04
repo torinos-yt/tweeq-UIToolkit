@@ -61,7 +61,6 @@ namespace Tweeq.UIToolkit
 
         // Vue .digit padding is .1em .2em, which is 1.2 / 2.4px against the 12px font
         const float DIGIT_PADDING_X = 2.4f;
-        const float DIGIT_PADDING_Y = 1.2f;
 
         // Vue: .TqInputTime:hover &.tweak { background: set-alpha(text-subtle, .3) }
         const float DIGIT_HIGHLIGHT_ALPHA = 0.3f;
@@ -1057,8 +1056,8 @@ namespace Tweeq.UIToolkit
                 digit.pickingMode = PickingMode.Position;
                 digit.style.paddingLeft = DIGIT_PADDING_X;
                 digit.style.paddingRight = DIGIT_PADDING_X;
-                digit.style.paddingTop = DIGIT_PADDING_Y;
-                digit.style.paddingBottom = DIGIT_PADDING_Y;
+                digit.style.paddingTop = 0f;
+                digit.style.paddingBottom = 0f;
                 digit.style.display = DisplayStyle.None;
 
                 int captured = scale;
@@ -1075,8 +1074,8 @@ namespace Tweeq.UIToolkit
                 Label separator = CreateLabel();
                 separator.name = "tweeq-time-separator-" + scale;
                 separator.text = SEPARATOR_TEXT;
-                separator.style.paddingTop = DIGIT_PADDING_Y;
-                separator.style.paddingBottom = DIGIT_PADDING_Y;
+                separator.style.paddingTop = 0f;
+                separator.style.paddingBottom = 0f;
                 separator.style.unityFontStyleAndWeight = FontStyle.Bold;
                 separator.style.display = DisplayStyle.None;
 
@@ -1205,6 +1204,7 @@ namespace Tweeq.UIToolkit
                 {
                     _digitLabels[index].style.fontSize = displayFontSize;
                 }
+                ResetDisplayLabelBox(_digitLabels[index]);
                 TweeqFonts.Apply(_digitLabels[index], numeric);
             }
 
@@ -1214,8 +1214,23 @@ namespace Tweeq.UIToolkit
                 {
                     _separators[index].style.fontSize = displayFontSize;
                 }
+                ResetDisplayLabelBox(_separators[index]);
                 TweeqFonts.Apply(_separators[index], numeric);
             }
+        }
+
+        static void ResetDisplayLabelBox(Label label)
+        {
+            if (label == null)
+            {
+                return;
+            }
+
+            label.style.marginTop = 0f;
+            label.style.marginBottom = 0f;
+            label.style.paddingTop = 0f;
+            label.style.paddingBottom = 0f;
+            label.style.height = Length.Percent(100f);
         }
 
         void ApplyInteractivity()
