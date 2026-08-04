@@ -23,7 +23,10 @@ namespace Tweeq.UIToolkit
         const float OVERLAY_VERTICAL_INSET = 3f;
 
         /// <summary>Applies the slim style to both scrollers. Null-safe on every part.</summary>
-        public static void ApplySlim(ScrollView scrollView, TweeqTheme theme)
+        public static void ApplySlim(
+            ScrollView scrollView,
+            TweeqTheme theme,
+            float rightInset = OVERLAY_RIGHT_INSET)
         {
             if (scrollView == null || theme == null)
             {
@@ -52,11 +55,11 @@ namespace Tweeq.UIToolkit
                 contentViewport.style.minWidth = 0f;
             }
 
-            Apply(scrollView.verticalScroller, theme, true);
-            Apply(scrollView.horizontalScroller, theme, false);
+            Apply(scrollView.verticalScroller, theme, true, rightInset);
+            Apply(scrollView.horizontalScroller, theme, false, 0f);
         }
 
-        static void Apply(Scroller scroller, TweeqTheme theme, bool vertical)
+        static void Apply(Scroller scroller, TweeqTheme theme, bool vertical, float rightInset)
         {
             if (scroller == null)
             {
@@ -69,7 +72,7 @@ namespace Tweeq.UIToolkit
                 scroller.style.position = Position.Absolute;
                 scroller.style.top = OVERLAY_VERTICAL_INSET;
                 scroller.style.bottom = OVERLAY_VERTICAL_INSET;
-                scroller.style.right = OVERLAY_RIGHT_INSET;
+                scroller.style.right = rightInset;
                 scroller.style.flexGrow = 0f;
                 scroller.style.flexShrink = 0f;
             }
