@@ -743,6 +743,11 @@ namespace Tweeq.UIToolkit
 
             FontDefinition numeric = _theme.FontNumeric;
 
+            float displayFontSize = _theme.FontSizeInput;
+            _prefixLabel.style.fontSize = displayFontSize;
+            _valueLabel.style.fontSize = displayFontSize;
+            _suffixLabel.style.fontSize = displayFontSize;
+
             TweeqFonts.Apply(_valueLabel, numeric);
             TweeqFonts.Apply(_textField, numeric);
 

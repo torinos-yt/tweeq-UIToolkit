@@ -1193,6 +1193,7 @@ namespace Tweeq.UIToolkit
             }
 
             FontDefinition numeric = _theme.FontNumeric;
+            float displayFontSize = _theme.FontSizeInput;
 
             TweeqFonts.Apply(_textField, numeric);
             TweeqFonts.Apply(_textInput, numeric);
@@ -1200,11 +1201,19 @@ namespace Tweeq.UIToolkit
 
             for (int index = 0; index < _digitLabels.Length; index++)
             {
+                if (_digitLabels[index] != null)
+                {
+                    _digitLabels[index].style.fontSize = displayFontSize;
+                }
                 TweeqFonts.Apply(_digitLabels[index], numeric);
             }
 
             for (int index = 0; index < _separators.Length; index++)
             {
+                if (_separators[index] != null)
+                {
+                    _separators[index].style.fontSize = displayFontSize;
+                }
                 TweeqFonts.Apply(_separators[index], numeric);
             }
         }
