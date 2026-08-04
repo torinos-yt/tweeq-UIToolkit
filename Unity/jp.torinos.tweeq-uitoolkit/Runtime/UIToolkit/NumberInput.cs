@@ -678,6 +678,8 @@ namespace Tweeq.UIToolkit
             label.style.paddingTop = 0f;
             label.style.paddingBottom = 0f;
             label.style.height = Length.Percent(100f);
+            label.style.minHeight = 0f;
+            label.style.maxHeight = Length.Percent(100f);
             label.style.unityTextAlign = TextAnchor.MiddleCenter;
             return label;
         }
@@ -786,6 +788,8 @@ namespace Tweeq.UIToolkit
             label.style.paddingTop = 0f;
             label.style.paddingBottom = 0f;
             label.style.height = Length.Percent(100f);
+            label.style.minHeight = 0f;
+            label.style.maxHeight = Length.Percent(100f);
         }
 
         void ApplyInteractivity()
