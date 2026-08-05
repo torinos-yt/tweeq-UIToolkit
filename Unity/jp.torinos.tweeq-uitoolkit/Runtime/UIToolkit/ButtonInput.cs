@@ -207,6 +207,30 @@ namespace Tweeq.UIToolkit
             }
         }
 
+        /// <summary>
+        /// Applies a disabled transition and its host-owned colors as one visual update.
+        /// A host that owns the final palette can avoid a one-frame neutral flash caused by
+        /// the ordinary setter refreshing the library palette before the host override arrives.
+        /// </summary>
+        public void ApplyDisabledVisual(bool disabled, Color background, Color text)
+        {
+            _disabled = disabled;
+            _hovered = false;
+
+            if (disabled)
+            {
+                StopBlink();
+            }
+
+            ApplyInteractivity();
+            Refresh(background, text);
+
+            if (!disabled && _blink)
+            {
+                RefreshBlink();
+            }
+        }
+
         /// <summary>The color theme. Falls back to Dark() if null is passed.</summary>
         public TweeqTheme Theme
         {
@@ -557,7 +581,7 @@ namespace Tweeq.UIToolkit
 
         #region Refresh
 
-        void Refresh()
+        void Refresh(Color? backgroundOverride = null, Color? textOverride = null)
         {
             if (_theme == null)
             {
@@ -567,10 +591,11 @@ namespace Tweeq.UIToolkit
             // While blinking, the scheduler writes the background every frame, so it isn't touched here
             if (_blinkItem == null)
             {
-                this.style.backgroundColor = CurrentBackground;
+                this.style.backgroundColor = backgroundOverride ?? CurrentBackground;
             }
 
-            Color text = _blinkItem != null ? _restText : CurrentText;
+            Color text = textOverride
+                ?? (_blinkItem != null ? _restText : CurrentText);
             _label.style.color = text;
 
             bool ringVisible = _focused && !_disabled;
