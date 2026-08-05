@@ -72,6 +72,7 @@ namespace Tweeq.UIToolkit
         float _radius = float.NaN;
         float _paddingVertical = float.NaN;
         float _paddingHorizontal = float.NaN;
+        Color? _fillColorOverride;
 
         float _shadowBlur = DEFAULT_SHADOW_BLUR;
         float _shadowOffsetY = DEFAULT_SHADOW_OFFSET_Y;
@@ -160,6 +161,26 @@ namespace Tweeq.UIToolkit
             {
                 _paddingHorizontal = value;
                 ApplyContentPadding();
+            }
+        }
+
+        /// <summary>
+        /// Optional Painter2D fill override. Null keeps the theme's SurfaceOpaque behavior.
+        /// Hosts that need an application-specific opaque modal surface can set this without
+        /// replacing the balloon or changing the shared theme.
+        /// </summary>
+        public Color? FillColorOverride
+        {
+            get => _fillColorOverride;
+            set
+            {
+                if (_fillColorOverride == value)
+                {
+                    return;
+                }
+
+                _fillColorOverride = value;
+                this.MarkDirtyRepaint();
             }
         }
 
@@ -400,7 +421,7 @@ namespace Tweeq.UIToolkit
 
             BuildOutline(painter, originX, originY, width, height, radius, 0f);
             // The semi-transparent Surface color assumes a blur behind it (Vue). Without blur the background would show through, so we composite it opaque
-            painter.fillColor = _theme.SurfaceOpaque;
+            painter.fillColor = _fillColorOverride ?? _theme.SurfaceOpaque;
             painter.Fill();
 
             painter.strokeColor = _theme.Border;

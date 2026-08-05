@@ -91,6 +91,10 @@ Web capabilities without a Unity equivalent, replaced rather than emulated:
   state through its app-level store; a widget library has no such layer, so
   rollback on Cancel is the host's responsibility (the demo shows the pattern).
 - **Inactive tab panels are `display: none`** (kept in the tree, not unmounted).
+- **Balloon fills may be explicitly overridden at the Painter2D boundary.**
+  `TweeqBalloon.FillColorOverride` is null by default and therefore preserves
+  `TweeqTheme.SurfaceOpaque`; a host that requires a literal opaque modal fill
+  can set it without replacing the shared theme or relying on USS paint order.
 
 ## API shape
 

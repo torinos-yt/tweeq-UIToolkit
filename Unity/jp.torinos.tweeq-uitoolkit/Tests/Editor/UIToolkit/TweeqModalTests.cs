@@ -326,6 +326,22 @@ namespace Tweeq.UIToolkit.Tests
         }
 
         [Test]
+        public void Balloon_FillColorOverrideIsOptionalAndReversible()
+        {
+            TweeqBalloon balloon = new TweeqBalloon();
+            Color fill = new Color32(0x13, 0x14, 0x18, 0xFF);
+
+            Assert.IsFalse(balloon.FillColorOverride.HasValue);
+
+            balloon.FillColorOverride = fill;
+            Assert.IsTrue(balloon.FillColorOverride.HasValue);
+            Assert.AreEqual(fill, balloon.FillColorOverride.Value);
+
+            balloon.FillColorOverride = null;
+            Assert.IsFalse(balloon.FillColorOverride.HasValue);
+        }
+
+        [Test]
         public void Modal_TakesNoSpaceInTheOwnerTree()
         {
             TweeqModal modal = new TweeqModal();
