@@ -166,6 +166,42 @@ namespace Tweeq.UIToolkit.Tests
         }
 
         [Test]
+        public void IdleSameValueReadback_KeepsTheExistingDisplayString()
+        {
+            Arrange(TimeDisplayMode.Frames, 2172f);
+            string initialDisplay = _input.DisplayText;
+
+            _input.SetValueWithoutNotify(2172f);
+
+            Assert.AreSame(initialDisplay, _input.DisplayText);
+            Assert.AreEqual("2172F", _input.GetDigitText(0));
+        }
+
+        [Test]
+        public void FramesIdleReadback_UpdatesTheGlyphWithoutChangingThePublicDisplay()
+        {
+            Arrange(TimeDisplayMode.Frames, 2172f);
+            Label group = _input.Q<Label>(TimeInput.DIGIT_NAME_PREFIX + "0");
+            Label firstDigit = group.Q<Label>(TimeInput.FRAME_GLYPH_DIGIT_PREFIX + "6");
+            Label secondDigit = group.Q<Label>(TimeInput.FRAME_GLYPH_DIGIT_PREFIX + "7");
+            Label thirdDigit = group.Q<Label>(TimeInput.FRAME_GLYPH_DIGIT_PREFIX + "8");
+            Label lastDigit = group.Q<Label>(TimeInput.FRAME_GLYPH_DIGIT_PREFIX + "9");
+            Label suffix = group.Q<Label>(TimeInput.FRAME_SUFFIX_GLYPH_NAME);
+
+            _input.SetValueWithoutNotify(2173f);
+
+            Assert.AreEqual("2173F", _input.DisplayText);
+            Assert.AreEqual("2173F", _input.GetDigitText(0));
+            Assert.AreEqual(string.Empty, group.text);
+            Assert.AreEqual("2", firstDigit.text);
+            Assert.AreEqual("1", secondDigit.text);
+            Assert.AreEqual("7", thirdDigit.text);
+            Assert.AreEqual("3", lastDigit.text);
+            Assert.AreEqual("F", suffix.text);
+            Assert.AreEqual(DisplayStyle.Flex, suffix.style.display.value);
+        }
+
+        [Test]
         public void TimecodeMode_SplitsIntoDigitGroupsFromTheFramesSide()
         {
             Arrange(TimeDisplayMode.Timecode, 2172f);

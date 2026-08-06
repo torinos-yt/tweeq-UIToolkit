@@ -56,6 +56,31 @@ namespace Tweeq.UIToolkit
         const string SEPARATOR_TEXT = ":";
         const string FRAMES_SUFFIX = "F";
 
+        /// <summary>Name of the fixed frames-mode suffix glyph.</summary>
+        public const string FRAME_SUFFIX_GLYPH_NAME = "tweeq-time-frame-suffix-glyph";
+
+        /// <summary>Prefix for the fixed frames-mode digit glyphs, ordered left to right.</summary>
+        public const string FRAME_GLYPH_DIGIT_PREFIX = "tweeq-time-frame-glyph-digit-";
+
+        const string FRAME_GLYPH_SIGN_NAME = "tweeq-time-frame-glyph-sign";
+        const string FRAME_GLYPH_SIGN = "-";
+        const int FRAME_GLYPH_MAX_DIGITS = 10;
+        const int FRAME_GLYPH_SIGN_INDEX = 0;
+        const int FRAME_GLYPH_FIRST_DIGIT_INDEX = 1;
+        const int FRAME_GLYPH_SUFFIX_INDEX = FRAME_GLYPH_FIRST_DIGIT_INDEX + FRAME_GLYPH_MAX_DIGITS;
+        const int FRAME_GLYPH_COUNT = FRAME_GLYPH_SUFFIX_INDEX + 1;
+
+        static readonly string[] StaticNumerals =
+        {
+            "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+        };
+
+        static readonly long[] DecimalPowers =
+        {
+            1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L,
+            1000000000L,
+        };
+
         // Frame counts are normally integral, but an expression may commit a fraction
         const int DISPLAY_PRECISION = 4;
 
@@ -127,6 +152,7 @@ namespace Tweeq.UIToolkit
         double _displayCacheFrameRate;
         TimeDisplayMode _displayCacheMode;
         bool _hasDisplayCache;
+        bool _displaySynchronized;
 
         readonly string[] _digitTexts = new string[MAX_DIGIT_GROUPS];
         int _digitCount;
@@ -144,6 +170,8 @@ namespace Tweeq.UIToolkit
         TextElement _textElement;
         TweeqFocusRing _focusRing;
         TimeTweakOverlay _overlay;
+        readonly Label[] _frameGlyphs = new Label[FRAME_GLYPH_COUNT];
+        bool _frameGlyphMode;
 
         readonly TweeqScrubManipulator _scrub = new TweeqScrubManipulator();
         bool _scrubAttached;
@@ -394,7 +422,11 @@ namespace Tweeq.UIToolkit
         /// <summary>String shown while not editing.</summary>
         public string DisplayText
         {
-            get { return _display; }
+            get
+            {
+                EnsureDisplayText();
+                return _display;
+            }
         }
 
         /// <summary>Number of visible digit groups (1 in frames mode).</summary>
@@ -406,17 +438,32 @@ namespace Tweeq.UIToolkit
         /// <summary>Text of a digit group; 0 is the frames group on the right. Out of range is empty.</summary>
         public string GetDigitText(int scale)
         {
+            EnsureDisplayText();
             return scale >= 0 && scale < _digitCount ? _digitTexts[scale] ?? string.Empty : string.Empty;
         }
 
         /// <summary>Sets the value without sending a ChangeEvent. The raw value follows.</summary>
         public void SetValueWithoutNotify(float newValue)
         {
+            bool sameValue = TweeqFormat.SameValueBits(_value, newValue);
             _value = newValue;
 
             // An external write lands outside any drag or edit session, so reset the accumulator
             _local = newValue;
             _scrubAccum = 0.0;
+
+            if (!_editing && !_scrubbing && sameValue && _displaySynchronized)
+            {
+                Refresh();
+                return;
+            }
+
+            if (TryApplyFrameGlyphDisplay())
+            {
+                Refresh();
+                return;
+            }
+
             SyncDisplayText(true);
             Refresh();
         }
@@ -731,6 +778,12 @@ namespace Tweeq.UIToolkit
             // Text selection owns the pointer while editing. Leaving the scrub attached would
             // capture the pointer on press and kill drag-selection inside the field
             ApplyScrubManipulator();
+
+            if (!editing)
+            {
+                TryApplyFrameGlyphDisplay();
+            }
+
             Refresh();
         }
 
@@ -1060,6 +1113,15 @@ namespace Tweeq.UIToolkit
                 digit.style.paddingBottom = 0f;
                 digit.style.display = DisplayStyle.None;
 
+                if (scale == TimecodeLogic.SCALE_FRAMES)
+                {
+                    digit.style.flexDirection = FlexDirection.Row;
+                    digit.style.alignItems = Align.Center;
+                    digit.style.justifyContent = Justify.Center;
+                    digit.style.overflow = Overflow.Hidden;
+                    CreateFrameGlyphs(digit);
+                }
+
                 int captured = scale;
                 digit.RegisterCallback<PointerEnterEvent>(_ => PerformDigitHover(captured));
 
@@ -1112,6 +1174,35 @@ namespace Tweeq.UIToolkit
             // absolutely positioned child inwards by 1px
             _focusRing = TweeqFocusRing.Attach(this);
             _focusRing.name = "tweeq-time-focus-ring";
+        }
+
+        void CreateFrameGlyphs(Label parent)
+        {
+            for (int index = 0; index < _frameGlyphs.Length; index++)
+            {
+                Label glyph = CreateLabel();
+                glyph.pickingMode = PickingMode.Ignore;
+                glyph.style.display = DisplayStyle.None;
+                glyph.style.whiteSpace = WhiteSpace.NoWrap;
+
+                if (index == FRAME_GLYPH_SIGN_INDEX)
+                {
+                    glyph.name = FRAME_GLYPH_SIGN_NAME;
+                }
+                else if (index == FRAME_GLYPH_SUFFIX_INDEX)
+                {
+                    glyph.name = FRAME_SUFFIX_GLYPH_NAME;
+                    glyph.text = FRAMES_SUFFIX;
+                }
+                else
+                {
+                    glyph.name = FRAME_GLYPH_DIGIT_PREFIX
+                        + (index - FRAME_GLYPH_FIRST_DIGIT_INDEX).ToString();
+                }
+
+                _frameGlyphs[index] = glyph;
+                parent.hierarchy.Add(glyph);
+            }
         }
 
         static Label CreateLabel()
@@ -1206,6 +1297,16 @@ namespace Tweeq.UIToolkit
                 }
                 ResetDisplayLabelBox(_digitLabels[index]);
                 TweeqFonts.Apply(_digitLabels[index], numeric);
+            }
+
+            for (int index = 0; index < _frameGlyphs.Length; index++)
+            {
+                if (_frameGlyphs[index] != null)
+                {
+                    _frameGlyphs[index].style.fontSize = displayFontSize;
+                }
+                ResetDisplayLabelBox(_frameGlyphs[index]);
+                TweeqFonts.Apply(_frameGlyphs[index], numeric);
             }
 
             for (int index = 0; index < _separators.Length; index++)
@@ -1368,12 +1469,42 @@ namespace Tweeq.UIToolkit
 
         #region Display
 
+        void EnsureDisplayText()
+        {
+            if (_frameGlyphMode)
+            {
+                _display = ComposeDisplayText();
+                SplitDigits(_display);
+                return;
+            }
+
+            if (!_displaySynchronized && !_editing)
+            {
+                SyncDisplayText(true);
+            }
+        }
+
         // force = false leaves the text being typed alone (same guard as the Vue display watcher)
         void SyncDisplayText(bool force)
         {
             if (_editing && !force)
             {
                 return;
+            }
+
+            if (!force && _frameGlyphMode)
+            {
+                return;
+            }
+
+            if (!force && _displaySynchronized)
+            {
+                return;
+            }
+
+            if (force)
+            {
+                ExitFrameGlyphMode();
             }
 
             string text = ComposeDisplayText();
@@ -1388,6 +1519,128 @@ namespace Tweeq.UIToolkit
             {
                 _textField.SetValueWithoutNotify(text);
             }
+
+            _displaySynchronized = true;
+
+            if (force)
+            {
+                TryApplyFrameGlyphDisplay();
+            }
+        }
+
+        bool TryApplyFrameGlyphDisplay()
+        {
+            if (_displayMode != TimeDisplayMode.Frames
+                || _editing
+                || _scrubbing
+                || !TryGetIntegralFrame(_value, out int frame))
+            {
+                return false;
+            }
+
+            _frameGlyphMode = true;
+            _hasDisplayCache = false;
+            for (int index = 0; index < _digitTexts.Length; index++)
+            {
+                _digitTexts[index] = null;
+            }
+
+            _digitCount = 1;
+            ApplyDigitTexts();
+            UpdateFrameGlyphs(frame);
+            _displaySynchronized = true;
+            return true;
+        }
+
+        void UpdateFrameGlyphs(int frame)
+        {
+            long magnitude = frame;
+            bool negative = magnitude < 0L;
+            if (negative)
+            {
+                magnitude = -magnitude;
+            }
+
+            int digitCount = 1;
+            long remaining = magnitude;
+            while (remaining >= 10L)
+            {
+                remaining /= 10L;
+                digitCount++;
+            }
+
+            SetFrameGlyph(_frameGlyphs[FRAME_GLYPH_SIGN_INDEX], negative, FRAME_GLYPH_SIGN);
+
+            int firstVisibleDigit = FRAME_GLYPH_MAX_DIGITS - digitCount;
+            for (int slot = 0; slot < FRAME_GLYPH_MAX_DIGITS; slot++)
+            {
+                bool visible = slot >= firstVisibleDigit;
+                string text = string.Empty;
+                if (visible)
+                {
+                    int powerIndex = FRAME_GLYPH_MAX_DIGITS - slot - 1;
+                    int numeral = (int)((magnitude / DecimalPowers[powerIndex]) % 10L);
+                    text = StaticNumerals[numeral];
+                }
+
+                SetFrameGlyph(
+                    _frameGlyphs[FRAME_GLYPH_FIRST_DIGIT_INDEX + slot],
+                    visible,
+                    text);
+            }
+
+            SetFrameGlyph(_frameGlyphs[FRAME_GLYPH_SUFFIX_INDEX], true, FRAMES_SUFFIX);
+        }
+
+        static void SetFrameGlyph(Label glyph, bool visible, string text)
+        {
+            if (glyph == null)
+            {
+                return;
+            }
+
+            if (visible && glyph.text != text)
+            {
+                glyph.text = text;
+            }
+
+            DisplayStyle display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+            if (glyph.style.display.value != display)
+            {
+                glyph.style.display = display;
+            }
+        }
+
+        void ExitFrameGlyphMode()
+        {
+            if (!_frameGlyphMode)
+            {
+                return;
+            }
+
+            _frameGlyphMode = false;
+            for (int index = 0; index < _frameGlyphs.Length; index++)
+            {
+                SetFrameGlyph(_frameGlyphs[index], false, string.Empty);
+            }
+        }
+
+        static bool TryGetIntegralFrame(float value, out int frame)
+        {
+            frame = 0;
+            if (!TweeqMath.IsFinite(value))
+            {
+                return false;
+            }
+
+            double rounded = Math.Round(value, MidpointRounding.AwayFromZero);
+            if (rounded != value || rounded < int.MinValue || rounded > int.MaxValue)
+            {
+                return false;
+            }
+
+            frame = (int)rounded;
+            return true;
         }
 
         // Pure in (value, fps, mode), so during a scrub the string is rebuilt only on the frames
@@ -1458,7 +1711,11 @@ namespace Tweeq.UIToolkit
                 }
 
                 bool visible = scale < _digitCount;
-                digit.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+                DisplayStyle digitDisplay = visible ? DisplayStyle.Flex : DisplayStyle.None;
+                if (digit.style.display.value != digitDisplay)
+                {
+                    digit.style.display = digitDisplay;
+                }
 
                 if (visible)
                 {
@@ -1477,9 +1734,13 @@ namespace Tweeq.UIToolkit
                 Label separator = _separators[scale];
                 if (separator != null)
                 {
-                    separator.style.display = scale < _digitCount - 1
+                    DisplayStyle separatorDisplay = scale < _digitCount - 1
                         ? DisplayStyle.Flex
                         : DisplayStyle.None;
+                    if (separator.style.display.value != separatorDisplay)
+                    {
+                        separator.style.display = separatorDisplay;
+                    }
                 }
             }
         }
