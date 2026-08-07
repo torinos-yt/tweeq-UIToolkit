@@ -45,7 +45,6 @@ namespace Tweeq.UIToolkit
         const float IN_OUT_LINE_WIDTH = 1f;
 
         const float PLAYHEAD_BODY_WIDTH = 9f;
-        const float PLAYHEAD_MARKER_WIDTH = 1f;
 
         // FocusInOut leaves this fraction of the In/Out span as breathing room on each side.
         const float FOCUS_MARGIN_RATIO = 0.05f;
@@ -1061,10 +1060,6 @@ namespace Tweeq.UIToolkit
                 painter.lineWidth = PLAYHEAD_BODY_WIDTH;
                 painter.lineCap = LineCap.Butt;
                 float playheadX = FrameToLocalX(_playheadFrame.Value);
-                StrokeVerticalLine(painter, playheadX, rect);
-
-                painter.strokeColor = _theme.Text;
-                painter.lineWidth = PLAYHEAD_MARKER_WIDTH;
                 StrokeVerticalLine(painter, playheadX, rect);
             }
         }
