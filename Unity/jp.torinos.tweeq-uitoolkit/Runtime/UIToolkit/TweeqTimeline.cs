@@ -502,6 +502,7 @@ namespace Tweeq.UIToolkit
             // Three stacked layers so the lit In/Out band sits under the clips while the dimming
             // of everything outside it sits over them.
             _underlay = CreateLayer("tweeq-timeline-underlay");
+            _underlay.pickingMode = PickingMode.Ignore;
             _underlay.generateVisualContent += OnGenerateUnderlay;
             _container.hierarchy.Add(_underlay);
 
@@ -513,6 +514,7 @@ namespace Tweeq.UIToolkit
             _container.hierarchy.Add(_content);
 
             _overlay = CreateLayer("tweeq-timeline-overlay");
+            _overlay.pickingMode = PickingMode.Ignore;
             _overlay.generateVisualContent += OnGenerateOverlay;
             _container.hierarchy.Add(_overlay);
 
