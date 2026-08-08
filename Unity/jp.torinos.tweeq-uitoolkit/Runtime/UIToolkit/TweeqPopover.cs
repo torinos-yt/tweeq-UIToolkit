@@ -264,6 +264,18 @@ namespace Tweeq.UIToolkit
             OpenInternal(context);
         }
 
+        /// <summary>Moves a popover opened at an explicit position and keeps that position as its source of truth.</summary>
+        public void MoveTo(Vector2 position)
+        {
+            if (!_useFixedPosition)
+            {
+                return;
+            }
+
+            _fixedPosition = position;
+            Reposition();
+        }
+
         /// <summary>Closes the popover. Does nothing if it isn't open (Closed doesn't fire either).</summary>
         public void Close()
         {
