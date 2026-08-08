@@ -21,6 +21,7 @@ namespace Tweeq.UIToolkit
 
         // Actual size converting the Vue original's padding of 0 .7em using rem12
         const float LABEL_PADDING = 8.4f;
+        const float LABEL_FONT_SIZE = 12f;
 
         const float DISABLED_OPACITY = 0.4f;
         const float FOCUS_RING_WIDTH = 1f;
@@ -33,6 +34,7 @@ namespace Tweeq.UIToolkit
 
         bool _value;
         string _labelText = string.Empty;
+        float _fontSize = LABEL_FONT_SIZE;
         bool _disabled;
 
         TweeqBoxPosition _inlinePosition = TweeqBoxPosition.None;
@@ -87,6 +89,26 @@ namespace Tweeq.UIToolkit
 
                 _labelText = text;
                 ApplyContentLayout();
+            }
+        }
+
+        /// <summary>Explicit label size override for pen-authored compact controls.</summary>
+        [UxmlAttribute("font-size")]
+        public float FontSize
+        {
+            get => _fontSize;
+            set
+            {
+                if (Mathf.Approximately(_fontSize, value))
+                {
+                    return;
+                }
+
+                _fontSize = value;
+                if (_label != null)
+                {
+                    _label.style.fontSize = _fontSize;
+                }
             }
         }
 
@@ -273,6 +295,7 @@ namespace Tweeq.UIToolkit
             SetBorderColor(_focusOuter, _theme.Accent);
 
             TweeqFonts.Apply(_label, _theme.FontUi);
+            _label.style.fontSize = _fontSize;
         }
 
         void ApplyContentLayout()

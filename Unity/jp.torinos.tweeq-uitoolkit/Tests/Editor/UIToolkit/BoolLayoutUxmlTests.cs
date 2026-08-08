@@ -107,13 +107,14 @@ namespace Tweeq.UIToolkit.Tests
         public void ButtonToggleAttributesAreAppliedFromUxml()
         {
             VisualElement root = Instantiate(
-                "<tq:ButtonToggleInput text=\"Solo\" value=\"true\" disabled=\"true\" />");
+                "<tq:ButtonToggleInput text=\"Solo\" value=\"true\" disabled=\"true\" font-size=\"12\" />");
 
             ButtonToggleInput toggle = root.Q<ButtonToggleInput>();
             Assert.That(toggle, Is.Not.Null, "ButtonToggleInput could not be resolved from UXML");
             Assert.That(toggle.Label, Is.EqualTo("Solo"));
             Assert.That(toggle.value, Is.True);
             Assert.That(toggle.Disabled, Is.True);
+            Assert.That(toggle.FontSize, Is.EqualTo(12f));
         }
 
         [Test]

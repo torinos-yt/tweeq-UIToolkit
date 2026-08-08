@@ -201,6 +201,17 @@ namespace Tweeq.UIToolkit.Tests
         }
 
         [Test]
+        public void ButtonToggle_FontSizeOverrideAppliesToItsLabel()
+        {
+            ButtonToggleInput toggle = new ButtonToggleInput("Mapping");
+
+            toggle.FontSize = 12f;
+
+            Assert.AreEqual(12f, toggle.FontSize);
+            Assert.AreEqual(12f, toggle.Q<Label>().style.fontSize.value.value);
+        }
+
+        [Test]
         public void ButtonToggle_InlineMiddleSquaresAllCorners()
         {
             ButtonToggleInput toggle = new ButtonToggleInput
