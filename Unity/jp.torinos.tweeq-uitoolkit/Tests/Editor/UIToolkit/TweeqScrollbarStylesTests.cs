@@ -22,6 +22,7 @@ namespace Tweeq.UIToolkit.Tests
             Assert.AreEqual(TweeqScrollbarStyles.TRACK_SIZE, scroll.horizontalScroller.style.height.value.value);
             Assert.AreEqual(DisplayStyle.None, scroll.verticalScroller.lowButton.style.display.value);
             Assert.AreEqual(DisplayStyle.None, scroll.verticalScroller.highButton.style.display.value);
+            Assert.AreEqual(StyleKeyword.Null, scroll.verticalScroller.style.opacity.keyword);
         }
 
         [Test]
@@ -82,6 +83,25 @@ namespace Tweeq.UIToolkit.Tests
         {
             Assert.DoesNotThrow(() => TweeqScrollbarStyles.ApplySlim(null, TweeqTheme.Dark()));
             Assert.DoesNotThrow(() => TweeqScrollbarStyles.ApplySlim(new ScrollView(), null));
+        }
+
+        [Test]
+        public void ApplySlim_AutoHideStartsTransparentAndShowsOnScrollActivity()
+        {
+            ScrollView scroll = new ScrollView(ScrollViewMode.Vertical);
+            scroll.verticalScroller.highValue = 10f;
+
+            TweeqScrollbarStyles.ApplySlim(scroll, TweeqTheme.Dark(), autoHide: true);
+
+            Assert.AreEqual(0f, scroll.verticalScroller.style.opacity.value);
+            Assert.AreEqual(
+                TweeqScrollbarStyles.AUTO_HIDE_FADE_DURATION_SECONDS,
+                scroll.verticalScroller.style.transitionDuration.value[0].value,
+                1e-6f);
+
+            scroll.verticalScroller.value = 1f;
+
+            Assert.AreEqual(1f, scroll.verticalScroller.style.opacity.value);
         }
     }
 }

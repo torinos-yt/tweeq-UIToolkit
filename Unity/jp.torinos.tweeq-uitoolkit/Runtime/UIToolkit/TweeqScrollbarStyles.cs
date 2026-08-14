@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -17,16 +18,38 @@ namespace Tweeq.UIToolkit
         /// <summary>Thumb thickness, centered inside the track.</summary>
         public const float THUMB_SIZE = 4f;
 
+        /// <summary>Idle time before an auto-hidden scroller starts fading out.</summary>
+        public const long AUTO_HIDE_IDLE_DELAY_MS = 700L;
+
+        /// <summary>Duration of the auto-hide opacity transition.</summary>
+        public const float AUTO_HIDE_FADE_DURATION_SECONDS = 0.15f;
+
         const float THUMB_ALPHA = 0.35f;
         const float THUMB_HOVER_ALPHA = 0.7f;
         const float OVERLAY_RIGHT_INSET = 2f;
         const float OVERLAY_VERTICAL_INSET = 3f;
+        const string AUTO_HIDE_CLASS = "tweeq-scrollbar-auto-hide";
+
+        static readonly StyleList<StylePropertyName> OpacityProperty =
+            new StyleList<StylePropertyName>(
+                new List<StylePropertyName> { new StylePropertyName("opacity") });
+
+        static readonly StyleList<EasingFunction> EaseOut =
+            new StyleList<EasingFunction>(
+                new List<EasingFunction> { new EasingFunction(EasingMode.EaseOutCubic) });
+
+        static readonly StyleList<TimeValue> FadeDuration =
+            new StyleList<TimeValue>(new List<TimeValue>
+            {
+                new TimeValue(AUTO_HIDE_FADE_DURATION_SECONDS, TimeUnit.Second),
+            });
 
         /// <summary>Applies the slim style to both scrollers. Null-safe on every part.</summary>
         public static void ApplySlim(
             ScrollView scrollView,
             TweeqTheme theme,
-            float rightInset = OVERLAY_RIGHT_INSET)
+            float rightInset = OVERLAY_RIGHT_INSET,
+            bool autoHide = false)
         {
             if (scrollView == null || theme == null)
             {
@@ -57,6 +80,12 @@ namespace Tweeq.UIToolkit
 
             Apply(scrollView.verticalScroller, theme, true, rightInset);
             Apply(scrollView.horizontalScroller, theme, false, 0f);
+
+            if (autoHide && !scrollView.ClassListContains(AUTO_HIDE_CLASS))
+            {
+                scrollView.AddToClassList(AUTO_HIDE_CLASS);
+                new AutoHideController(scrollView);
+            }
         }
 
         static void Apply(Scroller scroller, TweeqTheme theme, bool vertical, float rightInset)
@@ -147,6 +176,148 @@ namespace Tweeq.UIToolkit
             Color color = theme.TextSubtle;
             color.a = hovered ? THUMB_HOVER_ALPHA : THUMB_ALPHA;
             return color;
+        }
+
+        sealed class AutoHideController
+        {
+            readonly Scroller[] _scrollers;
+            readonly HashSet<Scroller> _hoveredScrollers = new HashSet<Scroller>();
+            readonly HashSet<int> _pressedPointers = new HashSet<int>();
+            readonly IVisualElementScheduledItem _hideItem;
+
+            public AutoHideController(ScrollView scrollView)
+            {
+                _scrollers = new[]
+                {
+                    scrollView.verticalScroller,
+                    scrollView.horizontalScroller,
+                };
+
+                for (int index = 0; index < _scrollers.Length; index++)
+                {
+                    Scroller scroller = _scrollers[index];
+                    if (scroller == null)
+                    {
+                        continue;
+                    }
+
+                    ApplyOpacityTransition(scroller);
+                    scroller.style.opacity = 0f;
+                    scroller.valueChanged += OnScrollValueChanged;
+                    scroller.RegisterCallback<PointerEnterEvent>(OnPointerEnter);
+                    scroller.RegisterCallback<PointerLeaveEvent>(OnPointerLeave);
+                    scroller.RegisterCallback<PointerDownEvent>(OnPointerDown, TrickleDown.TrickleDown);
+                    scroller.RegisterCallback<PointerUpEvent>(OnPointerUp, TrickleDown.TrickleDown);
+                    scroller.RegisterCallback<PointerCaptureOutEvent>(
+                        OnPointerCaptureOut,
+                        TrickleDown.TrickleDown);
+                }
+
+                scrollView.RegisterCallback<WheelEvent>(OnWheel, TrickleDown.TrickleDown);
+                _hideItem = scrollView.schedule.Execute(HideIfIdle);
+                _hideItem.Pause();
+            }
+
+            void OnScrollValueChanged(float _)
+            {
+                ShowForActivity();
+            }
+
+            void OnWheel(WheelEvent _)
+            {
+                ShowForActivity();
+            }
+
+            void OnPointerEnter(PointerEnterEvent evt)
+            {
+                if (evt.currentTarget is Scroller scroller)
+                {
+                    _hoveredScrollers.Add(scroller);
+                }
+
+                Show();
+                _hideItem.Pause();
+            }
+
+            void OnPointerLeave(PointerLeaveEvent evt)
+            {
+                if (evt.currentTarget is Scroller scroller)
+                {
+                    _hoveredScrollers.Remove(scroller);
+                }
+
+                ScheduleHideIfIdle();
+            }
+
+            void OnPointerDown(PointerDownEvent evt)
+            {
+                _pressedPointers.Add(evt.pointerId);
+                Show();
+                _hideItem.Pause();
+            }
+
+            void OnPointerUp(PointerUpEvent evt)
+            {
+                _pressedPointers.Remove(evt.pointerId);
+                ScheduleHideIfIdle();
+            }
+
+            void OnPointerCaptureOut(PointerCaptureOutEvent evt)
+            {
+                _pressedPointers.Remove(evt.pointerId);
+                ScheduleHideIfIdle();
+            }
+
+            void ShowForActivity()
+            {
+                Show();
+                ScheduleHideIfIdle();
+            }
+
+            void Show()
+            {
+                for (int index = 0; index < _scrollers.Length; index++)
+                {
+                    if (_scrollers[index] != null)
+                    {
+                        _scrollers[index].style.opacity = 1f;
+                    }
+                }
+            }
+
+            void ScheduleHideIfIdle()
+            {
+                if (_hoveredScrollers.Count > 0 || _pressedPointers.Count > 0)
+                {
+                    _hideItem.Pause();
+                    return;
+                }
+
+                _hideItem.ExecuteLater(AUTO_HIDE_IDLE_DELAY_MS);
+            }
+
+            void HideIfIdle()
+            {
+                if (_hoveredScrollers.Count > 0 || _pressedPointers.Count > 0)
+                {
+                    return;
+                }
+
+                for (int index = 0; index < _scrollers.Length; index++)
+                {
+                    if (_scrollers[index] != null)
+                    {
+                        _scrollers[index].style.opacity = 0f;
+                    }
+                }
+            }
+        }
+
+        static void ApplyOpacityTransition(Scroller scroller)
+        {
+            scroller.style.transitionProperty = OpacityProperty;
+            scroller.style.transitionTimingFunction = EaseOut;
+            scroller.style.transitionDuration = FadeDuration;
         }
     }
 }
