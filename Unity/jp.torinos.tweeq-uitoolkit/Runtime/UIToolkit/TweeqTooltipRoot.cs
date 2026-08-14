@@ -27,6 +27,9 @@ namespace Tweeq.UIToolkit
         const float PILL_PADDING_VERTICAL = 2f;
         const float PILL_PADDING_HORIZONTAL = 6f;
         const float PILL_RADIUS = 9999f;
+        const float WRAPPED_PADDING_VERTICAL = 8f;
+        const float WRAPPED_PADDING_HORIZONTAL = 12f;
+        const float WRAPPED_RADIUS = 6f;
         const float FONT_SIZE = 11f;
 
         // .plain's max-width of 18em converted to px based on 0.9em (=11px)
@@ -251,6 +254,7 @@ namespace Tweeq.UIToolkit
             _label.style.marginRight = 0f;
             _label.style.marginTop = 0f;
             _label.style.marginBottom = 0f;
+            _label.RegisterCallback<GeometryChangedEvent>(OnLabelGeometryChanged);
             _popover.Add(_label);
 
             _onLayerDetached = OnLayerDetached;
@@ -369,12 +373,46 @@ namespace Tweeq.UIToolkit
         // Avoid regenerating the Label's text when the string is unchanged
         void SetLabelText(string text)
         {
+            ApplyTextLayout(text);
+
             if (_label.text == text)
             {
                 return;
             }
 
             _label.text = text;
+        }
+
+        void ApplyTextLayout(string text)
+        {
+            bool wraps = TextWraps(text);
+            _popover.Balloon.Radius = wraps ? WRAPPED_RADIUS : PILL_RADIUS;
+            _popover.Balloon.PaddingVertical = wraps ? WRAPPED_PADDING_VERTICAL : PILL_PADDING_VERTICAL;
+            _popover.Balloon.PaddingHorizontal = wraps ? WRAPPED_PADDING_HORIZONTAL : PILL_PADDING_HORIZONTAL;
+            _label.style.unityTextAlign = wraps ? TextAnchor.MiddleLeft : TextAnchor.MiddleCenter;
+        }
+
+        // Text measurement is NaN until the first attached layout pass, so retry when geometry becomes usable
+        void OnLabelGeometryChanged(GeometryChangedEvent evt)
+        {
+            ApplyTextLayout(_label.text);
+        }
+
+        bool TextWraps(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                return false;
+            }
+
+            if (text.IndexOf('\n') >= 0 || text.IndexOf('\r') >= 0)
+            {
+                return true;
+            }
+
+            Vector2 size = _label.MeasureTextSize(
+                text, 0f, VisualElement.MeasureMode.Undefined, 0f, VisualElement.MeasureMode.Undefined);
+            return !float.IsNaN(size.x) && size.x > MAX_WIDTH;
         }
 
         #endregion
