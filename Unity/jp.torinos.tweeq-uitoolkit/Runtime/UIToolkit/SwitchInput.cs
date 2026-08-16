@@ -40,6 +40,10 @@ namespace Tweeq.UIToolkit
         Color _inactiveHandleColor;
         bool _hasInactiveHandleColor;
         float _baseHandleSize;
+        float _trackWidth;
+        bool _geometryValid;
+        bool _leftTransitionActive;
+        bool _geometryDirty;
 
         VisualElement _track;
         VisualElement _handle;
@@ -118,8 +122,11 @@ namespace Tweeq.UIToolkit
         /// <summary>Sets the value without firing ChangeEvent.</summary>
         public void SetValueWithoutNotify(bool newValue)
         {
+            bool changed = _value != newValue;
             _value = newValue;
-            Refresh();
+            // Snapshot refreshes can repeat the same value while a transition is running.
+            // Rewriting left for those no-op updates restarts/cancels the USS transition.
+            Refresh(changed, changed);
         }
 
         #endregion
@@ -174,7 +181,11 @@ namespace Tweeq.UIToolkit
             };
             _handle.style.position = Position.Absolute;
             _handle.style.top = HANDLE_INSET;
+            _handle.RegisterCallback<GeometryChangedEvent>(OnGeometryChanged);
+            _handle.RegisterCallback<TransitionEndEvent>(OnHandleTransitionEnd);
+            _handle.RegisterCallback<TransitionCancelEvent>(OnHandleTransitionCancel);
             _track.hierarchy.Add(_handle);
+            _track.RegisterCallback<GeometryChangedEvent>(OnGeometryChanged);
 
             // The ring also extends 3px outside the track, so it's drawn on a separate layer with the same rect as the track.
             _ring = new VisualElement
@@ -322,6 +333,40 @@ namespace Tweeq.UIToolkit
         void OnGeometryChanged(GeometryChangedEvent evt)
         {
             _ring?.MarkDirtyRepaint();
+
+            if (_leftTransitionActive)
+            {
+                _geometryDirty = true;
+                return;
+            }
+
+            if (CacheGeometry())
+            {
+                Refresh();
+            }
+        }
+
+        void OnHandleTransitionEnd(TransitionEndEvent evt)
+        {
+            if (!_leftTransitionActive)
+            {
+                return;
+            }
+
+            _leftTransitionActive = false;
+            FinalizeHandlePosition();
+        }
+
+        void OnHandleTransitionCancel(TransitionCancelEvent evt)
+        {
+            if (!_leftTransitionActive)
+            {
+                return;
+            }
+
+            _leftTransitionActive = false;
+            // Finish after cancellation dispatch so UI Toolkit has completed its layout pass.
+            _handle.schedule.Execute(FinalizeHandlePosition).StartingIn(0);
         }
 
         void NotifyValueChanged(bool previous, bool current)
@@ -342,23 +387,14 @@ namespace Tweeq.UIToolkit
 
         #region Refresh
 
-        float TrackWidth => ResolveWidth(
-            _track,
-            _theme != null ? _theme.InputHeight * TRACK_WIDTH_FACTOR : 0f);
+        float TrackWidth => _geometryValid
+            ? _trackWidth
+            : (_theme != null ? _theme.InputHeight * TRACK_WIDTH_FACTOR : 0f);
 
         float HandleSize
         {
             get
             {
-                if (_gesture == null || !_gesture.Dragging)
-                {
-                    float resolved = ResolveWidth(_handle, 0f);
-                    if (IsUsableSize(resolved))
-                    {
-                        _baseHandleSize = resolved;
-                    }
-                }
-
                 if (IsUsableSize(_baseHandleSize))
                 {
                     return _baseHandleSize;
@@ -375,24 +411,63 @@ namespace Tweeq.UIToolkit
             ? _theme.InputHeight - HANDLE_INSET * 2f
             : 0f;
 
-        static float ResolveWidth(VisualElement element, float fallback)
+        bool CacheGeometry()
         {
-            if (element != null)
+            if (!TryResolveWidth(_track, out float trackWidth)
+                || !TryResolveWidth(_handle, out float handleWidth))
             {
-                float resolved = element.resolvedStyle.width;
-                if (IsUsableSize(resolved))
-                {
-                    return resolved;
-                }
+                _geometryValid = false;
+                return false;
+            }
 
+            bool changed = !_geometryValid
+                || !Mathf.Approximately(_trackWidth, trackWidth)
+                || !Mathf.Approximately(_baseHandleSize, handleWidth);
+            _trackWidth = trackWidth;
+            _baseHandleSize = handleWidth;
+            _geometryValid = true;
+            _geometryDirty = false;
+            return changed;
+        }
+
+        bool TryResolveWidth(VisualElement element, out float width)
+        {
+            width = 0f;
+            if (element == null)
+            {
+                return false;
+            }
+
+            float resolved = element.resolvedStyle.width;
+            if (IsUsableSize(resolved))
+            {
+                width = resolved;
+                return true;
+            }
+
+            // Inline fallback is valid for detached unit-test controls. Once attached, a zero
+            // resolved width means layout is not ready (or the control is hidden), so defer to
+            // the next GeometryChangedEvent instead of writing a guessed endpoint.
+            if (panel == null)
+            {
                 float inline = element.style.width.value.value;
                 if (IsUsableSize(inline))
                 {
-                    return inline;
+                    width = inline;
+                    return true;
+                }
+
+                float fallback = element == _track
+                    ? (_theme != null ? _theme.InputHeight * TRACK_WIDTH_FACTOR : 0f)
+                    : DefaultHandleSize;
+                if (IsUsableSize(fallback))
+                {
+                    width = fallback;
+                    return true;
                 }
             }
 
-            return fallback;
+            return false;
         }
 
         static bool IsUsableSize(float value)
@@ -400,15 +475,20 @@ namespace Tweeq.UIToolkit
             return value > 0f && !float.IsNaN(value) && !float.IsInfinity(value);
         }
 
-        void Refresh()
+        void Refresh(bool updatePosition = true, bool restartPositionTransition = false)
         {
             if (_theme == null)
             {
                 return;
             }
 
+            if (!_geometryValid)
+            {
+                CacheGeometry();
+            }
+
             UpdateTrack();
-            UpdateHandle();
+            UpdateHandle(updatePosition, restartPositionTransition);
             UpdateLabelColor();
             UpdateOverlay();
 
@@ -432,7 +512,7 @@ namespace Tweeq.UIToolkit
             }
         }
 
-        void UpdateHandle()
+        void UpdateHandle(bool updatePosition, bool restartPositionTransition)
         {
             if (_handle == null)
             {
@@ -442,13 +522,69 @@ namespace Tweeq.UIToolkit
             bool tweaking = _gesture != null && _gesture.Dragging;
             float width = tweaking ? HandleTweakingWidth : HandleSize;
 
-            // The on side grows while keeping its outer edge fixed to the right end (track width - inset).
-            float onLeft = Mathf.Max(HANDLE_INSET, TrackWidth - HANDLE_INSET - width);
-            float left = _value ? onLeft : HANDLE_INSET;
+            if (!Mathf.Approximately(_handle.style.width.value.value, width))
+            {
+                _handle.style.width = width;
+            }
 
-            _handle.style.width = width;
-            _handle.style.left = left;
+            if (updatePosition
+                && (!_leftTransitionActive || restartPositionTransition))
+            {
+                ApplyHandleTarget(width, force: false);
+            }
             _handle.style.backgroundColor = _value ? _theme.Background : InactiveHandleColor;
+        }
+
+        void ApplyHandleTarget(float width, bool force)
+        {
+            if (_handle == null || !_geometryValid)
+            {
+                return;
+            }
+
+            // Never use a hidden/invalid attached layout as a travel endpoint. The cached
+            // geometry is refreshed by GeometryChangedEvent when the control becomes visible.
+            if (panel != null
+                && (!IsUsableSize(_track.resolvedStyle.width)
+                    || !IsUsableSize(_handle.resolvedStyle.width)))
+            {
+                _geometryDirty = true;
+                return;
+            }
+
+            // The on side grows while keeping its outer edge fixed to the right end.
+            float onLeft = Mathf.Max(HANDLE_INSET, TrackWidth - HANDLE_INSET - width);
+            float target = _value ? onLeft : HANDLE_INSET;
+            float resolvedLeft = _handle.resolvedStyle.left;
+            bool moving = panel != null
+                && IsUsableSize(resolvedLeft)
+                && !Mathf.Approximately(resolvedLeft, target);
+
+            _leftTransitionActive = !force && moving;
+            if (force
+                || !Mathf.Approximately(_handle.style.left.value.value, target)
+                || (IsUsableSize(resolvedLeft) && !Mathf.Approximately(resolvedLeft, target)))
+            {
+                _handle.style.left = target;
+            }
+        }
+
+        void FinalizeHandlePosition()
+        {
+            if (_geometryDirty)
+            {
+                CacheGeometry();
+                if (!_geometryValid)
+                {
+                    return;
+                }
+
+                _geometryDirty = false;
+            }
+
+            bool tweaking = _gesture != null && _gesture.Dragging;
+            float width = tweaking ? HandleTweakingWidth : HandleSize;
+            ApplyHandleTarget(width, force: true);
         }
 
         void UpdateLabelColor()
