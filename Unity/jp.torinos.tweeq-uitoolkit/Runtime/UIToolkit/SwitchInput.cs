@@ -37,6 +37,9 @@ namespace Tweeq.UIToolkit
         bool _value;
         string _label = string.Empty;
         TweeqTheme _theme = TweeqTheme.Dark();
+        Color _inactiveHandleColor;
+        bool _hasInactiveHandleColor;
+        float _baseHandleSize;
 
         VisualElement _track;
         VisualElement _handle;
@@ -94,6 +97,20 @@ namespace Tweeq.UIToolkit
             {
                 _theme = value ?? TweeqTheme.Dark();
                 ApplyStaticStyles();
+                Refresh();
+            }
+        }
+
+        /// <summary>Optional inactive-handle color override for hosts with a dedicated disabled token.</summary>
+        public Color InactiveHandleColor
+        {
+            get => _hasInactiveHandleColor
+                ? _inactiveHandleColor
+                : (_theme != null ? _theme.TextSubtle : Color.clear);
+            set
+            {
+                _inactiveHandleColor = value;
+                _hasInactiveHandleColor = true;
                 Refresh();
             }
         }
@@ -210,7 +227,8 @@ namespace Tweeq.UIToolkit
 
             if (_handle != null)
             {
-                float size = HandleSize;
+                float size = DefaultHandleSize;
+                _baseHandleSize = size;
                 _handle.style.height = size;
                 SetBorderRadius(_handle, size * 0.5f);
                 ApplyTransition(_handle, new[] { "left", "width", "background-color" });
@@ -324,12 +342,63 @@ namespace Tweeq.UIToolkit
 
         #region Refresh
 
-        float TrackWidth => _theme != null ? _theme.InputHeight * TRACK_WIDTH_FACTOR : 0f;
+        float TrackWidth => ResolveWidth(
+            _track,
+            _theme != null ? _theme.InputHeight * TRACK_WIDTH_FACTOR : 0f);
 
-        float HandleSize => _theme != null ? _theme.InputHeight - HANDLE_INSET * 2f : 0f;
+        float HandleSize
+        {
+            get
+            {
+                if (_gesture == null || !_gesture.Dragging)
+                {
+                    float resolved = ResolveWidth(_handle, 0f);
+                    if (IsUsableSize(resolved))
+                    {
+                        _baseHandleSize = resolved;
+                    }
+                }
+
+                if (IsUsableSize(_baseHandleSize))
+                {
+                    return _baseHandleSize;
+                }
+
+                return DefaultHandleSize;
+            }
+        }
 
         // Stretches 4px toward the center while dragging (the outer edge stays fixed).
-        float HandleTweakingWidth => _theme != null ? _theme.InputHeight - HANDLE_INSET : 0f;
+        float HandleTweakingWidth => HandleSize + HANDLE_INSET;
+
+        float DefaultHandleSize => _theme != null
+            ? _theme.InputHeight - HANDLE_INSET * 2f
+            : 0f;
+
+        static float ResolveWidth(VisualElement element, float fallback)
+        {
+            if (element != null)
+            {
+                float resolved = element.resolvedStyle.width;
+                if (IsUsableSize(resolved))
+                {
+                    return resolved;
+                }
+
+                float inline = element.style.width.value.value;
+                if (IsUsableSize(inline))
+                {
+                    return inline;
+                }
+            }
+
+            return fallback;
+        }
+
+        static bool IsUsableSize(float value)
+        {
+            return value > 0f && !float.IsNaN(value) && !float.IsInfinity(value);
+        }
 
         void Refresh()
         {
@@ -374,11 +443,12 @@ namespace Tweeq.UIToolkit
             float width = tweaking ? HandleTweakingWidth : HandleSize;
 
             // The on side grows while keeping its outer edge fixed to the right end (track width - inset).
-            float left = _value ? TrackWidth - HANDLE_INSET - width : HANDLE_INSET;
+            float onLeft = Mathf.Max(HANDLE_INSET, TrackWidth - HANDLE_INSET - width);
+            float left = _value ? onLeft : HANDLE_INSET;
 
             _handle.style.width = width;
             _handle.style.left = left;
-            _handle.style.backgroundColor = _value ? _theme.Background : _theme.TextSubtle;
+            _handle.style.backgroundColor = _value ? _theme.Background : InactiveHandleColor;
         }
 
         void UpdateLabelColor()
