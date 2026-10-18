@@ -137,6 +137,10 @@ namespace Tweeq.UIToolkit
         int _valueAtStartIndex = -1;
         long _openTimeMs;
 
+        // A press that starts on the list after opening is a deliberate click on an option, so its release
+        // must commit even inside the grace window (which exists only for the press that opened the popup)
+        bool _listPressedSinceOpen;
+
         // Remembers "has it already been added" without depending on popover's internal structure
         bool _popupAttached;
 
@@ -459,6 +463,7 @@ namespace Tweeq.UIToolkit
             _valueAtStart = _value;
             _valueAtStartIndex = _valueIndex;
             _openTimeMs = Now();
+            _listPressedSinceOpen = false;
             _pointerOverArrow = false;
 
             ShowPopup();
@@ -558,7 +563,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            if (Now() - _openTimeMs <= CONFIRM_GRACE_MS)
+            if (!_listPressedSinceOpen && Now() - _openTimeMs <= CONFIRM_GRACE_MS)
             {
                 return;
             }
@@ -1704,6 +1709,7 @@ namespace Tweeq.UIToolkit
             // A press inside the popup isn't treated as an outside click.
             // Also return focus to the field so Enter / Escape keep working
             SelectRowAt(evt);
+            _listPressedSinceOpen = true;
 
             // While filtering, return to the caret-holding TextField; otherwise return to the root
             FocusSelf();
