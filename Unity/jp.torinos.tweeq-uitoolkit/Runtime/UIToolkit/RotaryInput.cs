@@ -106,6 +106,11 @@ namespace Tweeq.UIToolkit
         bool _hovered;
         bool _focused;
 
+        bool _showMixedValue;
+
+        // Escape restores the mixed state the drag started from.
+        bool _mixedOnDragStart;
+
         #endregion
 
         #region Public API
@@ -120,14 +125,35 @@ namespace Tweeq.UIToolkit
             get => _value;
             set
             {
-                if (_value == value)
+                // Like UI Toolkit's BaseField: assigning while mixed resolves the mixed state and notifies even for the same value.
+                if (_value == value && !_showMixedValue)
                 {
                     return;
                 }
 
                 float previous = _value;
+                _showMixedValue = false;
                 SetValueWithoutNotify(value);
                 NotifyValueChanged(previous, _value);
+            }
+        }
+
+        /// <summary>
+        /// Hides the indicator needle (e.g. a multi-selection whose values differ). A drag resolves it, starting from the current value.
+        /// Not cleared by <see cref="SetValueWithoutNotify"/>.
+        /// </summary>
+        public bool ShowMixedValue
+        {
+            get => _showMixedValue;
+            set
+            {
+                if (_showMixedValue == value)
+                {
+                    return;
+                }
+
+                _showMixedValue = value;
+                Refresh();
             }
         }
 
@@ -235,6 +261,8 @@ namespace Tweeq.UIToolkit
             _dragging = true;
             _valueOnDragStart = _value;
             _local = _value;
+            _mixedOnDragStart = _showMixedValue;
+            _showMixedValue = false;
 
             HideCursor();
             AcquireOverlay();
@@ -594,6 +622,8 @@ namespace Tweeq.UIToolkit
             _previousPosition = position;
             _valueOnDragStart = _value;
             _local = _value;
+            _mixedOnDragStart = _showMixedValue;
+            _showMixedValue = false;
 
             HideCursor();
             AcquireOverlay();
@@ -615,11 +645,15 @@ namespace Tweeq.UIToolkit
         {
             int pointerId = _pointerId;
             float restored = _valueOnDragStart;
+            bool mixed = _dragging ? _mixedOnDragStart : _showMixedValue;
             ResetDragState();
             ReleasePointerSafely(pointerId);
 
             // The value notified during the drag is being rolled back, so notify this too.
+            // Mixed is cleared around it so an untouched mixed knob doesn't re-notify its unchanged value.
+            _showMixedValue = false;
             this.value = restored;
+            _showMixedValue = mixed;
             UpdateVisualState();
         }
 
@@ -1107,6 +1141,11 @@ namespace Tweeq.UIToolkit
             painter.Arc(center, radius, new Angle(0f, AngleUnit.Degree), new Angle(360f, AngleUnit.Degree));
             painter.ClosePath();
             painter.Fill();
+
+            if (_showMixedValue)
+            {
+                return;
+            }
 
             Vector2 direction = AngleDirection(DisplayAngle());
             painter.strokeColor = absoluteHover ? _theme.AccentHover : _theme.Input;

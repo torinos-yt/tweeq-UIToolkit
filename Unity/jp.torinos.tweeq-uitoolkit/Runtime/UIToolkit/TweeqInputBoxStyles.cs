@@ -22,6 +22,9 @@ namespace Tweeq.UIToolkit
         /// <summary>Thickness of the inset border when disabled (px).</summary>
         public const float DISABLED_BORDER_WIDTH = 1f;
 
+        /// <summary>The text shown in place of the value while an input's ShowMixedValue is on (same glyph as UI Toolkit's mixed fields).</summary>
+        public const string MIXED_VALUE_TEXT = "—";
+
         // The inner element of TextField. Touched to remove the background/border and make
         // full use of the 24px height.
         const string TEXT_INPUT_NAME = "unity-text-input";

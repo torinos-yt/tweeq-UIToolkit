@@ -72,14 +72,29 @@ namespace Tweeq.UIToolkit
             get => _value;
             set
             {
-                if (_value == value)
+                if (_value == value && !ShowMixedValue)
                 {
                     return;
                 }
 
                 float previous = _value;
+                ShowMixedValue = false;
                 SetValueWithoutNotify(value);
                 Notify(previous, _value);
+            }
+        }
+
+        /// <summary>
+        /// Mixed display on both the knob and the number field (see <see cref="NumberInput.ShowMixedValue"/>).
+        /// Changing the value through either one resolves both.
+        /// </summary>
+        public bool ShowMixedValue
+        {
+            get => _rotary.ShowMixedValue || _number.ShowMixedValue;
+            set
+            {
+                _rotary.ShowMixedValue = value;
+                _number.ShowMixedValue = value;
             }
         }
 
@@ -463,6 +478,7 @@ namespace Tweeq.UIToolkit
 
             float previous = _value;
             _value = next;
+            ShowMixedValue = false;
 
             _syncing = true;
             other.SetValueWithoutNotify(next);
@@ -478,6 +494,8 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
+            // A drag that ended on the value it started from still confirmed that value for both halves.
+            ShowMixedValue = false;
             Confirmed?.Invoke(_value);
         }
 

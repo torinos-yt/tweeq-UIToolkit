@@ -39,6 +39,10 @@ preserved at the git tag [`vue-final`](https://github.com/torinos-yt/tweeq-UIToo
 | `TweeqProvider` / `useTweeq` / `theme` | `TweeqRoot` + `TweeqTheme` | Theme generation and distribution; USS `--tq-*` seeds |
 | `validator` | `NumberValidator` (`Tweeq.Core`) | clamp → quantize composition |
 
+`NumberInput`, `RotaryInput`, `AngleInput`, `SwitchInput` and `DropdownInput<T>` have a `ShowMixedValue` flag for a host
+editing several objects whose values differ: it shows "—" with no bar fill, rotary needle, switch side or marked option, and
+the next edit resolves it (a switch turns on, like UI Toolkit's `showMixedValue`).
+
 All widgets are `[UxmlElement]`s and can be placed from UXML/UI Builder
 (see the `UxmlDemo` sample in the package).
 

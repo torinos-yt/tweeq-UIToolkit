@@ -207,6 +207,11 @@ namespace Tweeq.UIToolkit
         // Set only while text parsing is failing. Cleared once a valid input comes in next.
         bool _parseFailed;
 
+        bool _showMixedValue;
+
+        // Escape restores the mixed state the drag/edit session started from.
+        bool _mixedAtSessionStart;
+
         #endregion
 
         #region Public API
@@ -221,14 +226,36 @@ namespace Tweeq.UIToolkit
             get => _value;
             set
             {
-                if (_value == value)
+                // Like UI Toolkit's BaseField: assigning while mixed resolves the mixed state and notifies even for the same value.
+                if (_value == value && !_showMixedValue)
                 {
                     return;
                 }
 
                 float previous = _value;
+                ShowMixedValue = false;
                 SetValueWithoutNotify(value);
                 NotifyValueChanged(previous, _value);
+            }
+        }
+
+        /// <summary>
+        /// Shows "—" instead of the value, with no bar fill or handle (e.g. a multi-selection whose values differ).
+        /// A drag, typed text, an arrow increment, or assigning <see cref="value"/> resolves it; a drag starts from the current value.
+        /// Not cleared by <see cref="SetValueWithoutNotify"/>.
+        /// </summary>
+        public bool ShowMixedValue
+        {
+            get => _showMixedValue;
+            set
+            {
+                if (_showMixedValue == value)
+                {
+                    return;
+                }
+
+                _showMixedValue = value;
+                Refresh();
             }
         }
 
@@ -984,7 +1011,8 @@ namespace Tweeq.UIToolkit
             _pointerPosition = position;
             _startedEditing = _editing;
             _valueOnDragStart = _value;
-            _grabbedHandle = BarVisible && InsideRange && IsInGrabZone(position.x);
+            // A mixed field draws no handle, so there is nothing to grab: the press jumps like anywhere else on the bar.
+            _grabbedHandle = !_showMixedValue && BarVisible && InsideRange && IsInGrabZone(position.x);
             _shiftHeld = (evt.modifiers & EventModifiers.Shift) != 0;
             _altHeld = (evt.modifiers & EventModifiers.Alt) != 0;
 
@@ -1152,6 +1180,8 @@ namespace Tweeq.UIToolkit
             _local = _value;
             _gesture.Reset();
             StopHoldTimer();
+            _mixedAtSessionStart = _showMixedValue;
+            _showMixedValue = false;
 
             // Jumps immediately to the pressed position only when unfocused, inside the range, and not on the handle (spec §1).
             // Fit folds t into [0,1] before lerping, so the result is always within [min,max].
@@ -1240,6 +1270,7 @@ namespace Tweeq.UIToolkit
                 SetValueWithoutNotify(restored);
             }
 
+            _showMixedValue = _mixedAtSessionStart;
             SyncDisplayText(true);
             Refresh();
         }
@@ -1360,6 +1391,7 @@ namespace Tweeq.UIToolkit
             if (editing)
             {
                 _valueAtFocus = _value;
+                _mixedAtSessionStart = _showMixedValue;
             }
             else
             {
@@ -1394,6 +1426,7 @@ namespace Tweeq.UIToolkit
             }
 
             _display = evt.newValue ?? string.Empty;
+            _showMixedValue = false;
             ParseDisplay(_display);
             ApplyOutput();
         }
@@ -1420,6 +1453,13 @@ namespace Tweeq.UIToolkit
         // Confirms on Enter / blur. Rebuilds the display from the output value and fires Confirmed.
         void Commit()
         {
+            // Nothing was typed into a mixed field, so there is no value to confirm.
+            if (_showMixedValue)
+            {
+                SyncDisplayText(true);
+                return;
+            }
+
             if (_editing && _textField != null)
             {
                 // Should already be reflected on every keystroke, but Enter/blur always forces a commit in case anything slipped through.
@@ -1437,7 +1477,11 @@ namespace Tweeq.UIToolkit
         {
             _local = _valueAtFocus;
             _parseFailed = false;
+
+            // Cleared first so an untouched mixed field doesn't re-notify its unchanged value.
+            _showMixedValue = false;
             this.value = _valueAtFocus;
+            _showMixedValue = _mixedAtSessionStart;
             SyncDisplayText(true);
             ScheduleSelectAll();
         }
@@ -1676,6 +1720,7 @@ namespace Tweeq.UIToolkit
             _local = NumberLogic.ArrowIncrement(
                 _local, direction, _step, _snapStep, _shiftHeld, _altHeld, ValidMin, ValidMax);
 
+            _showMixedValue = false;
             ApplyOutput();
             _local = _value;
             SyncDisplayText(true);
@@ -1698,12 +1743,14 @@ namespace Tweeq.UIToolkit
 
             if (_valueLabel != null)
             {
-                _valueLabel.text = text;
+                _valueLabel.text = _showMixedValue ? TweeqInputBoxStyles.MIXED_VALUE_TEXT : text;
             }
 
-            if (_textField != null && _textField.value != text)
+            // A mixed field opens its editor empty, so typing starts a fresh value rather than editing one of them.
+            string fieldText = _showMixedValue ? string.Empty : text;
+            if (_textField != null && _textField.value != fieldText)
             {
-                _textField.SetValueWithoutNotify(text);
+                _textField.SetValueWithoutNotify(fieldText);
             }
         }
 
@@ -1784,7 +1831,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            if (!BarVisible)
+            if (!BarVisible || _showMixedValue)
             {
                 // Hidden while keeping the layout intact (spec §5).
                 _barFill.style.visibility = Visibility.Hidden;
@@ -1817,10 +1864,10 @@ namespace Tweeq.UIToolkit
 
             _prefixLabel.text = _prefix;
             _suffixLabel.text = _suffix;
-            _prefixLabel.style.display = string.IsNullOrEmpty(_prefix)
+            _prefixLabel.style.display = string.IsNullOrEmpty(_prefix) || _showMixedValue
                 ? DisplayStyle.None
                 : DisplayStyle.Flex;
-            _suffixLabel.style.display = string.IsNullOrEmpty(_suffix)
+            _suffixLabel.style.display = string.IsNullOrEmpty(_suffix) || _showMixedValue
                 ? DisplayStyle.None
                 : DisplayStyle.Flex;
 
@@ -2064,7 +2111,7 @@ namespace Tweeq.UIToolkit
 
         void PaintHandle(Painter2D painter, float width, float height)
         {
-            if (!BarVisible)
+            if (!BarVisible || _showMixedValue)
             {
                 return;
             }
@@ -2087,7 +2134,7 @@ namespace Tweeq.UIToolkit
 
         void PaintOutOfRangeArrows(Painter2D painter, float width, float height)
         {
-            if (!BarVisible || InsideRange)
+            if (!BarVisible || InsideRange || _showMixedValue)
             {
                 return;
             }

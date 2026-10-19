@@ -102,6 +102,11 @@ namespace Tweeq.UIToolkit
         // Position of _value within options. -1 if not found. Cached so it isn't searched for every frame
         int _valueIndex = -1;
 
+        bool _showMixedValue;
+
+        // Escape / an outside click restores the mixed state the popup opened with.
+        bool _mixedAtStart;
+
         bool _disabled;
         bool _invalid;
         bool _hovered;
@@ -188,15 +193,38 @@ namespace Tweeq.UIToolkit
             get => _value;
             set
             {
-                if (Comparer.Equals(_value, value))
+                // Like UI Toolkit's BaseField: assigning while mixed resolves the mixed state and notifies even for the same value.
+                if (Comparer.Equals(_value, value) && !_showMixedValue)
                 {
                     return;
                 }
 
                 T previous = _value;
+                _showMixedValue = false;
                 SetValueWithoutNotify(value);
                 ValueChanged?.Invoke(_value);
                 NotifyValueChanged(previous, _value);
+            }
+        }
+
+        /// <summary>
+        /// Shows "—" in the field and marks no option in the popup (e.g. a multi-selection whose values differ).
+        /// Picking an option (hover, arrows, filter) resolves it; closing without a pick restores it and confirms nothing.
+        /// Not cleared by <see cref="SetValueWithoutNotify"/>.
+        /// </summary>
+        public bool ShowMixedValue
+        {
+            get => _showMixedValue;
+            set
+            {
+                if (_showMixedValue == value)
+                {
+                    return;
+                }
+
+                _showMixedValue = value;
+                RefreshDisplayText();
+                Refresh();
             }
         }
 
@@ -501,7 +529,8 @@ namespace Tweeq.UIToolkit
 
             _open = true;
             _valueAtStart = _value;
-            _valueAtStartIndex = _valueIndex;
+            _valueAtStartIndex = MarkedIndex;
+            _mixedAtStart = _showMixedValue;
             _openTimeMs = Now();
             _listPressedSinceOpen = false;
             _pointerOverArrow = false;
@@ -540,7 +569,12 @@ namespace Tweeq.UIToolkit
             }
 
             Close();
-            Confirmed?.Invoke(_value);
+
+            // Still mixed means no option was picked, so there is no value to confirm.
+            if (!_showMixedValue)
+            {
+                Confirmed?.Invoke(_value);
+            }
         }
 
         /// <summary>Rolls back to the value at open time and closes (Escape). Confirmed does not fire.</summary>
@@ -551,9 +585,12 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            // If already changed, also fire ValueChanged for the reverting direction (same handling as canceling a drag)
+            // If already changed, also fire ValueChanged for the reverting direction (same handling as canceling a drag).
+            // Cleared first so an untouched mixed field doesn't re-notify its unchanged value
+            _showMixedValue = false;
             this.value = _valueAtStart;
             Close();
+            ShowMixedValue = _mixedAtStart;
         }
 
         /// <summary>
@@ -752,9 +789,12 @@ namespace Tweeq.UIToolkit
         }
 
         // The current value's position "in display order". When not filtering, this is just the options index itself
+        // The option shown as the current value. A mixed field has none, so arrows and the popup start from the top
+        int MarkedIndex => _showMixedValue ? -1 : _valueIndex;
+
         int VisibleIndexOfValue()
         {
-            if (_valueIndex < 0)
+            if (MarkedIndex < 0)
             {
                 return -1;
             }
@@ -1258,6 +1298,17 @@ namespace Tweeq.UIToolkit
 
         void RefreshDisplayText()
         {
+            if (_showMixedValue)
+            {
+                _displayText = TweeqInputBoxStyles.MIXED_VALUE_TEXT;
+                if (_fieldLabel != null)
+                {
+                    SetTextParts(_fieldLabel, _fieldDetail, _displayText, null);
+                }
+
+                return;
+            }
+
             string label = _valueIndex >= 0 && _valueIndex < _labelCache.Length
                 ? _labelCache[_valueIndex]
                 : ComposeLabel(_value, -1);
@@ -1655,7 +1706,7 @@ namespace Tweeq.UIToolkit
 
             float viewportHeight = ViewportHeight();
             float chromeTop = padding + POPUP_BORDER_WIDTH;
-            int index = _valueIndex < 0 ? 0 : _valueIndex;
+            int index = MarkedIndex < 0 ? 0 : MarkedIndex;
 
             _listHeight = VisibleCount * itemHeight;
 
@@ -1732,7 +1783,7 @@ namespace Tweeq.UIToolkit
         // Vue alignCurrentToTrigger: aligns scroll so the selected row lands over the field
         void AlignActiveToField(float fieldTop, float listTop, float itemHeight)
         {
-            int index = _valueIndex < 0 ? 0 : _valueIndex;
+            int index = MarkedIndex < 0 ? 0 : MarkedIndex;
             SetScroll(listTop + index * itemHeight - fieldTop);
         }
 
@@ -2293,7 +2344,7 @@ namespace Tweeq.UIToolkit
 
                 OptionRow row = _rows[i];
                 int option = OptionIndexAt(i);
-                bool active = option >= 0 && option == _valueIndex;
+                bool active = option >= 0 && option == MarkedIndex;
                 bool current = option >= 0 && option == currentIndex;
                 Color text = active ? onAccent : _theme.Text;
 

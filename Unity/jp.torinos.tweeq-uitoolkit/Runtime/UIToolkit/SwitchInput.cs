@@ -55,6 +55,7 @@ namespace Tweeq.UIToolkit
 
         bool _hovered;
         bool _focused;
+        bool _showMixedValue;
 
         #endregion
 
@@ -70,14 +71,36 @@ namespace Tweeq.UIToolkit
             get => _value;
             set
             {
-                if (_value == value)
+                // Like UI Toolkit's BaseField: assigning while mixed resolves the mixed state and notifies even for the same value.
+                if (_value == value && !_showMixedValue)
                 {
                     return;
                 }
 
                 bool previous = _value;
+                ShowMixedValue = false;
                 SetValueWithoutNotify(value);
                 NotifyValueChanged(previous, _value);
+            }
+        }
+
+        /// <summary>
+        /// Parks the handle in the middle of an off-colored track (e.g. a multi-selection whose values differ).
+        /// A click or Space then turns it on (as UI Toolkit's Toggle does); any input or assigning <see cref="value"/> resolves it.
+        /// Not cleared by <see cref="SetValueWithoutNotify"/>.
+        /// </summary>
+        public bool ShowMixedValue
+        {
+            get => _showMixedValue;
+            set
+            {
+                if (_showMixedValue == value)
+                {
+                    return;
+                }
+
+                _showMixedValue = value;
+                Refresh(true, true);
             }
         }
 
@@ -152,7 +175,8 @@ namespace Tweeq.UIToolkit
 
             _gesture = new BoolSwipeGesture(this)
             {
-                ValueGetter = () => _value,
+                // Reading a mixed switch as off makes a click / Space land on true.
+                ValueGetter = () => _value && !_showMixedValue,
                 ValueChanged = OnGestureValueChanged,
                 Confirmed = OnGestureConfirmed,
                 StateChanged = OnGestureStateChanged,
@@ -502,7 +526,7 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            if (_value)
+            if (_value && !_showMixedValue)
             {
                 _track.style.backgroundColor = _hovered ? _theme.AccentHover : _theme.Accent;
             }
@@ -532,7 +556,7 @@ namespace Tweeq.UIToolkit
             {
                 ApplyHandleTarget(width, force: false);
             }
-            _handle.style.backgroundColor = _value ? _theme.Background : InactiveHandleColor;
+            _handle.style.backgroundColor = _value && !_showMixedValue ? _theme.Background : InactiveHandleColor;
         }
 
         void ApplyHandleTarget(float width, bool force)
@@ -554,7 +578,9 @@ namespace Tweeq.UIToolkit
 
             // The on side grows while keeping its outer edge fixed to the right end.
             float onLeft = Mathf.Max(HANDLE_INSET, TrackWidth - HANDLE_INSET - width);
-            float target = _value ? onLeft : HANDLE_INSET;
+            float target = _showMixedValue
+                ? (HANDLE_INSET + onLeft) * 0.5f
+                : _value ? onLeft : HANDLE_INSET;
             float resolvedLeft = _handle.resolvedStyle.left;
             bool moving = panel != null
                 && IsUsableSize(resolvedLeft)
