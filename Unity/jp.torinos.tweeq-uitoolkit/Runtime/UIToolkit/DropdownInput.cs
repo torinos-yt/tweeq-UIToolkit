@@ -55,6 +55,9 @@ namespace Tweeq.UIToolkit
         const float DISABLED_BORDER_WIDTH = 1f;
         const float POPUP_BORDER_WIDTH = 1f;
 
+        // Same dim as the other inputs' disabled state, applied to a single option row
+        const float DISABLED_OPACITY = 0.4f;
+
         // Left/right padding for option rows (Vue uses left .5em / right chevron width, but here it's centered so kept symmetric)
         const float OPTION_PADDING = 6f;
 
@@ -86,7 +89,11 @@ namespace Tweeq.UIToolkit
         T _value;
         T[] _options = Array.Empty<T>();
         string[] _labelCache = Array.Empty<string>();
+        string[] _detailCache = Array.Empty<string>();
+        bool[] _enabledCache = Array.Empty<bool>();
         Func<T, string> _labelizer;
+        Func<T, string> _detailLabelizer;
+        Func<T, bool> _optionEnabled;
         string[] _labels;
         string _prefix = string.Empty;
         string _suffix = string.Empty;
@@ -103,8 +110,10 @@ namespace Tweeq.UIToolkit
         TweeqBoxPosition _inlinePosition = TweeqBoxPosition.None;
         TweeqBoxPosition _blockPosition = TweeqBoxPosition.None;
 
-        // Field side
+        // Field side. The label and its detail share one centered row so only the label gives up width
+        VisualElement _fieldContent;
         UILabel _fieldLabel;
+        UILabel _fieldDetail;
         VisualElement _chevron;
         VisualElement _focusRing;
 
@@ -128,7 +137,7 @@ namespace Tweeq.UIToolkit
         VisualElement _list;
         VisualElement _arrowUp;
         VisualElement _arrowDown;
-        readonly List<UILabel> _rows = new List<UILabel>();
+        readonly List<OptionRow> _rows = new List<OptionRow>();
 
         bool _open;
         T _valueAtStart;
@@ -154,6 +163,9 @@ namespace Tweeq.UIToolkit
 
         // Don't commit when released over a scroll arrow (equivalent to Vue's @pointerup.stop)
         bool _pointerOverArrow;
+
+        // Same for a disabled row: the release must neither commit the last previewed value nor close
+        bool _pointerOverDisabledRow;
 
         DropdownPopupDirection _popupDirection = DropdownPopupDirection.Auto;
 
@@ -244,11 +256,7 @@ namespace Tweeq.UIToolkit
             set
             {
                 _labelizer = value;
-                RebuildLabelCache();
-                RefreshFilterResults();
-                ApplyRowTexts();
-                RefreshDisplayText();
-                Refresh();
+                RefreshOptionCaches();
             }
         }
 
@@ -259,12 +267,44 @@ namespace Tweeq.UIToolkit
             set
             {
                 _labels = value;
-                RebuildLabelCache();
-                RefreshFilterResults();
-                ApplyRowTexts();
-                RefreshDisplayText();
-                Refresh();
+                RefreshOptionCaches();
             }
+        }
+
+        /// <summary>
+        /// A function that builds a trailing detail (e.g. a duration) shown after the label, both in the field and
+        /// in each option row. When space runs out only the label is ellipsized; the detail always stays whole.
+        /// Null, or a null/empty result, shows no detail. Cached like <see cref="Labelizer"/>.
+        /// </summary>
+        public Func<T, string> DetailLabelizer
+        {
+            get => _detailLabelizer;
+            set
+            {
+                _detailLabelizer = value;
+                RefreshOptionCaches();
+            }
+        }
+
+        /// <summary>
+        /// Per-option availability. A disabled option stays listed (dimmed) but can't be picked by pointer,
+        /// arrow keys or filtering. Null means every option is enabled. Evaluated when options change, like
+        /// <see cref="Labelizer"/>; assign it again to re-evaluate.
+        /// </summary>
+        public Func<T, bool> OptionEnabled
+        {
+            get => _optionEnabled;
+            set
+            {
+                _optionEnabled = value;
+                RefreshOptionCaches();
+            }
+        }
+
+        /// <summary>Whether the option at optionIndex can be picked. False when out of range.</summary>
+        public bool IsOptionEnabled(int optionIndex)
+        {
+            return optionIndex >= 0 && optionIndex < _enabledCache.Length && _enabledCache[optionIndex];
         }
 
         /// <summary>String prepended to the field display. Not applied to option rows (that's Vue's InputString's responsibility).</summary>
@@ -465,6 +505,7 @@ namespace Tweeq.UIToolkit
             _openTimeMs = Now();
             _listPressedSinceOpen = false;
             _pointerOverArrow = false;
+            _pointerOverDisabledRow = false;
 
             ShowPopup();
             Refresh();
@@ -534,11 +575,25 @@ namespace Tweeq.UIToolkit
             }
 
             int current = VisibleIndexOfValue();
+            int step = direction > 0 ? 1 : -1;
 
             // The current value isn't among the candidates (outside options, or dropped by filtering). Start from the top regardless of direction
-            int next = current < 0 ? 0 : WrapIndex(current + (direction > 0 ? 1 : -1), count);
+            int next = current < 0 ? 0 : WrapIndex(current + step, count);
 
-            int option = OptionIndexAt(next);
+            // Disabled options are stepped over; if every candidate is disabled the value stays put
+            int option = -1;
+            for (int tried = 0; tried < count; tried++)
+            {
+                int candidate = OptionIndexAt(next);
+                if (IsOptionEnabled(candidate))
+                {
+                    option = candidate;
+                    break;
+                }
+
+                next = WrapIndex(next + (current < 0 ? 1 : step), count);
+            }
+
             if (option < 0)
             {
                 return;
@@ -558,7 +613,7 @@ namespace Tweeq.UIToolkit
         /// </summary>
         public void PerformPointerUp()
         {
-            if (!_open || _pointerOverArrow)
+            if (!_open || _pointerOverArrow || _pointerOverDisabledRow)
             {
                 return;
             }
@@ -569,6 +624,29 @@ namespace Tweeq.UIToolkit
             }
 
             Commit();
+        }
+
+        /// <summary>
+        /// Common path for the pointer moving over the visibleIndex-th displayed row (-1 = over no row).
+        /// An enabled row previews its value (Vue updates the model on an option's pointerenter); a disabled row
+        /// leaves the value alone and keeps the next release from committing or closing.
+        /// </summary>
+        public void PerformPointerHover(int visibleIndex)
+        {
+            if (!_open)
+            {
+                return;
+            }
+
+            int option = OptionIndexAt(visibleIndex);
+            _pointerOverDisabledRow = option >= 0 && !IsOptionEnabled(option);
+
+            if (option < 0 || _pointerOverDisabledRow)
+            {
+                return;
+            }
+
+            this.value = _options[option];
         }
 
         #endregion
@@ -640,10 +718,18 @@ namespace Tweeq.UIToolkit
         {
             RefreshFilterResults();
 
-            // Vue: if the current value falls out of the filtered results, snap to the top. This keeps the up/down starting point always within the candidates
-            if (_filtered.Count > 0 && VisibleIndexOfValue() < 0)
+            // Vue: if the current value falls out of the filtered results, snap to the top. This keeps the up/down starting point always within the candidates.
+            // The top here is the first enabled result, so filtering never lands on an option that can't be picked
+            if (VisibleIndexOfValue() < 0)
             {
-                this.value = _options[_filtered[0]];
+                for (int i = 0; i < _filtered.Count; i++)
+                {
+                    if (IsOptionEnabled(_filtered[i]))
+                    {
+                        this.value = _options[_filtered[i]];
+                        break;
+                    }
+                }
             }
 
             ApplyRowTexts();
@@ -730,28 +816,21 @@ namespace Tweeq.UIToolkit
 
         void BuildField()
         {
-            _fieldLabel = new UILabel(string.Empty)
+            _fieldContent = new VisualElement
             {
-                name = "tweeq-dropdown-label",
+                name = "tweeq-dropdown-content",
                 pickingMode = PickingMode.Ignore,
             };
-            _fieldLabel.style.position = Position.Absolute;
-            _fieldLabel.style.left = 0f;
-            _fieldLabel.style.top = 0f;
-            _fieldLabel.style.right = 0f;
-            _fieldLabel.style.bottom = 0f;
-            _fieldLabel.style.marginLeft = 0f;
-            _fieldLabel.style.marginRight = 0f;
-            _fieldLabel.style.marginTop = 0f;
-            _fieldLabel.style.marginBottom = 0f;
-            _fieldLabel.style.paddingTop = 0f;
-            _fieldLabel.style.paddingBottom = 0f;
-            _fieldLabel.style.fontSize = _theme != null ? _theme.FontSizeInput : TEXT_FONT_SIZE;
-            _fieldLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
-            _fieldLabel.style.whiteSpace = WhiteSpace.NoWrap;
-            _fieldLabel.style.overflow = Overflow.Hidden;
-            _fieldLabel.style.textOverflow = TextOverflow.Ellipsis;
-            this.hierarchy.Add(_fieldLabel);
+            _fieldContent.style.position = Position.Absolute;
+            _fieldContent.style.left = 0f;
+            _fieldContent.style.top = 0f;
+            _fieldContent.style.right = 0f;
+            _fieldContent.style.bottom = 0f;
+            this.hierarchy.Add(_fieldContent);
+
+            _fieldLabel = CreateTextPart("tweeq-dropdown-label", true);
+            _fieldDetail = CreateTextPart("tweeq-dropdown-detail", false);
+            SetupTextRow(_fieldContent, _fieldLabel, _fieldDetail);
 
             _chevron = new VisualElement
             {
@@ -802,14 +881,13 @@ namespace Tweeq.UIToolkit
                 ApplyTransition(_chevron, _theme.HoverTransitionDuration, "opacity");
             }
 
-            if (_fieldLabel != null)
+            if (_fieldContent != null)
             {
                 // Inset from left and right by the chevron's width, keeping the text's center aligned with the box's center
-                _fieldLabel.style.paddingLeft = chevronWidth;
-                _fieldLabel.style.paddingRight = chevronWidth;
-                _fieldLabel.style.fontSize = _theme.FontSizeInput;
-
-                TweeqFonts.Apply(_fieldLabel, _theme.FontUi);
+                _fieldContent.style.paddingLeft = chevronWidth;
+                _fieldContent.style.paddingRight = chevronWidth;
+                ApplyTextPartStyles(_fieldLabel);
+                ApplyTextPartStyles(_fieldDetail);
             }
 
             if (_focusRing != null)
@@ -1008,9 +1086,9 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            if (_fieldLabel != null)
+            if (_fieldContent != null)
             {
-                _fieldLabel.style.display = DisplayStyle.None;
+                _fieldContent.style.display = DisplayStyle.None;
             }
 
             // Focus() won't take effect while display:none, so the display must be switched first
@@ -1026,9 +1104,9 @@ namespace Tweeq.UIToolkit
 
         void HideFilterField()
         {
-            if (_fieldLabel != null)
+            if (_fieldContent != null)
             {
-                _fieldLabel.style.display = DisplayStyle.Flex;
+                _fieldContent.style.display = DisplayStyle.Flex;
             }
 
             if (_filterField == null)
@@ -1123,7 +1201,7 @@ namespace Tweeq.UIToolkit
 
         #region Labels
 
-        // Runs only when options / labelizer / labels changes. Generated in bulk here so
+        // Runs only when options / labelizer / labels / detail / enabled changes. Generated in bulk here so
         // subsequent access is just an array reference (no per-frame Format)
         void RebuildLabelCache()
         {
@@ -1132,12 +1210,34 @@ namespace Tweeq.UIToolkit
                 _labelCache = _options.Length == 0
                     ? Array.Empty<string>()
                     : new string[_options.Length];
+                _detailCache = _options.Length == 0
+                    ? Array.Empty<string>()
+                    : new string[_options.Length];
+                _enabledCache = _options.Length == 0
+                    ? Array.Empty<bool>()
+                    : new bool[_options.Length];
             }
 
             for (int i = 0; i < _options.Length; i++)
             {
                 _labelCache[i] = ComposeLabel(_options[i], i);
+                _detailCache[i] = ComposeDetail(_options[i]);
+                _enabledCache[i] = _optionEnabled == null || _optionEnabled(_options[i]);
             }
+        }
+
+        void RefreshOptionCaches()
+        {
+            RebuildLabelCache();
+            RefreshFilterResults();
+            ApplyRowTexts();
+            RefreshDisplayText();
+            Refresh();
+        }
+
+        string ComposeDetail(T option)
+        {
+            return _detailLabelizer != null ? _detailLabelizer(option) : null;
         }
 
         // Priority order is Labelizer > Labels > value.ToString() (popover-spec.md)
@@ -1167,10 +1267,79 @@ namespace Tweeq.UIToolkit
                 ? label
                 : _prefix + label + _suffix;
 
+            string detail = _valueIndex >= 0 && _valueIndex < _detailCache.Length
+                ? _detailCache[_valueIndex]
+                : ComposeDetail(_value);
+
             if (_fieldLabel != null)
             {
-                _fieldLabel.text = _displayText;
+                SetTextParts(_fieldLabel, _fieldDetail, _displayText, detail);
             }
+        }
+
+        // Shared by the field and every option row. The label gives up width and ellipsizes; the detail never shrinks
+        UILabel CreateTextPart(string elementName, bool isLabel)
+        {
+            UILabel part = new UILabel(string.Empty)
+            {
+                name = elementName,
+                pickingMode = PickingMode.Ignore,
+            };
+            part.style.marginLeft = 0f;
+            part.style.marginRight = 0f;
+            part.style.marginTop = 0f;
+            part.style.marginBottom = 0f;
+            part.style.paddingLeft = 0f;
+            part.style.paddingRight = 0f;
+            part.style.paddingTop = 0f;
+            part.style.paddingBottom = 0f;
+            part.style.fontSize = _theme != null ? _theme.FontSizeInput : TEXT_FONT_SIZE;
+            part.style.unityTextAlign = TextAnchor.MiddleCenter;
+            part.style.whiteSpace = WhiteSpace.NoWrap;
+            part.style.flexShrink = isLabel ? 1f : 0f;
+
+            if (isLabel)
+            {
+                part.style.flexGrow = 1f;
+                part.style.minWidth = 0f;
+                part.style.overflow = Overflow.Hidden;
+                part.style.textOverflow = TextOverflow.Ellipsis;
+            }
+
+            return part;
+        }
+
+        static void SetupTextRow(VisualElement row, UILabel label, UILabel detail)
+        {
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.justifyContent = Justify.Center;
+            row.Add(label);
+
+            detail.style.display = DisplayStyle.None;
+            row.Add(detail);
+        }
+
+        // Without a detail the label fills the row, so it lays out exactly like a lone centered label.
+        // With one, the label shrinks to its text and the pair is centered as a unit
+        static void SetTextParts(UILabel label, UILabel detail, string labelText, string detailText)
+        {
+            bool hasDetail = !string.IsNullOrEmpty(detailText);
+
+            label.text = labelText;
+            label.style.flexGrow = hasDetail ? 0f : 1f;
+            detail.text = hasDetail ? detailText : string.Empty;
+            detail.style.display = hasDetail ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        void ApplyTextPartStyles(UILabel part)
+        {
+            if (_theme == null || part == null)
+            {
+                return;
+            }
+
+            part.style.fontSize = _theme.FontSizeInput;
+            TweeqFonts.Apply(part, _theme.FontUi);
         }
 
         int IndexOf(T target)
@@ -1197,21 +1366,27 @@ namespace Tweeq.UIToolkit
 
             for (int i = _rows.Count - 1; i >= _options.Length; i--)
             {
-                _list.Remove(_rows[i]);
+                _list.Remove(_rows[i].Root);
                 _rows.RemoveAt(i);
             }
 
             while (_rows.Count < _options.Length)
             {
-                UILabel row = new UILabel(string.Empty)
+                OptionRow row = new OptionRow
                 {
-                    name = "tweeq-dropdown-option",
+                    Root = new VisualElement
+                    {
+                        name = "tweeq-dropdown-option-row",
 
-                    // Hit testing is derived from the layout's y on the _list side (rows don't carry per-row callbacks)
-                    pickingMode = PickingMode.Ignore,
+                        // Hit testing is derived from the layout's y on the _list side (rows don't carry per-row callbacks)
+                        pickingMode = PickingMode.Ignore,
+                    },
+                    Label = CreateTextPart("tweeq-dropdown-option", true),
+                    Detail = CreateTextPart("tweeq-dropdown-option-detail", false),
                 };
+                SetupTextRow(row.Root, row.Label, row.Detail);
                 ApplyRowStyles(row);
-                _list.Add(row);
+                _list.Add(row.Root);
                 _rows.Add(row);
             }
 
@@ -1226,20 +1401,23 @@ namespace Tweeq.UIToolkit
 
             for (int i = 0; i < _rows.Count; i++)
             {
-                UILabel row = _rows[i];
+                OptionRow row = _rows[i];
 
                 if (i >= visible)
                 {
-                    row.style.display = DisplayStyle.None;
+                    row.Root.style.display = DisplayStyle.None;
                     continue;
                 }
 
-                row.style.display = DisplayStyle.Flex;
+                row.Root.style.display = DisplayStyle.Flex;
 
                 int option = OptionIndexAt(i);
-                row.text = option >= 0 && option < _labelCache.Length
-                    ? _labelCache[option]
-                    : string.Empty;
+                bool known = option >= 0 && option < _labelCache.Length;
+                SetTextParts(
+                    row.Label,
+                    row.Detail,
+                    known ? _labelCache[option] : string.Empty,
+                    known ? _detailCache[option] : null);
             }
         }
 
@@ -1275,6 +1453,7 @@ namespace Tweeq.UIToolkit
             _viewport.RegisterCallback<PointerMoveEvent>(OnListPointerMove);
             _viewport.RegisterCallback<PointerDownEvent>(OnListPointerDown);
             _viewport.RegisterCallback<WheelEvent>(OnListWheel);
+            _viewport.RegisterCallback<PointerLeaveEvent>(OnListPointerLeave);
             _surface.Add(_viewport);
 
             _list = new VisualElement
@@ -1323,30 +1502,28 @@ namespace Tweeq.UIToolkit
             arrow.RegisterCallback<PointerLeaveEvent>(OnArrowLeave);
         }
 
-        void ApplyRowStyles(UILabel row)
+        void ApplyRowStyles(OptionRow row)
         {
             if (_theme == null || row == null)
             {
                 return;
             }
 
-            row.style.height = _theme.InputHeight;
-            row.style.paddingLeft = OPTION_PADDING;
-            row.style.paddingRight = OPTION_PADDING;
-            row.style.paddingTop = 0f;
-            row.style.paddingBottom = 0f;
-            row.style.marginLeft = 0f;
-            row.style.marginRight = 0f;
-            row.style.marginTop = 0f;
-            row.style.marginBottom = 0f;
-            row.style.fontSize = _theme.FontSizeInput;
-            row.style.unityTextAlign = TextAnchor.MiddleCenter;
-            row.style.whiteSpace = WhiteSpace.NoWrap;
-            row.style.overflow = Overflow.Hidden;
-            row.style.textOverflow = TextOverflow.Ellipsis;
-            SetCornerRadius(row, _theme.InputRadius, true, true, true, true);
+            VisualElement root = row.Root;
+            root.style.height = _theme.InputHeight;
+            root.style.paddingLeft = OPTION_PADDING;
+            root.style.paddingRight = OPTION_PADDING;
+            root.style.paddingTop = 0f;
+            root.style.paddingBottom = 0f;
+            root.style.marginLeft = 0f;
+            root.style.marginRight = 0f;
+            root.style.marginTop = 0f;
+            root.style.marginBottom = 0f;
+            root.style.overflow = Overflow.Hidden;
+            SetCornerRadius(root, _theme.InputRadius, true, true, true, true);
 
-            TweeqFonts.Apply(row, _theme.FontUi);
+            ApplyTextPartStyles(row.Label);
+            ApplyTextPartStyles(row.Detail);
         }
 
         void ApplyPopupStyles()
@@ -1727,14 +1904,12 @@ namespace Tweeq.UIToolkit
 
             Vector3 position = evt.position;
             Vector2 local = _viewport.WorldToLocal(new Vector2(position.x, position.y));
-            int option = OptionIndexAt(RowIndexAt(local.y));
-            if (option < 0)
-            {
-                return;
-            }
+            PerformPointerHover(RowIndexAt(local.y));
+        }
 
-            // Vue updates the model on an option's pointerenter (hover becomes an instant preview)
-            this.value = _options[option];
+        void OnListPointerLeave(PointerLeaveEvent evt)
+        {
+            _pointerOverDisabledRow = false;
         }
 
         void OnListWheel(WheelEvent evt)
@@ -2046,6 +2221,7 @@ namespace Tweeq.UIToolkit
             if (_fieldLabel != null)
             {
                 _fieldLabel.style.color = TextColor;
+                _fieldDetail.style.color = TextColor;
             }
 
             UpdateFilterTextColor();
@@ -2115,15 +2291,18 @@ namespace Tweeq.UIToolkit
                     continue;
                 }
 
-                UILabel row = _rows[i];
+                OptionRow row = _rows[i];
                 int option = OptionIndexAt(i);
                 bool active = option >= 0 && option == _valueIndex;
                 bool current = option >= 0 && option == currentIndex;
+                Color text = active ? onAccent : _theme.Text;
 
-                row.style.backgroundColor = active
+                row.Root.style.backgroundColor = active
                     ? _theme.Accent
                     : current ? _theme.AccentSoft : Color.clear;
-                row.style.color = active ? onAccent : _theme.Text;
+                row.Root.style.opacity = option < 0 || IsOptionEnabled(option) ? 1f : DISABLED_OPACITY;
+                row.Label.style.color = text;
+                row.Detail.style.color = text;
             }
         }
 
@@ -2307,6 +2486,13 @@ namespace Tweeq.UIToolkit
         #endregion
 
         #region Helpers
+
+        sealed class OptionRow
+        {
+            public VisualElement Root;
+            public UILabel Label;
+            public UILabel Detail;
+        }
 
         long Now()
         {

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using NUnit.Framework;
+using Tweeq.UIToolkit.TestSupport;
 using UnityEngine.UIElements;
 
 namespace Tweeq.UIToolkit.Tests
@@ -1012,6 +1013,171 @@ namespace Tweeq.UIToolkit.Tests
             dropdown.Invalid = true;
 
             Assert.AreEqual("Linear", dropdown.value);
+        }
+
+        #endregion
+
+        #region Per-option state
+
+        static DropdownInput<string> CreateWithDisabledEaseIn()
+        {
+            DropdownInput<string> dropdown = Create();
+            dropdown.OptionEnabled = option => option != "Ease In";
+            return dropdown;
+        }
+
+        [Test]
+        public void OptionEnabled_DefaultsToEveryOptionEnabled()
+        {
+            DropdownInput<string> dropdown = Create();
+
+            Assert.IsNull(dropdown.OptionEnabled);
+            for (int i = 0; i < Options.Length; i++)
+            {
+                Assert.IsTrue(dropdown.IsOptionEnabled(i));
+            }
+
+            Assert.IsFalse(dropdown.IsOptionEnabled(-1));
+            Assert.IsFalse(dropdown.IsOptionEnabled(Options.Length));
+        }
+
+        [Test]
+        public void OptionEnabled_DisabledOptionStaysListed()
+        {
+            DropdownInput<string> dropdown = CreateWithDisabledEaseIn();
+
+            Assert.AreEqual(Options.Length, dropdown.VisibleCount);
+            Assert.IsTrue(dropdown.IsOptionEnabled(0));
+            Assert.IsFalse(dropdown.IsOptionEnabled(1));
+            Assert.IsTrue(dropdown.IsOptionEnabled(2));
+        }
+
+        [Test]
+        public void OptionEnabled_ReleaseOverDisabledRowNeitherCommitsNorCloses()
+        {
+            long now = 0;
+            DropdownInput<string> dropdown = CreateWithDisabledEaseIn();
+            dropdown.TimeSource = () => now;
+            int confirmed = 0;
+            dropdown.Confirmed += _ => confirmed++;
+
+            dropdown.Open();
+            now += 1000;
+            dropdown.PerformPointerHover(1);
+            dropdown.PerformPointerUp();
+
+            Assert.AreEqual("Linear", dropdown.value);
+            Assert.IsTrue(dropdown.IsOpen);
+            Assert.AreEqual(0, confirmed);
+
+            // Moving on to an enabled row picks again as usual
+            dropdown.PerformPointerHover(2);
+            dropdown.PerformPointerUp();
+
+            Assert.AreEqual("Ease Out", dropdown.value);
+            Assert.IsFalse(dropdown.IsOpen);
+            Assert.AreEqual(1, confirmed);
+        }
+
+        [Test]
+        public void OptionEnabled_HoverPreviewsEnabledRows()
+        {
+            DropdownInput<string> dropdown = Create();
+
+            dropdown.Open();
+            dropdown.PerformPointerHover(1);
+
+            Assert.AreEqual("Ease In", dropdown.value);
+        }
+
+        [Test]
+        public void OptionEnabled_ArrowsStepOverDisabledOptions()
+        {
+            DropdownInput<string> dropdown = CreateWithDisabledEaseIn();
+
+            dropdown.MoveSelection(1);
+            Assert.AreEqual("Ease Out", dropdown.value);
+
+            dropdown.MoveSelection(-1);
+            Assert.AreEqual("Linear", dropdown.value);
+        }
+
+        [Test]
+        public void OptionEnabled_ArrowsWithEveryOptionDisabledKeepTheValue()
+        {
+            DropdownInput<string> dropdown = Create();
+            dropdown.OptionEnabled = _ => false;
+
+            dropdown.MoveSelection(1);
+
+            Assert.AreEqual("Linear", dropdown.value);
+        }
+
+        [Test]
+        public void OptionEnabled_FilterSnapsToTheFirstEnabledResult()
+        {
+            DropdownInput<string> dropdown = CreateWithDisabledEaseIn();
+
+            dropdown.BeginFilter("ease");
+
+            Assert.AreEqual("Ease Out", dropdown.value);
+        }
+
+        [Test]
+        public void Detail_AbsentKeepsTheLoneLabel()
+        {
+            DropdownInput<string> dropdown = Create();
+            Label label = dropdown.Q<Label>("tweeq-dropdown-label");
+            Label detail = dropdown.Q<Label>("tweeq-dropdown-detail");
+
+            Assert.AreEqual("Linear", label.text);
+            Assert.AreEqual(1f, label.style.flexGrow.value);
+            Assert.AreEqual(DisplayStyle.None, detail.style.display.value);
+        }
+
+        [Test]
+        public void Detail_OnlyTheLabelEllipsizes()
+        {
+            DropdownInput<string> dropdown = Create();
+            dropdown.DetailLabelizer = option => option.Length + " s";
+            Label label = dropdown.Q<Label>("tweeq-dropdown-label");
+            Label detail = dropdown.Q<Label>("tweeq-dropdown-detail");
+
+            Assert.AreEqual("Linear", label.text);
+            Assert.AreEqual("Linear", dropdown.DisplayText);
+            Assert.AreEqual(TextOverflow.Ellipsis, label.style.textOverflow.value);
+            Assert.AreEqual(1f, label.style.flexShrink.value);
+
+            Assert.AreEqual("6 s", detail.text);
+            Assert.AreEqual(DisplayStyle.Flex, detail.style.display.value);
+            Assert.AreEqual(0f, detail.style.flexShrink.value);
+            Assert.AreNotEqual(TextOverflow.Ellipsis, detail.style.textOverflow.value);
+
+            dropdown.MoveSelection(1);
+            Assert.AreEqual("7 s", detail.text);
+        }
+
+        [Test]
+        public void Rows_ShowDetailAndDimDisabledOptions()
+        {
+            using (TweeqRuntimeTestPanel panel = TweeqRuntimeTestPanel.Create())
+            {
+                DropdownInput<string> dropdown = CreateWithDisabledEaseIn();
+                dropdown.DetailLabelizer = option => option.Length + " s";
+                panel.Root.Add(dropdown);
+                dropdown.Open();
+
+                VisualElement tree = panel.Root.panel.visualTree;
+                List<VisualElement> rows = tree.Query<VisualElement>("tweeq-dropdown-option-row").ToList();
+                Assert.AreEqual(Options.Length, rows.Count);
+
+                Assert.AreEqual(1f, rows[0].style.opacity.value);
+                Assert.AreEqual(0.4f, rows[1].style.opacity.value);
+                Assert.AreEqual("Ease In", rows[1].Q<Label>("tweeq-dropdown-option").text);
+                Label detail = rows[1].Q<Label>("tweeq-dropdown-option-detail");
+                Assert.AreEqual("7 s", detail.text);
+                Assert.AreEqual(0f, detail.style.flexShrink.value);
+            }
         }
 
         #endregion

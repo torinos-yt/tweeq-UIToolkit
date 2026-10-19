@@ -21,7 +21,7 @@ preserved at the git tag [`vue-final`](https://github.com/torinos-yt/tweeq-UIToo
 | `InputButton` | `ButtonInput` | Blink/Flash/Chevron/Subtle/Narrow styles |
 | `InputButtonToggle` | `ButtonToggleInput` | |
 | `InputRadio` | `RadioInput` | Sliding indicator, drag selection, arrow-key wrap |
-| `InputDropdown` | `DropdownInput<T>`, `StringDropdownInput` | Fuzzy filtering included |
+| `InputDropdown` | `DropdownInput<T>`, `StringDropdownInput` | Fuzzy filtering included. `OptionEnabled` lists an option dimmed and unpickable; `DetailLabelizer` adds a trailing detail that never truncates (only the label ellipsizes) |
 | `InputShuffle` | `ShuffleInput<T>`, `StringShuffleInput` | |
 | `InputCubicBezier` | `CubicBezierInput` | `Vector4` easing control points, popover pad with two draggable handles |
 | `InputTime` | `TimeInput` | Frame-count value, SMPTE timecode display, per-digit scrub, clock overlay; expressions use a reduced arithmetic grammar |
