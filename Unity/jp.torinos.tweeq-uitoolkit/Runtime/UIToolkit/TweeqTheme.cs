@@ -196,6 +196,12 @@ namespace Tweeq.UIToolkit
         public float InputRadius { get; set; } = 4f;
 
         /// <summary>
+        /// Corner radius of tooltips (px). null keeps the default shape: a capsule for a single line and 6 for wrapped text.
+        /// When set, single-line and wrapped tooltips both use this radius.
+        /// </summary>
+        public float? RadiusTooltip { get; set; }
+
+        /// <summary>
         /// Corner radius of a popup (popover / balloon) (px). `--tq-radius-popup`.
         /// Designed as concentric circles with InputRadius(4) + PopupPadding(9), so changing either one should keep the other in sync.
         /// </summary>

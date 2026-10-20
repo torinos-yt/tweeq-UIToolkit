@@ -239,7 +239,7 @@ namespace Tweeq.UIToolkit
                 pickingMode = PickingMode.Ignore,
             };
             _popover.Balloon.pickingMode = PickingMode.Ignore;
-            _popover.Balloon.Radius = PILL_RADIUS;
+            _popover.Balloon.Radius = ResolveRadius(false);
             _popover.Balloon.PaddingVertical = PILL_PADDING_VERTICAL;
             _popover.Balloon.PaddingHorizontal = PILL_PADDING_HORIZONTAL;
             _popover.Balloon.contentContainer.pickingMode = PickingMode.Ignore;
@@ -383,10 +383,17 @@ namespace Tweeq.UIToolkit
             _label.text = text;
         }
 
+        float ResolveRadius(bool wraps) => ResolveRadius(_theme, wraps);
+
+        public static float ResolveRadius(TweeqTheme theme, bool wraps)
+        {
+            return theme?.RadiusTooltip ?? (wraps ? WRAPPED_RADIUS : PILL_RADIUS);
+        }
+
         void ApplyTextLayout(string text)
         {
             bool wraps = TextWraps(text);
-            _popover.Balloon.Radius = wraps ? WRAPPED_RADIUS : PILL_RADIUS;
+            _popover.Balloon.Radius = ResolveRadius(wraps);
             _popover.Balloon.PaddingVertical = wraps ? WRAPPED_PADDING_VERTICAL : PILL_PADDING_VERTICAL;
             _popover.Balloon.PaddingHorizontal = wraps ? WRAPPED_PADDING_HORIZONTAL : PILL_PADDING_HORIZONTAL;
             _label.style.unityTextAlign = wraps ? TextAnchor.MiddleLeft : TextAnchor.MiddleCenter;

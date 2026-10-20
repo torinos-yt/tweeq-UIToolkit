@@ -112,6 +112,9 @@ root.Theme = theme;   // distribute; re-assign (or call root.Redistribute()) aft
 Setting a token back to `default` restores the panel's font rather than leaving
 the previous override behind.
 
+`TweeqTheme.RadiusTooltip` (nullable, default `null`) sets the tooltip corner radius. `null` keeps the
+capsule for one line and 6 px for wrapped text; a value applies to both.
+
 From USS, seed the same four tokens on the element carrying `TweeqRoot`:
 
 ```css
