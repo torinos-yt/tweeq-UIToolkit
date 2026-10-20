@@ -22,6 +22,25 @@ namespace Tweeq.Core
         }
     }
 
+    /// <summary>The three axes after applying the ratio lock, and the lock state after applying it.</summary>
+    public readonly struct Size3ApplyResult
+    {
+        public readonly double X;
+        public readonly double Y;
+        public readonly double Z;
+
+        /// <summary>The ratio lock state after applying. Differs from the input only when it was automatically released.</summary>
+        public readonly bool KeepRatio;
+
+        public Size3ApplyResult(double x, double y, double z, bool keepRatio)
+        {
+            X = x;
+            Y = y;
+            Z = z;
+            KeepRatio = keepRatio;
+        }
+    }
+
     /// <summary>
     /// InputSize's ratio lock (Vue's InputSize.vue onUpdate).
     /// Handles the other axis following along when only one axis moves while locked, and automatic release when both axes change at once.
@@ -99,9 +118,81 @@ namespace Tweeq.Core
                 : new SizeApplyResult(baselineX * ratio, primaryNext, true);
         }
 
+        /// <summary>
+        /// The 3-axis version of <see cref="Apply(double,double,double,double,double,double,bool)"/>: the edited axis
+        /// scales the other two by (next / baseline) of that axis. A zero baseline gives multiplier 1 (the others stay),
+        /// and an axis that is 0 at the baseline stays 0. Changing several axes in a way that breaks the proportion
+        /// releases the lock.
+        /// </summary>
+        public static Size3ApplyResult Apply3(
+            double previousX, double previousY, double previousZ,
+            double nextX, double nextY, double nextZ,
+            double baselineX, double baselineY, double baselineZ,
+            bool keepRatio)
+        {
+            bool changedX = previousX != nextX;
+            bool changedY = previousY != nextY;
+            bool changedZ = previousZ != nextZ;
+            int changedCount = (changedX ? 1 : 0) + (changedY ? 1 : 0) + (changedZ ? 1 : 0);
+
+            if (keepRatio && changedCount > 1)
+            {
+                // Proportional means every changed axis was multiplied by the same factor
+                double factor = double.NaN;
+                bool proportional = true;
+                CheckFactor(changedX, previousX, nextX, ref factor, ref proportional);
+                CheckFactor(changedY, previousY, nextY, ref factor, ref proportional);
+                CheckFactor(changedZ, previousZ, nextZ, ref factor, ref proportional);
+                if (!proportional)
+                {
+                    keepRatio = false;
+                }
+            }
+
+            if (!keepRatio || changedCount == 0)
+            {
+                return new Size3ApplyResult(nextX, nextY, nextZ, keepRatio);
+            }
+
+            // Axis priority when several move: X, then Y, then Z (same as the 2-axis version)
+            int primary = changedX ? 0 : (changedY ? 1 : 2);
+            double primaryBaseline = primary == 0 ? baselineX : (primary == 1 ? baselineY : baselineZ);
+            double primaryNext = primary == 0 ? nextX : (primary == 1 ? nextY : nextZ);
+
+            double ratio = primaryNext / primaryBaseline;
+            if (!TweeqMath.IsFinite(ratio))
+            {
+                ratio = 1.0;
+            }
+
+            return new Size3ApplyResult(
+                primary == 0 ? primaryNext : baselineX * ratio,
+                primary == 1 ? primaryNext : baselineY * ratio,
+                primary == 2 ? primaryNext : baselineZ * ratio,
+                true);
+        }
+
         #endregion
 
         #region Internals
+
+        static void CheckFactor(bool changed, double previous, double next, ref double factor, ref bool proportional)
+        {
+            if (!changed || !proportional)
+            {
+                return;
+            }
+
+            double axisFactor = next / previous;
+            if (double.IsNaN(factor))
+            {
+                factor = axisFactor;
+            }
+            else if (!ApproximatelySameRatio(factor, axisFactor))
+            {
+                proportional = false;
+            }
+        }
 
         static bool ApproximatelySameRatio(double left, double right)
         {

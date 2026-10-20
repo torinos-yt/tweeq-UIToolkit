@@ -12,6 +12,7 @@ preserved at the git tag [`vue-final`](https://github.com/torinos-yt/tweeq-UIToo
 | `InputVec` | `Vec2Input` / `Vec3Input` / `Vec4Input`, `VecInput` | Typed variants for `Vector2/3/4`; `VecInput` (`float[]`) for arbitrary arity |
 | `InputPosition` | `PositionInput` | |
 | `InputSize` | `SizeInput` | Aspect-ratio link with snapshot-based scaling |
+| (none; 3-axis `InputSize`) | `Size3Input` | `SizeInput` counterpart for 3 axes: chain toggle on a `Vec3Input`, same baseline-at-gesture-start semantics (`SizeLogic.Apply3`) |
 | `InputTranslate` | `TranslateInput` | Y axis inverted to match Unity (see [deviations](deviations.md)) |
 | `InputAngle` | `AngleInput` | Rotary + number field composite |
 | `InputString` | `StringInput` | |

@@ -22,12 +22,6 @@ namespace Tweeq.UIToolkit
 
         static readonly string[] DEFAULT_AXIS_LABELS = { "W", "H" };
 
-        // Chain icon (a simplified version of the reference implementation's link-icon painter). Anchored to the center of the 24px box
-        const float LINK_LOOP_OFFSET = 4.5f;
-        const float LINK_LOOP_RADIUS = 3.2f;
-        const float LINK_STROKE_WIDTH = 1.25f;
-        const float LINK_BAR_WIDTH = 1f;
-
         #endregion
 
         #region Fields
@@ -398,50 +392,7 @@ namespace Tweeq.UIToolkit
 
         void OnGenerateChainIcon(MeshGenerationContext context)
         {
-            if (context == null || _theme == null)
-            {
-                return;
-            }
-
-            Painter2D painter = context.painter2D;
-            if (painter == null)
-            {
-                return;
-            }
-
-            Vector2 center = _chainIcon.contentRect.center;
-
-            // The fill color is painted by the toggle side, so choose a color that reads well on top of it
-            painter.strokeColor = _keepRatio
-                ? TweeqTheme.ContrastText(_theme.Accent)
-                : _theme.TextSubtle;
-            painter.lineWidth = LINK_STROKE_WIDTH;
-            painter.lineCap = LineCap.Butt;
-
-            for (int side = -1; side <= 1; side += 2)
-            {
-                Vector2 loop = new Vector2(center.x + side * LINK_LOOP_OFFSET, center.y);
-                painter.BeginPath();
-                painter.Arc(
-                    loop,
-                    LINK_LOOP_RADIUS,
-                    new Angle(0f, AngleUnit.Degree),
-                    new Angle(360f, AngleUnit.Degree));
-                painter.ClosePath();
-                painter.Stroke();
-            }
-
-            if (!_keepRatio)
-            {
-                return;
-            }
-
-            // Bridge the two loops only while connected (when broken, the gap itself reads as the "disconnected" symbol)
-            painter.lineWidth = LINK_BAR_WIDTH;
-            painter.BeginPath();
-            painter.MoveTo(new Vector2(center.x - LINK_LOOP_OFFSET, center.y));
-            painter.LineTo(new Vector2(center.x + LINK_LOOP_OFFSET, center.y));
-            painter.Stroke();
+            SizeChainIcon.Paint(context, _chainIcon, _theme, _keepRatio);
         }
 
         void Notify(Vector2 previous, Vector2 current)
