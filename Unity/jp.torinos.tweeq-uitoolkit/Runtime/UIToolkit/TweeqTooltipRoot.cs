@@ -375,12 +375,16 @@ namespace Tweeq.UIToolkit
         {
             ApplyTextLayout(text);
 
-            if (_label.text == text)
+            // The rich-text tag only widens the gaps between lines, so a single line keeps its height
+            string shown = _theme.LineHeightTooltip is float lineHeight
+                ? "<line-height=" + lineHeight.ToString(System.Globalization.CultureInfo.InvariantCulture) + "%>" + text
+                : text;
+            if (_label.text == shown)
             {
                 return;
             }
 
-            _label.text = text;
+            _label.text = shown;
         }
 
         float ResolveRadius(bool wraps) => ResolveRadius(_theme, wraps);
@@ -394,8 +398,25 @@ namespace Tweeq.UIToolkit
         {
             bool wraps = TextWraps(text);
             _popover.Balloon.Radius = ResolveRadius(wraps);
-            _popover.Balloon.PaddingVertical = wraps ? WRAPPED_PADDING_VERTICAL : PILL_PADDING_VERTICAL;
-            _popover.Balloon.PaddingHorizontal = wraps ? WRAPPED_PADDING_HORIZONTAL : PILL_PADDING_HORIZONTAL;
+            if (_theme.PaddingTooltip is Vector2 inset)
+            {
+                // The Label's own default padding is uneven (1/2 px), so zero it for the inset to be exact on both sides
+                _label.style.paddingLeft = 0f;
+                _label.style.paddingRight = 0f;
+                _label.style.paddingTop = 0f;
+                _label.style.paddingBottom = 0f;
+                _popover.Balloon.PaddingVertical = inset.y;
+                _popover.Balloon.PaddingHorizontal = inset.x;
+            }
+            else
+            {
+                _label.style.paddingLeft = StyleKeyword.Null;
+                _label.style.paddingRight = StyleKeyword.Null;
+                _label.style.paddingTop = StyleKeyword.Null;
+                _label.style.paddingBottom = StyleKeyword.Null;
+                _popover.Balloon.PaddingVertical = wraps ? WRAPPED_PADDING_VERTICAL : PILL_PADDING_VERTICAL;
+                _popover.Balloon.PaddingHorizontal = wraps ? WRAPPED_PADDING_HORIZONTAL : PILL_PADDING_HORIZONTAL;
+            }
             _label.style.unityTextAlign = wraps ? TextAnchor.MiddleLeft : TextAnchor.MiddleCenter;
         }
 

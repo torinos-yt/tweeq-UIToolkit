@@ -202,6 +202,16 @@ namespace Tweeq.UIToolkit
         public float? RadiusTooltip { get; set; }
 
         /// <summary>
+        /// Inset from the tooltip edge to its text (px; x = left/right, y = top/bottom). null keeps the default:
+        /// a tight capsule inset for a single line and a roomier one for wrapped text.
+        /// When set, single-line and wrapped tooltips both use this inset.
+        /// </summary>
+        public Vector2? PaddingTooltip { get; set; }
+
+        /// <summary>Line height of wrapped tooltip text, in percent of the font's line height. null keeps the font's own spacing.</summary>
+        public float? LineHeightTooltip { get; set; }
+
+        /// <summary>
         /// Corner radius of a popup (popover / balloon) (px). `--tq-radius-popup`.
         /// Designed as concentric circles with InputRadius(4) + PopupPadding(9), so changing either one should keep the other in sync.
         /// </summary>
