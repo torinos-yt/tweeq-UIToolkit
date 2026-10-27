@@ -42,9 +42,9 @@ namespace Tweeq.UIToolkit
         /// <summary>Default value for the shadow's downward offset.</summary>
         public const float DEFAULT_SHADOW_OFFSET_Y = 2f;
 
-        // There's no box-shadow, so we approximate the blur by stacking outline strokes of varying thickness.
-        // More layers would look smoother, but it directly costs rendering time, so we cap it at 3
-        const int SHADOW_LAYERS = 3;
+        // There's no box-shadow, so we approximate the blur by stacking fills of the outline grown outward.
+        // 8 bands keep each step under ~3px at a 20px blur; the vertices are only rebuilt on repaint
+        const int SHADOW_LAYERS = 8;
 
         // The scale used when appearing. The origin is the arrow's tip (so it appears to grow from the pointed-at location)
         const float POP_IN_SCALE = 0.96f;
@@ -63,6 +63,9 @@ namespace Tweeq.UIToolkit
 
         static readonly StyleList<TimeValue> InstantDuration =
             new StyleList<TimeValue>(new List<TimeValue> { new TimeValue(0f, TimeUnit.Second) });
+
+        static readonly float ArrowSideLength =
+            Mathf.Sqrt(ARROW_WIDTH * ARROW_WIDTH * 0.25f + ARROW_HEIGHT * ARROW_HEIGHT);
 
         TweeqTheme _theme = TweeqTheme.Dark();
         TweeqArrowSide _arrowSide = TweeqArrowSide.None;
@@ -419,7 +422,7 @@ namespace Tweeq.UIToolkit
 
             PaintShadow(painter, originX, originY, width, height, radius);
 
-            BuildOutline(painter, originX, originY, width, height, radius, 0f);
+            BuildOutline(painter, originX, originY, width, height, radius, 0f, 0f);
             // The semi-transparent Surface color assumes a blur behind it (Vue). Without blur the background would show through, so we composite it opaque
             painter.fillColor = _fillColorOverride ?? _theme.SurfaceOpaque;
             painter.Fill();
@@ -430,8 +433,10 @@ namespace Tweeq.UIToolkit
             painter.Stroke();
         }
 
-        // A substitute for drop-shadow. Stack several copies of the same outline as "thick stroke + fill",
-        // creating a halo that gets fainter toward the outside. Alpha is divided equally per layer, so the total stays within the original alpha
+        // A substitute for drop-shadow. Fills of the outline grown by increasing spread are stacked from the
+        // outside in. Thick strokes were used before, but a stroke wider than the corner radius folds over itself
+        // on the arc and doubles its alpha into radial streaks; a grown outline is still convex at the corners and can't.
+        // Each layer's alpha is solved so the stacked result hits the falloff curve at the middle of its band
         void PaintShadow(Painter2D painter, float originX, float originY, float width, float height, float radius)
         {
             Color shadow = _theme.Shadow;
@@ -440,29 +445,35 @@ namespace Tweeq.UIToolkit
                 return;
             }
 
-            Color layerColor = shadow;
-            layerColor.a = shadow.a / (SHADOW_LAYERS + 1);
-
-            painter.strokeColor = layerColor;
-            painter.fillColor = layerColor;
-            painter.lineJoin = LineJoin.Round;
-
-            for (int index = 0; index < SHADOW_LAYERS; index++)
+            float outerAlpha = 0f;
+            for (int index = SHADOW_LAYERS; index >= 1; index--)
             {
-                // Draw from the widest, outermost stroke inward (layers stack darker toward the inside)
-                float spread = _shadowBlur * (SHADOW_LAYERS - index) / SHADOW_LAYERS;
-                BuildOutline(painter, originX, originY, width, height, radius, _shadowOffsetY);
-                painter.lineWidth = spread * 2f;
-                painter.Stroke();
-            }
+                float spread = _shadowBlur * index / SHADOW_LAYERS;
+                float bandAlpha = shadow.a * ShadowFalloff((index - 0.5f) / SHADOW_LAYERS);
 
-            // A stroke alone leaves the inside hollow, so lay down one fill for the body as well
-            BuildOutline(painter, originX, originY, width, height, radius, _shadowOffsetY);
-            painter.Fill();
+                Color layerColor = shadow;
+                layerColor.a = 1f - (1f - bandAlpha) / (1f - outerAlpha);
+                outerAlpha = bandAlpha;
+
+                painter.fillColor = layerColor;
+                BuildOutline(painter, originX, originY, width, height, radius, _shadowOffsetY, spread);
+                painter.Fill();
+            }
+        }
+
+        // CSS drop-shadow is about half strength at the shape's edge and fades out with a Gaussian tail.
+        // (1 - t)^1.5 / 2 stays close to that curve (sigma = blur / 2) while reaching exactly zero
+        // at the blur distance; a square falls off visibly faster than the Gaussian in the outer half
+        static float ShadowFalloff(float t)
+        {
+            float rest = 1f - t;
+            return 0.5f * rest * Mathf.Sqrt(rest);
         }
 
         // Traces the same path (clockwise) as the Vue original's Balloon.vue SVG path, using Painter2D.
-        // Rounded corners use ArcTo (equivalent to canvas's arcTo), and the arrow is expressed as a polyline inserted partway along the edge
+        // Rounded corners use ArcTo (equivalent to canvas's arcTo), and the arrow is expressed as a polyline inserted partway along the edge.
+        // spread grows the outline outward for the shadow: the rect and corner radius grow together, so the arc
+        // tangent points stay where the body's are
         void BuildOutline(
             Painter2D painter,
             float originX,
@@ -470,60 +481,75 @@ namespace Tweeq.UIToolkit
             float width,
             float height,
             float radius,
-            float offsetY)
+            float offsetY,
+            float spread)
         {
-            float left = originX;
-            float top = originY + offsetY;
-            float right = originX + width;
-            float bottom = originY + height + offsetY;
+            // The arrow stays anchored to the body's edge, not the grown one
+            float bodyLeft = originX;
+            float bodyTop = originY + offsetY;
+            float bodyRight = originX + width;
+            float bodyBottom = originY + height + offsetY;
+
+            float left = bodyLeft - spread;
+            float top = bodyTop - spread;
+            float right = bodyRight + spread;
+            float bottom = bodyBottom + spread;
+            float corner = radius + spread;
             float half = ARROW_WIDTH * 0.5f;
 
+            // Offsetting the arrow's sides along their normals slides the concave base corners outward along the edge by this much
+            float baseGrow = spread * (ArrowSideLength - half) / ARROW_HEIGHT;
+
             painter.BeginPath();
-            painter.MoveTo(new Vector2(left + radius, top));
+            painter.MoveTo(new Vector2(left + corner, top));
 
             if (_arrowSide == TweeqArrowSide.Top)
             {
-                float center = ClampAlongEdge(left + _arrowOffset, left, right, radius, half);
-                painter.LineTo(new Vector2(center - half, top));
-                painter.LineTo(new Vector2(center, top - ARROW_HEIGHT));
-                painter.LineTo(new Vector2(center + half, top));
+                float center = ClampAlongEdge(bodyLeft + _arrowOffset, bodyLeft, bodyRight, radius, half);
+                Vector2 span = GrowArrowBase(center, half, baseGrow, bodyLeft, bodyRight, radius);
+                TraceArrow(
+                    painter, new Vector2(span.x, top), new Vector2(center, top - ARROW_HEIGHT), new Vector2(span.y, top),
+                    new Vector2(1f, 0f), new Vector2(0f, -1f), spread);
             }
 
-            painter.LineTo(new Vector2(right - radius, top));
-            painter.ArcTo(new Vector2(right, top), new Vector2(right, bottom), radius);
+            painter.LineTo(new Vector2(right - corner, top));
+            painter.ArcTo(new Vector2(right, top), new Vector2(right, bottom), corner);
 
             if (_arrowSide == TweeqArrowSide.Right)
             {
-                float center = ClampAlongEdge(top + _arrowOffset, top, bottom, radius, half);
-                painter.LineTo(new Vector2(right, center - half));
-                painter.LineTo(new Vector2(right + ARROW_HEIGHT, center));
-                painter.LineTo(new Vector2(right, center + half));
+                float center = ClampAlongEdge(bodyTop + _arrowOffset, bodyTop, bodyBottom, radius, half);
+                Vector2 span = GrowArrowBase(center, half, baseGrow, bodyTop, bodyBottom, radius);
+                TraceArrow(
+                    painter, new Vector2(right, span.x), new Vector2(right + ARROW_HEIGHT, center), new Vector2(right, span.y),
+                    new Vector2(0f, 1f), new Vector2(1f, 0f), spread);
             }
 
-            painter.LineTo(new Vector2(right, bottom - radius));
-            painter.ArcTo(new Vector2(right, bottom), new Vector2(left, bottom), radius);
+            painter.LineTo(new Vector2(right, bottom - corner));
+            painter.ArcTo(new Vector2(right, bottom), new Vector2(left, bottom), corner);
 
             if (_arrowSide == TweeqArrowSide.Bottom)
             {
-                float center = ClampAlongEdge(left + _arrowOffset, left, right, radius, half);
-                painter.LineTo(new Vector2(center + half, bottom));
-                painter.LineTo(new Vector2(center, bottom + ARROW_HEIGHT));
-                painter.LineTo(new Vector2(center - half, bottom));
+                float center = ClampAlongEdge(bodyLeft + _arrowOffset, bodyLeft, bodyRight, radius, half);
+                Vector2 span = GrowArrowBase(center, half, baseGrow, bodyLeft, bodyRight, radius);
+                TraceArrow(
+                    painter, new Vector2(span.y, bottom), new Vector2(center, bottom + ARROW_HEIGHT), new Vector2(span.x, bottom),
+                    new Vector2(-1f, 0f), new Vector2(0f, 1f), spread);
             }
 
-            painter.LineTo(new Vector2(left + radius, bottom));
-            painter.ArcTo(new Vector2(left, bottom), new Vector2(left, top), radius);
+            painter.LineTo(new Vector2(left + corner, bottom));
+            painter.ArcTo(new Vector2(left, bottom), new Vector2(left, top), corner);
 
             if (_arrowSide == TweeqArrowSide.Left)
             {
-                float center = ClampAlongEdge(top + _arrowOffset, top, bottom, radius, half);
-                painter.LineTo(new Vector2(left, center + half));
-                painter.LineTo(new Vector2(left - ARROW_HEIGHT, center));
-                painter.LineTo(new Vector2(left, center - half));
+                float center = ClampAlongEdge(bodyTop + _arrowOffset, bodyTop, bodyBottom, radius, half);
+                Vector2 span = GrowArrowBase(center, half, baseGrow, bodyTop, bodyBottom, radius);
+                TraceArrow(
+                    painter, new Vector2(left, span.y), new Vector2(left - ARROW_HEIGHT, center), new Vector2(left, span.x),
+                    new Vector2(0f, -1f), new Vector2(-1f, 0f), spread);
             }
 
-            painter.LineTo(new Vector2(left, top + radius));
-            painter.ArcTo(new Vector2(left, top), new Vector2(right, top), radius);
+            painter.LineTo(new Vector2(left, top + corner));
+            painter.ArcTo(new Vector2(left, top), new Vector2(right, top), corner);
             painter.ClosePath();
         }
 
@@ -543,6 +569,40 @@ namespace Tweeq.UIToolkit
             }
 
             return Mathf.Clamp(value, low, high);
+        }
+
+        // Walks the arrow from one base end to the other. along is the walking direction, outward points away from the body.
+        // A grown arrow's exact offset rounds its tip; two chords through the apex stand in for that arc,
+        // while the shoulder points keep the side segments parallel to the body's sides
+        static void TraceArrow(
+            Painter2D painter, Vector2 start, Vector2 apex, Vector2 end, Vector2 along, Vector2 outward, float spread)
+        {
+            painter.LineTo(start);
+
+            if (spread > 0f)
+            {
+                // Skipped at zero spread: repeated points would give the body's miter-joined border a zero-length segment
+                Vector2 sideways = along * (spread * ARROW_HEIGHT / ArrowSideLength);
+                Vector2 drop = outward * (spread * (1f - ARROW_WIDTH * 0.5f / ArrowSideLength));
+                painter.LineTo(apex - sideways - drop);
+                painter.LineTo(apex);
+                painter.LineTo(apex + sideways - drop);
+            }
+            else
+            {
+                painter.LineTo(apex);
+            }
+
+            painter.LineTo(end);
+        }
+
+        // Widening the base past the arc's tangent point would fold the path back over the corner, so it stops there.
+        // It never gets narrower than the body's own arrow. Returns (low end, high end) along the edge
+        static Vector2 GrowArrowBase(float center, float half, float grow, float min, float max, float radius)
+        {
+            return new Vector2(
+                Mathf.Min(center - half, Mathf.Max(center - half - grow, min + radius)),
+                Mathf.Max(center + half, Mathf.Min(center + half + grow, max - radius)));
         }
 
         static float Resolve(float value, float fallback)
